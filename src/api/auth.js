@@ -1,12 +1,15 @@
 /**
  * Cliente auth contra proyecto_basalto (cookie JWT httpOnly `token`).
- * Misma cookie en localhost entre puertos → sesión compartida.
+ *
+ * - Si VITE_API_BASE_URL está vacío → llama a /api (proxy Vite).
+ * - Si apunta a http://localhost:3001 → llama directo al API (CORS + cookie).
  */
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+const RAW_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
 
 function apiUrl(path) {
-  return `${API_BASE}${path}`
+  // Con base absoluta usamos el API real; si no, el proxy de Vite.
+  return `${RAW_BASE}${path}`
 }
 
 async function parseJson(res) {
