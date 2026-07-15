@@ -19,17 +19,9 @@ export function useAuth() {
     state.error = ''
     try {
       const me = await authApi.fetchMe()
-      if (me?.success && me.rut) {
-        const rut = me.rut
-        const nombre = me.nombre || ''
-        const role = me.role || ''
-        state.user = { rut, nombre, role }
-        localStorage.setItem('user_rut', rut)
-        if (nombre) localStorage.setItem('user_name', nombre)
-        if (role) localStorage.setItem('user_role', role)
-        if (me.session_version) {
-          localStorage.setItem('session_version', String(me.session_version))
-        }
+      const user = me?.success ? authApi.persistSessionProfile(me) : null
+      if (user) {
+        state.user = user
       } else {
         authApi.clearProfile()
         state.user = null

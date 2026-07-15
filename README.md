@@ -4,10 +4,13 @@ App hermana de **proyecto_basalto**. Comparte la sesión JWT (cookie httpOnly `t
 
 ## Requisitos
 
-1. `proyecto_basalto` corriendo en `:3000` con:
+1. Backend centralizado disponible en `https://turnos.basalto.app` con:
 
 ```env
-CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
+CORS_ALLOWED_ORIGINS=https://inicio.basalto.app,https://rendiciones.basalto.app
+COOKIE_DOMAIN=.basalto.app
+COOKIE_SAMESITE=none
+COOKIE_SECURE=true
 ```
 
 2. Node 18+.
@@ -19,12 +22,12 @@ npm install
 npm run dev
 ```
 
-Abre http://localhost:5174 — el index permite login y muestra el usuario de `/api/auth/me`.
+Abre la app — el index valida sesión y muestra el usuario de `/api/auth/me`.
 
-## SSO local
+## SSO
 
-- En desarrollo, Vite hace proxy de `/api` → `http://localhost:3000`.
-- La cookie queda en el host `localhost` y es visible en Inicio (:5173), Rendiciones (:5174) y proyecto_basalto (:3000).
+- Las llamadas van a `https://turnos.basalto.app`.
+- La cookie httpOnly queda disponible para los subdominios de `basalto.app`.
 - Perfil de UI en `localStorage` (como en proyecto_basalto); la fuente de verdad es la cookie.
 
 ## Producción (subdominios)
@@ -32,13 +35,15 @@ Abre http://localhost:5174 — el index permite login y muestra el usuario de `/
 En el API:
 
 ```env
-COOKIE_DOMAIN=.tudominio.cl
-COOKIE_SAMESITE=lax
-CORS_ALLOWED_ORIGINS=https://inicio.tudominio.cl,https://rendiciones.tudominio.cl
+COOKIE_DOMAIN=.basalto.app
+COOKIE_SAMESITE=none
+COOKIE_SECURE=true
+CORS_ALLOWED_ORIGINS=https://inicio.basalto.app,https://rendiciones.basalto.app
 ```
 
 Y en esta app:
 
 ```env
-VITE_API_BASE_URL=https://app.tudominio.cl
+VITE_API_BASE_URL=https://turnos.basalto.app
+VITE_LOGIN_URL=https://inicio.basalto.app/login
 ```

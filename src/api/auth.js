@@ -1,15 +1,17 @@
 /**
- * Cliente auth contra proyecto_basalto (cookie JWT httpOnly `token`).
+ * Cliente auth contra el backend centralizado (cookie JWT httpOnly `token`).
  *
- * - Si VITE_API_BASE_URL está vacío → llama a /api (proxy Vite).
- * - Si apunta a http://localhost:3001 → llama directo al API (CORS + cookie).
+ * Usa `credentials: 'include'` para enviar y recibir la cookie entre subdominios.
  */
 
-const RAW_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+const DEFAULT_API_BASE_URL = 'https://turnos.basalto.app'
+const DEFAULT_LOGIN_URL = 'https://inicio.basalto.app/login'
+
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '')
+export const LOGIN_URL = import.meta.env.VITE_LOGIN_URL || DEFAULT_LOGIN_URL
 
 function apiUrl(path) {
-  // Con base absoluta usamos el API real; si no, el proxy de Vite.
-  return `${RAW_BASE}${path}`
+  return `${API_BASE_URL}${path}`
 }
 
 async function parseJson(res) {
@@ -105,6 +107,61 @@ export function persistLoginProfile(data) {
       grupo: data.grupo || data.id_grupo || null
     })
   )
+}
+
+export function normalizeAuthUser(data) {
+  const source = data?.user && (data.user.rut || data.user.role) ? data.user : data
+  const nombre = source?.nombre || data?.nombre || [
+    source?.nombres,
+    source?.apellido_paterno,
+    source?.apellido_materno
+  ].filter(Boolean).join(' ')
+
+  const user = {
+    rut: source?.rut || data?.rut || '',
+    nombre: nombre || '',
+    role: source?.role || data?.role || ''
+  }
+
+  return user.rut || user.role ? user : null
+}
+
+export function persistSessionProfile(data) {
+  const user = normalizeAuthUser(data)
+  if (!user) return null
+
+  if (user.rut) localStorage.setItem('user_rut', user.rut)
+  if (user.nombre) localStorage.setItem('user_name', user.nombre)
+  if (user.role) localStorage.setItem('user_role', user.role)
+  if (data?.session_version) {
+    localStorage.setItem('session_version', String(data.session_version))
+  }
+
+  localStorage.setItem(
+    'usuarioActivo',
+    JSON.stringify({
+      rol: user.role,
+      nombre: user.nombre,
+      rut: user.rut,
+      isAdmin: user.role === 'admin',
+      es_super_admin: data?.es_super_admin || 0,
+      permisos: data?.permisos || [],
+      permisos_cargo: data?.permisos_cargo || [],
+      permisos_especiales_trabajador: data?.permisos_especiales_trabajador || [],
+      permisos_totales: data?.permisos_totales || [],
+      cargo: data?.cargo || null,
+      id_grupo: data?.id_grupo || null,
+      grupo: data?.grupo || data?.id_grupo || null
+    })
+  )
+
+  return user
+}
+
+export function loginRedirectUrl(returnTo = window.location.href) {
+  const url = new URL(LOGIN_URL, window.location.origin)
+  url.searchParams.set('returnTo', returnTo)
+  return url.toString()
 }
 
 export async function login(rut, password) {

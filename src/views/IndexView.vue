@@ -4,7 +4,7 @@
     <h1>{{ appName }}</h1>
     <p class="lead">
       Inicia sesión con la misma API de proyecto_basalto. La cookie httpOnly se
-      comparte en localhost entre las tres apps.
+      comparte entre los subdominios de Basalto.
     </p>
 
     <template v-if="!bootstrapped || loading && !user">
@@ -30,8 +30,8 @@
         Cerrar sesión
       </button>
       <p class="hint">
-        Abre la otra app Vue o proyecto_basalto (:3000): la sesión debería seguir activa
-        (mismo host <code>localhost</code>).
+        Abre la otra app Vue: la sesión debería seguir activa usando la misma cookie
+        del backend centralizado.
       </p>
     </template>
 
@@ -55,8 +55,8 @@
         {{ loading ? 'Entrando…' : 'Iniciar sesión' }}
       </button>
       <p class="hint">
-        Backend: <code>{{ apiHint }}</code>. En proyecto_basalto configura
-        <code>CORS_ALLOWED_ORIGINS</code> con este origen.
+        Backend: <code>{{ apiHint }}</code>. El backend debe permitir este origen
+        con CORS y credenciales.
       </p>
     </form>
   </section>
@@ -65,9 +65,10 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useAuth } from '../composables/useAuth'
+import { API_BASE_URL } from '../api/auth'
 
 const appName = import.meta.env.VITE_APP_NAME || 'Basalto Rendiciones'
-const apiHint = import.meta.env.VITE_API_BASE_URL || '/api → localhost:3000 (proxy)'
+const apiHint = API_BASE_URL
 
 const { user, loading, error, bootstrapped, bootstrap, login, logout } = useAuth()
 
