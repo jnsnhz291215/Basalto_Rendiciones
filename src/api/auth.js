@@ -47,7 +47,8 @@ const PROFILE_KEYS = [
 ]
 
 export function clearProfile() {
-  PROFILE_KEYS.forEach((k) => localStorage.removeItem(k))
+  localStorage.clear()
+  sessionStorage.clear()
 }
 
 export function persistLoginProfile(data) {
