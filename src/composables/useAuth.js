@@ -58,9 +58,10 @@ export function useAuth() {
     state.loading = true
     try {
       await authApi.logout()
-      state.user = null
     } finally {
+      state.user = null
       state.loading = false
+      window.location.href = authApi.LOGIN_URL
     }
   }
 

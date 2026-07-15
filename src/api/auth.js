@@ -6,9 +6,11 @@
 
 const DEFAULT_API_BASE_URL = 'https://turnos.basalto.app'
 const DEFAULT_LOGIN_URL = 'https://inicio.basalto.app/login'
+const DEFAULT_LOGOUT_URL = 'https://turnos.basalto.app/api/auth/logout'
 
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '')
 export const LOGIN_URL = import.meta.env.VITE_LOGIN_URL || DEFAULT_LOGIN_URL
+export const LOGOUT_URL = import.meta.env.VITE_LOGOUT_URL || DEFAULT_LOGOUT_URL
 
 function apiUrl(path) {
   return `${API_BASE_URL}${path}`
@@ -200,10 +202,9 @@ export async function fetchMe() {
 
 export async function logout() {
   try {
-    await fetch(apiUrl('/api/auth/logout'), {
+    await fetch(LOGOUT_URL, {
       method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' }
+      credentials: 'include'
     })
   } finally {
     clearProfile()
