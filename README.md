@@ -45,5 +45,5 @@ Y en esta app:
 
 ```env
 VITE_API_BASE_URL=https://turnos.basalto.app
-VITE_LOGIN_URL=https://inicio.basalto.app/login
+VITE_LOGIN_URL=/login
 ```

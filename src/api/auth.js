@@ -5,7 +5,7 @@
  */
 
 const DEFAULT_API_BASE_URL = 'https://turnos.basalto.app'
-const DEFAULT_LOGIN_URL = 'https://inicio.basalto.app/login'
+const DEFAULT_LOGIN_URL = '/login'
 const DEFAULT_LOGOUT_URL = 'https://turnos.basalto.app/api/auth/logout'
 
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '')

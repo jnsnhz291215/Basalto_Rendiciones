@@ -76,8 +76,9 @@ const rut = ref('')
 const password = ref('')
 const formError = ref('')
 
-onMounted(() => {
-  bootstrap()
+onMounted(async () => {
+  await bootstrap()
+  if (user.value) redirectToReturnTo()
 })
 
 async function onLogin() {
@@ -85,6 +86,7 @@ async function onLogin() {
   try {
     await login(rut.value, password.value)
     password.value = ''
+    redirectToReturnTo()
   } catch (e) {
     formError.value = e.message || 'No se pudo iniciar sesión'
   }
@@ -92,5 +94,24 @@ async function onLogin() {
 
 async function onLogout() {
   await logout()
+}
+
+function getSafeReturnTo() {
+  const value = new URLSearchParams(window.location.search).get('returnTo')
+  if (!value) return ''
+
+  try {
+    const url = new URL(value, window.location.origin)
+    const allowedOrigin = url.origin === window.location.origin
+    return allowedOrigin && url.href !== window.location.href ? url.toString() : ''
+  } catch {
+    return ''
+  }
+}
+
+function redirectToReturnTo() {
+  const returnTo = getSafeReturnTo()
+  if (returnTo) window.location.href = returnTo
+  else if (window.location.pathname === '/login') window.location.href = '/'
 }
 </script>

@@ -7,6 +7,7 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'index', component: IndexView, meta: { requiresAuth: true } },
+    { path: '/login', name: 'login', component: IndexView },
     { path: '/sin-permiso', name: 'sin-permiso', component: SinPermisoView }
   ]
 })
@@ -27,8 +28,7 @@ router.beforeEach(async (to) => {
 
     if (!user) {
       authApi.clearProfile()
-      window.location.href = authApi.loginRedirectUrl()
-      return false
+      return { path: '/login', query: { returnTo: to.fullPath } }
     }
 
     if (!hasRequiredRole(user.role, to.meta.role)) {
@@ -38,8 +38,7 @@ router.beforeEach(async (to) => {
     return true
   } catch {
     authApi.clearProfile()
-    window.location.href = authApi.loginRedirectUrl()
-    return false
+    return { path: '/login', query: { returnTo: to.fullPath } }
   }
 })
 
