@@ -34,9 +34,7 @@
     <template v-else>
       <div class="panel-intro">
         <h1>Módulo de Rendiciones</h1>
-        <p class="lead">
-          Ingresa para administrar gastos de caja chica y anticipos de faena.
-        </p>
+        <p class="lead">Ingresa tu RUT y contraseña para acceder al sistema.</p>
       </div>
 
       <form class="login-form" @submit.prevent="onLogin">
@@ -72,7 +70,7 @@
             class="btn-icon"
             fill="none"
             stroke="currentColor"
-            stroke-width="3"
+            stroke-width="2.5"
             viewBox="0 0 24 24"
             aria-hidden="true"
           >
