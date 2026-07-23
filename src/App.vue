@@ -2,13 +2,11 @@
   <div class="shell">
     <header class="topbar">
       <div class="topbar-inner">
-        <div class="brand-chip">
-          <img
-            class="brand-logo"
-            src="/logoBASALTO.png"
-            alt="Basalto Drilling"
-          />
-        </div>
+        <img
+          class="brand-logo"
+          src="/logoBASALTO.png"
+          alt="Basalto Drilling"
+        />
       </div>
     </header>
 
