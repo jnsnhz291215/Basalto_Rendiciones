@@ -2,14 +2,13 @@
   <div class="shell">
     <header class="topbar">
       <div class="topbar-inner">
-        <div class="brand">
+        <div class="brand-chip">
           <img
             class="brand-logo"
             src="/logoBASALTO.png"
             alt="Basalto Drilling"
           />
         </div>
-        <span class="access-badge">Módulo Rendiciones</span>
       </div>
     </header>
 
