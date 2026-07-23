@@ -1,5 +1,7 @@
 import { reactive, computed } from 'vue'
 import * as authApi from '../api/auth'
+// TEMP_AUTH_BYPASS — revertir antes de commit
+import { TEMP_AUTH_BYPASS, TEMP_BYPASS_USER } from '../TEMP_AUTH_BYPASS'
 
 const state = reactive({
   user: authApi.readCachedUser(),
@@ -18,6 +20,21 @@ export function useAuth() {
     state.loading = true
     state.error = ''
     try {
+      // TEMP_AUTH_BYPASS — revertir antes de commit
+      if (TEMP_AUTH_BYPASS) {
+        if (sessionStorage.getItem('TEMP_AUTH_BYPASS_OK') === '1') {
+          state.user = { ...TEMP_BYPASS_USER }
+          authApi.persistSessionProfile({
+            success: true,
+            ...TEMP_BYPASS_USER,
+            es_super_admin: 1
+          })
+        } else {
+          state.user = null
+        }
+        return
+      }
+
       const me = await authApi.fetchMe()
       const user = me?.success ? authApi.persistSessionProfile(me) : null
       if (user) {
@@ -39,6 +56,17 @@ export function useAuth() {
     state.loading = true
     state.error = ''
     try {
+      // TEMP_AUTH_BYPASS — revertir antes de commit (no llama API/BD)
+      if (TEMP_AUTH_BYPASS) {
+        state.user = { ...TEMP_BYPASS_USER }
+        authApi.persistSessionProfile({
+          success: true,
+          ...TEMP_BYPASS_USER,
+          es_super_admin: 1
+        })
+        return state.user
+      }
+
       const data = await authApi.login(rut, password)
       state.user = {
         rut: data.rut,
@@ -57,7 +85,13 @@ export function useAuth() {
   async function logout() {
     state.loading = true
     try {
-      await authApi.logout()
+      // TEMP_AUTH_BYPASS — revertir antes de commit
+      if (TEMP_AUTH_BYPASS) {
+        sessionStorage.removeItem('TEMP_AUTH_BYPASS_OK')
+        authApi.clearProfile()
+      } else {
+        await authApi.logout()
+      }
     } finally {
       state.user = null
       state.loading = false

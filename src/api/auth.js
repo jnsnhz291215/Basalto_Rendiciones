@@ -39,6 +39,7 @@ const PROFILE_KEYS = [
   'user_grupo',
   'user_super_admin',
   'user_permisos',
+  'user_admin_nivel',
   'usuarioActivo',
   'adminData',
   'userRUT',
@@ -123,7 +124,8 @@ export function normalizeAuthUser(data) {
   const user = {
     rut: source?.rut || data?.rut || '',
     nombre: nombre || '',
-    role: source?.role || data?.role || ''
+    role: source?.role || data?.role || '',
+    adminNivel: source?.adminNivel || data?.adminNivel || ''
   }
 
   return user.rut || user.role ? user : null
@@ -136,6 +138,7 @@ export function persistSessionProfile(data) {
   if (user.rut) localStorage.setItem('user_rut', user.rut)
   if (user.nombre) localStorage.setItem('user_name', user.nombre)
   if (user.role) localStorage.setItem('user_role', user.role)
+  if (user.adminNivel) localStorage.setItem('user_admin_nivel', user.adminNivel)
   if (data?.session_version) {
     localStorage.setItem('session_version', String(data.session_version))
   }
@@ -147,6 +150,7 @@ export function persistSessionProfile(data) {
       nombre: user.nombre,
       rut: user.rut,
       isAdmin: user.role === 'admin',
+      adminNivel: user.adminNivel || '',
       es_super_admin: data?.es_super_admin || 0,
       permisos: data?.permisos || [],
       permisos_cargo: data?.permisos_cargo || [],
@@ -216,6 +220,7 @@ export function readCachedUser() {
   const rut = localStorage.getItem('user_rut')
   const nombre = localStorage.getItem('user_name')
   const role = localStorage.getItem('user_role')
+  const adminNivel = localStorage.getItem('user_admin_nivel') || ''
   if (!rut && !role) return null
-  return { rut, nombre, role }
+  return { rut, nombre, role, adminNivel }
 }
