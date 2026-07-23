@@ -1,17 +1,17 @@
 <template>
   <section class="panel">
-    <div class="badge">SSO · cookie JWT</div>
-    <h1>{{ appName }}</h1>
-    <p class="lead">
-      Inicia sesión con la misma API de proyecto_basalto. La cookie httpOnly se
-      comparte entre los subdominios de Basalto.
-    </p>
-
-    <template v-if="!bootstrapped || loading && !user">
-      <p class="lead">Comprobando sesión…</p>
+    <template v-if="!bootstrapped || (loading && !user)">
+      <div class="panel-intro">
+        <h1>Módulo de Rendiciones</h1>
+        <p class="lead">Comprobando sesión…</p>
+      </div>
     </template>
 
     <template v-else-if="user">
+      <div class="panel-intro">
+        <h1>Sesión activa</h1>
+        <p class="lead">Ya ingresaste al módulo de rendiciones.</p>
+      </div>
       <dl class="status-card">
         <div>
           <dt>Nombre</dt>
@@ -27,48 +27,66 @@
         </div>
       </dl>
       <button class="btn btn-primary" type="button" :disabled="loading" @click="onLogout">
-        Cerrar sesión
+        <span>Cerrar sesión</span>
       </button>
-      <p class="hint">
-        Abre la otra app Vue: la sesión debería seguir activa usando la misma cookie
-        del backend centralizado.
-      </p>
     </template>
 
-    <form v-else @submit.prevent="onLogin">
-      <div class="field">
-        <label for="rut">RUT</label>
-        <input id="rut" v-model.trim="rut" autocomplete="username" required placeholder="12.345.678-9" />
+    <template v-else>
+      <div class="panel-intro">
+        <h1>Módulo de Rendiciones</h1>
+        <p class="lead">
+          Ingresa para administrar gastos de caja chica y anticipos de faena.
+        </p>
       </div>
-      <div class="field">
-        <label for="password">Contraseña</label>
-        <input
-          id="password"
-          v-model="password"
-          type="password"
-          autocomplete="current-password"
-          required
-        />
-      </div>
-      <p class="error" role="alert">{{ error || formError }}</p>
-      <button class="btn btn-primary" type="submit" :disabled="loading">
-        {{ loading ? 'Entrando…' : 'Iniciar sesión' }}
-      </button>
-      <p class="hint">
-        Backend: <code>{{ apiHint }}</code>. El backend debe permitir este origen
-        con CORS y credenciales.
-      </p>
-    </form>
+
+      <form class="login-form" @submit.prevent="onLogin">
+        <div class="field">
+          <label for="rut">RUT</label>
+          <input
+            id="rut"
+            v-model.trim="rut"
+            autocomplete="username"
+            required
+            placeholder="12.345.678-9"
+          />
+        </div>
+
+        <div class="field">
+          <label for="password">Contraseña</label>
+          <input
+            id="password"
+            v-model="password"
+            type="password"
+            autocomplete="current-password"
+            required
+            placeholder="••••••••"
+          />
+        </div>
+
+        <p v-if="error || formError" class="error" role="alert">{{ error || formError }}</p>
+
+        <button class="btn btn-primary" type="submit" :disabled="loading">
+          <span>{{ loading ? 'Entrando…' : 'INGRESAR AL SISTEMA' }}</span>
+          <svg
+            v-if="!loading"
+            class="btn-icon"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="3"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+          </svg>
+        </button>
+      </form>
+    </template>
   </section>
 </template>
 
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useAuth } from '../composables/useAuth'
-import { API_BASE_URL } from '../api/auth'
-
-const appName = import.meta.env.VITE_APP_NAME || 'Basalto Rendiciones'
-const apiHint = API_BASE_URL
 
 const { user, loading, error, bootstrapped, bootstrap, login, logout } = useAuth()
 

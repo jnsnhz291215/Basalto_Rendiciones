@@ -1,19 +1,22 @@
 <template>
   <div class="shell">
     <header class="topbar">
-      <div class="brand">Basalto <span>Rendiciones</span></div>
-      <nav v-if="user">
-        <router-link to="/">Sesión</router-link>
-      </nav>
+      <div class="brand">
+        <span class="brand-bar" aria-hidden="true"></span>
+        <span class="brand-text">BASALTO <span>RENDICIONES</span></span>
+      </div>
+      <span class="access-badge">Acceso Sistema</span>
     </header>
+
     <main class="main">
       <router-view />
     </main>
+
+    <footer class="footer">
+      &copy; 2026 Basalto Drilling SpA
+    </footer>
   </div>
 </template>
 
 <script setup>
-import { useAuth } from './composables/useAuth'
-
-const { user } = useAuth()
 </script>
