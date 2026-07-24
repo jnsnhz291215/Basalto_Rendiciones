@@ -518,6 +518,49 @@ Notas:
 
 ---
 
+## 9. Seguridad API — cierre de bypasses (plan obligatorio)
+
+Objetivo: backend **sin atajos de desarrollo** en producción / staging.
+
+### A. Limpieza de mocks en auth middleware
+
+- Eliminar flags tipo `ALLOW_BYPASS=true`, tokens hardcodeados o headers mágicos.
+- Todo request sin `Authorization: Bearer <JWT_VÁLIDO>` → **HTTP 401**.
+
+### B. Validación estricta de JWT e identidad
+
+- Secret único: `JWT_SECRET_RENDICIONES` en `.env` (nunca en el repo).
+- Payload mínimo: `id`, `rut`, `rol`, `trabajador_id`, `exp`.
+- En **cada** request autenticado, revalidar en BD que el usuario tenga `estado = 'activo'` y `is_deleted = FALSE` (token válido no basta si fue desactivado).
+
+### C. RBAC middleware
+
+- Helper reutilizable, ej. `checkRole(['SUPER_ADMIN_DEV', 'SUPER_ADMIN'])`.
+- Rutas críticas (crear admins, audit logs, gestión global de cajas) exigen roles explícitos; 403 si no aplica.
+
+### D. Consultas sanitizadas
+
+- Solo **prepared statements** con placeholders (`?`) vía `mysql2/promise` (u ORM parametrizado).
+- Cero concatenación de SQL con input de usuario.
+
+### Front (este repo Vue)
+
+- Existe `TEMP_AUTH_BYPASS` (`src/TEMP_AUTH_BYPASS.js`) para maquetar sin API.
+- **Antes de producción:** `TEMP_AUTH_BYPASS = false` y login real contra `/api/auth/login`.
+- Buscar en el repo: `TEMP_AUTH_BYPASS`.
+
+### Checklist de cierre
+
+| Ítem | Estado |
+|------|--------|
+| Sin bypass en middleware backend | Pendiente (repo API) |
+| JWT + recheck activo/no borrado | Pendiente |
+| `checkRole` en rutas críticas | Pendiente |
+| Prepared statements en todas las queries | Pendiente |
+| Front: `TEMP_AUTH_BYPASS = false` | Pendiente |
+
+---
+
 ## Historial de cambios de este documento
 
 | Fecha | Cambio |
@@ -528,3 +571,4 @@ Notas:
 | 2026-07-24 | ALTERs aplicados: SUPER_ADMIN, uk_cajas_clave_mes, FK RESTRICT, estados + es_legacy |
 | 2026-07-24 | Legacy separado: DROP es_legacy + tabla `rendiciones_legacy` |
 | 2026-07-24 | Índices: trabajador+is_deleted, fecha_documento, audit; DROP idx_cajas_clave_mes duplicado |
+| 2026-07-24 | §9 Plan seguridad API: cierre bypass, JWT, RBAC, prepared statements |
