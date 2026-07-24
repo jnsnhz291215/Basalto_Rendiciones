@@ -2,50 +2,10 @@
   <div class="dash">
     <header class="dash-header">
       <div class="dash-brand">
-        <button
-          class="dash-menu-btn"
-          type="button"
-          aria-label="Abrir o cerrar menú"
-          @click="toggleSidebar"
-        >
-          <svg class="dash-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M4 6h16M4 12h16M4 18h16"
-            />
-          </svg>
-        </button>
-
         <img class="dash-logo" src="/logoBASALTO.png" alt="Basalto Drilling" />
-        <div class="dash-brand-divider" aria-hidden="true"></div>
-        <span class="dash-module">Rendiciones y Caja Chica</span>
       </div>
 
       <div class="dash-header-actions">
-        <div class="dash-caja">
-          <span class="dash-caja-label">Caja:</span>
-          <select v-model="cajaActiva" class="dash-caja-select">
-            <option
-              v-for="c in cajasActivasOpciones"
-              :key="c.groupKey"
-              :value="c.groupKey"
-            >
-              {{ c.label }}
-            </option>
-          </select>
-
-          <div class="dash-caja-divider" aria-hidden="true"></div>
-
-          <span class="dash-caja-mes-label">Mes:</span>
-          <select v-model="mesActivo" class="dash-caja-select dash-caja-select--mes">
-            <option v-for="m in mesesDisponibles" :key="m.value" :value="m.value">
-              {{ m.label }}
-            </option>
-          </select>
-        </div>
-
         <div class="dash-user">
           <div class="dash-avatar">{{ initials }}</div>
           <button class="dash-logout" type="button" @click="onLogout">Salir</button>
@@ -63,39 +23,51 @@
 
       <aside class="dash-sidebar" :class="{ 'dash-sidebar--open': sidebarOpen }">
         <div class="dash-sidebar-top">
-          <div class="dash-sidebar-label-slot">
-            <span
-              class="dash-sidebar-label"
-              :class="{ 'dash-sidebar-text--invisible': !sidebarOpen }"
+          <div class="dash-sidebar-menu-toggle">
+            <span class="dash-sidebar-label">Menú</span>
+            <button
+              class="dash-menu-btn"
+              type="button"
+              aria-label="Abrir o cerrar menú"
+              @click="toggleSidebar"
             >
-              Módulos
-            </span>
+              <svg class="dash-menu-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+            </button>
           </div>
 
-          <button
-            type="button"
-            class="dash-nav-item"
-            :class="
-              activeModule === 'caja' ? 'dash-nav-item--active' : 'dash-nav-item--ghost'
-            "
-            title="Control Caja Chica"
-            @click="selectModule('caja')"
-          >
-            <svg class="dash-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
-              />
-            </svg>
-            <span
-              class="dash-nav-text"
-              :class="{ 'dash-sidebar-text--invisible': !sidebarOpen }"
+          <div class="dash-sidebar-modules">
+            <button
+              type="button"
+              class="dash-nav-item"
+              :class="
+                activeModule === 'caja' ? 'dash-nav-item--active' : 'dash-nav-item--ghost'
+              "
+              title="Control Caja Chica"
+              @click="selectModule('caja')"
             >
-              Control Caja Chica
-            </span>
-          </button>
+              <svg class="dash-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
+                />
+              </svg>
+              <span
+                class="dash-nav-text"
+                :class="{ 'dash-sidebar-text--invisible': !sidebarOpen }"
+              >
+                Control Caja Chica
+              </span>
+            </button>
+          </div>
         </div>
 
         <div class="dash-sidebar-bottom">
@@ -140,29 +112,62 @@
 
       <main class="dash-main">
         <template v-if="activeModule === 'caja'">
-        <section class="dash-metrics-inner">
-          <div class="dash-metric-card">
-            <div>
-              <p class="dash-metric-label">Saldo en Caja</p>
-              <p class="dash-metric-value dash-metric-value--ok">$ 1.450.000</p>
+        <section class="dash-metrics">
+          <div class="dash-metrics-head">
+            <div class="dash-metrics-title">
+              <span class="dash-metrics-dot" aria-hidden="true"></span>
+              <span>Estado de Caja y Presupuesto</span>
             </div>
-            <span class="dash-chip dash-chip--ok">Disponible</span>
+
+            <div class="dash-metrics-controls">
+              <div class="dash-caja">
+                <span class="dash-caja-label">Caja:</span>
+                <select v-model="cajaActiva" class="dash-caja-select">
+                  <option
+                    v-for="c in cajasActivasOpciones"
+                    :key="c.groupKey"
+                    :value="c.groupKey"
+                  >
+                    {{ c.label }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="dash-caja">
+                <span class="dash-caja-mes-label">Mes:</span>
+                <select v-model="mesActivo" class="dash-caja-select dash-caja-select--mes">
+                  <option v-for="m in mesesDisponibles" :key="m.value" :value="m.value">
+                    {{ m.label }}
+                  </option>
+                </select>
+              </div>
+            </div>
           </div>
 
-          <div class="dash-metric-card">
-            <div>
-              <p class="dash-metric-label">Gastos Rendidos (Mes)</p>
-              <p class="dash-metric-value">$ 820.500</p>
+          <div class="dash-metrics-inner">
+            <div class="dash-metric-card">
+              <div>
+                <p class="dash-metric-label">Saldo en Caja</p>
+                <p class="dash-metric-value dash-metric-value--ok">$ 1.450.000</p>
+              </div>
+              <span class="dash-chip dash-chip--ok">Disponible</span>
             </div>
-            <span class="dash-chip">14 Doctos</span>
-          </div>
 
-          <div class="dash-metric-card">
-            <div>
-              <p class="dash-metric-label">Anticipos Conductores</p>
-              <p class="dash-metric-value dash-metric-value--accent">$ 350.000</p>
+            <div class="dash-metric-card">
+              <div>
+                <p class="dash-metric-label">Gastos Rendidos (Mes)</p>
+                <p class="dash-metric-value">$ 820.500</p>
+              </div>
+              <span class="dash-chip">14 Doctos</span>
             </div>
-            <span class="dash-chip dash-chip--accent">3 Pendientes</span>
+
+            <div class="dash-metric-card">
+              <div>
+                <p class="dash-metric-label">Anticipos Conductores</p>
+                <p class="dash-metric-value dash-metric-value--accent">$ 350.000</p>
+              </div>
+              <span class="dash-chip dash-chip--accent">3 Pendientes</span>
+            </div>
           </div>
         </section>
 
@@ -183,160 +188,179 @@
 
       <!-- Rendición de Gastos -->
       <template v-if="activeTab === 'rendicion'">
-        <div class="dash-panel">
-          <div class="dash-panel-head">
+        <div class="dash-rendicion-gestion">
+          <div class="dash-cajas-toolbar">
             <div>
-              <h2>Nuevo Ingreso de Gasto</h2>
-              <p class="dash-hint">
-                Declaración de gastos pagados por el trabajador para reembolso.
+              <h3 class="dash-cajas-toolbar-title">Rendición de Gastos</h3>
+              <p class="dash-cajas-toolbar-hint">
+                Declaración y seguimiento de gastos para reembolso.
               </p>
             </div>
-            <button class="dash-btn-excel" type="button">
-              <span>📥</span>
-              <span>Importar Excel</span>
-            </button>
-          </div>
-
-          <form class="dash-rendicion-form" @submit.prevent="onSaveGasto">
-            <div class="dash-form dash-form--five">
-              <div class="dash-field">
-                <label>Fecha</label>
-                <input v-model="gasto.fecha" type="date" />
-              </div>
-              <div class="dash-field">
-                <label>Trabajador</label>
-                <select
-                  v-if="canIngresarPorOtros"
-                  v-model="gasto.trabajadorId"
-                  @change="onGastoTrabajadorChange"
-                >
-                  <option value="me">{{ nombreSesion }} (Yo)</option>
-                  <option
-                    v-for="t in trabajadores"
-                    :key="t.id"
-                    :value="String(t.id)"
-                  >
-                    {{ t.nombre }}
-                  </option>
-                </select>
-                <input
-                  v-else
-                  :value="gasto.trabajador"
-                  type="text"
-                  readonly
-                  class="dash-input-locked"
-                  title="Asignado automáticamente según el usuario en sesión"
-                />
-              </div>
-              <div class="dash-field">
-                <label>Tipo Docto</label>
-                <select v-model="gasto.tipo">
-                  <option>Boleta</option>
-                  <option>Factura</option>
-                  <option>Ticket Peaje</option>
-                </select>
-              </div>
-              <div class="dash-field">
-                <label>N° Docto</label>
-                <input v-model="gasto.numero" type="text" placeholder="12345" />
-              </div>
-              <div class="dash-field">
-                <label>Monto Total ($)</label>
-                <input
-                  v-model="gasto.monto"
-                  type="number"
-                  placeholder="0"
-                  class="dash-input-strong"
-                />
-              </div>
-            </div>
-
-            <div class="dash-form dash-form--six dash-form--section">
-              <div class="dash-field">
-                <label>Origen de Pago</label>
-                <select v-model="gasto.metodoPago">
-                  <option value="efectivo">Efectivo Personal</option>
-                  <option value="personal_tarjeta">Tarjeta Personal</option>
-                  <option value="empresa_tarjeta">💳 Tarjeta Empresa</option>
-                </select>
-              </div>
-
-              <div v-if="muestraTarjetaEmpresa" class="dash-field">
-                <label>Tarjeta Corporativa</label>
-                <select v-model="gasto.tarjetaEmpresaKey">
-                  <option value="">-- Seleccionar tarjeta --</option>
-                  <option
-                    v-for="t in tarjetasEmpresa"
-                    :key="t.ultimos4 + t.alias"
-                    :value="`${t.tipo}|${t.ultimos4}|${t.alias}`"
-                  >
-                    {{ t.alias }} — {{ t.tipo }} (•••• {{ t.ultimos4 }})
-                  </option>
-                </select>
-              </div>
-
-              <template v-if="muestraTarjetaPersonal">
-                <div class="dash-field">
-                  <label>Tipo Tarjeta Personal</label>
-                  <select v-model="gasto.tipoPersonal">
-                    <option value="Débito">Débito</option>
-                    <option value="Crédito">Crédito</option>
-                  </select>
-                </div>
-                <div class="dash-field">
-                  <label>Últimos 4 Dígitos</label>
-                  <input
-                    v-model="gasto.ultimos4"
-                    type="text"
-                    maxlength="4"
-                    placeholder="4321"
-                    class="dash-mono"
-                  />
-                </div>
-              </template>
-
-              <div
-                class="dash-field"
-                :class="{
-                  'dash-field--span4': muestraTarjetaEmpresa || muestraTarjetaPersonal,
-                  'dash-field--span5': !muestraTarjetaEmpresa && !muestraTarjetaPersonal
-                }"
+            <div class="dash-toolbar-actions">
+              <button class="dash-btn-excel" type="button">
+                <span>📥</span>
+                <span>Importar Excel</span>
+              </button>
+              <button
+                class="dash-btn-primary dash-btn-toggle-caja"
+                type="button"
+                @click="toggleFormGasto"
               >
-                <label>Adjuntar Comprobante (PDF / PNG / JPG)</label>
-                <input
-                  type="file"
-                  accept=".pdf,image/png,image/jpeg"
-                  class="dash-file"
-                  @change="onGastoFile"
-                />
-              </div>
-            </div>
-
-            <div class="dash-form--section">
-              <div class="dash-desc-head">
-                <label class="dash-field-label">Descripción / Observación</label>
-                <span
-                  class="dash-word-count"
-                  :class="{ 'dash-word-count--over': palabrasDescripcion > 500 }"
-                >
-                  {{ palabrasDescripcion }} / 500 palabras
-                </span>
-              </div>
-              <textarea
-                v-model="gasto.descripcion"
-                rows="3"
-                maxlength="3000"
-                placeholder="Detalle amplio del gasto..."
-                class="dash-textarea"
-              ></textarea>
-            </div>
-
-            <div class="dash-form-actions">
-              <button class="dash-btn-primary" type="submit">
-                <span>Guardar Rendición</span>
+                <span>{{ gastoFormOpen ? '▲' : '＋' }}</span>
+                <span>{{ gastoFormOpen ? 'Ocultar Formulario' : 'Nuevo Ingreso de Gasto' }}</span>
               </button>
             </div>
-          </form>
+          </div>
+
+          <div
+            class="dash-collapse"
+            :class="{ 'dash-collapse--open': gastoFormOpen }"
+          >
+            <div class="dash-collapse-inner">
+              <div class="dash-panel dash-gasto-form-panel dash-collapse-panel">
+            <div class="dash-caja-form-head">
+              <div>
+                <h2 class="dash-assign-title dash-assign-title--flush">Nuevo Ingreso de Gasto</h2>
+                <p class="dash-hint">
+                  Ingresa los detalles del comprobante para solicitar la devolución.
+                </p>
+              </div>
+              <button
+                class="dash-modal-close"
+                type="button"
+                aria-label="Cerrar formulario"
+                @click="closeFormGasto"
+              >
+                ×
+              </button>
+            </div>
+
+            <form class="dash-rendicion-form" @submit.prevent="onSaveGasto">
+              <div class="dash-form dash-gasto-grid-4">
+                <div class="dash-field">
+                  <label>Fecha</label>
+                  <input v-model="gasto.fecha" type="date" />
+                </div>
+                <div class="dash-field">
+                  <label>Trabajador</label>
+                  <select
+                    v-if="canIngresarPorOtros"
+                    v-model="gasto.trabajadorId"
+                    @change="onGastoTrabajadorChange"
+                  >
+                    <option value="me">{{ nombreSesion }} (Yo)</option>
+                    <option
+                      v-for="t in trabajadores"
+                      :key="t.id"
+                      :value="String(t.id)"
+                    >
+                      {{ t.nombre }}
+                    </option>
+                  </select>
+                  <input
+                    v-else
+                    :value="gasto.trabajador"
+                    type="text"
+                    readonly
+                    class="dash-input-locked"
+                    title="Asignado automáticamente según el usuario en sesión"
+                  />
+                </div>
+                <div class="dash-field">
+                  <label>Tipo Docto</label>
+                  <select v-model="gasto.tipo" @change="onGastoTipoChange">
+                    <option>Boleta</option>
+                    <option>Factura</option>
+                    <option>Ticket Peaje</option>
+                  </select>
+                </div>
+                <div v-if="gasto.tipo === 'Factura'" class="dash-field">
+                  <label>N° Docto</label>
+                  <input v-model="gasto.numero" type="text" placeholder="12345" />
+                </div>
+                <div class="dash-field">
+                  <label>Monto Total ($)</label>
+                  <input
+                    v-model="gasto.monto"
+                    type="number"
+                    placeholder="0"
+                    class="dash-input-strong"
+                  />
+                </div>
+              </div>
+
+              <div class="dash-form dash-gasto-grid-4 dash-form--section">
+                <div class="dash-field">
+                  <label>Caja / Fondo</label>
+                  <select v-model="gasto.cajaGroupKey">
+                    <option value="" disabled>Seleccionar caja...</option>
+                    <option
+                      v-for="c in cajasDisponiblesParaGasto"
+                      :key="c.groupKey"
+                      :value="c.groupKey"
+                    >
+                      {{ c.label }}
+                    </option>
+                  </select>
+                  <p
+                    v-if="!cajasDisponiblesParaGasto.length"
+                    class="dash-hint dash-hint--inline"
+                  >
+                    Sin cajas asignadas. Un administrador debe asignarlas en Trabajadores.
+                  </p>
+                </div>
+
+                <div class="dash-field">
+                  <label>Origen de Pago</label>
+                  <select v-model="gasto.metodoPago">
+                    <option value="efectivo">Efectivo</option>
+                    <option value="debito">Débito</option>
+                    <option value="credito">Crédito</option>
+                  </select>
+                </div>
+
+                <div class="dash-field dash-gasto-span-2">
+                  <label>Adjuntar Comprobante (PDF / PNG / JPG)</label>
+                  <input
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg"
+                    class="dash-file"
+                    @change="onGastoFile"
+                  />
+                </div>
+              </div>
+
+              <div class="dash-form--section">
+                <div class="dash-desc-head">
+                  <label class="dash-field-label">Descripción / Observación</label>
+                  <span
+                    class="dash-word-count"
+                    :class="{ 'dash-word-count--over': palabrasDescripcion > 500 }"
+                  >
+                    {{ palabrasDescripcion }} / 500 palabras
+                  </span>
+                </div>
+                <textarea
+                  v-model="gasto.descripcion"
+                  rows="3"
+                  maxlength="3000"
+                  placeholder="Detalle amplio del gasto..."
+                  class="dash-textarea"
+                ></textarea>
+              </div>
+
+              <div class="dash-caja-form-actions">
+                <button class="dash-btn-secondary" type="button" @click="closeFormGasto">
+                  Cancelar
+                </button>
+                <button class="dash-btn-primary" type="submit">
+                  <span>Guardar Rendición</span>
+                </button>
+              </div>
+            </form>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="dash-table-wrap">
@@ -345,13 +369,84 @@
               <h3>Historial de Rendiciones</h3>
               <p>Seguimiento de gastos declarados y su estado de reembolso al trabajador.</p>
             </div>
+            <div class="dash-historial-filters">
+              <div class="dash-historial-filter">
+                <label class="dash-sr-only" for="historial-caja">Caja</label>
+                <select
+                  id="historial-caja"
+                  v-model="historialFiltroCaja"
+                  class="dash-historial-select"
+                >
+                  <option value="">Todas las Cajas</option>
+                  <option
+                    v-for="c in cajasActivasOpciones"
+                    :key="c.groupKey"
+                    :value="c.groupKey"
+                  >
+                    {{ c.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="dash-historial-filter">
+                <label class="dash-sr-only" for="historial-mes">Mes</label>
+                <select
+                  id="historial-mes"
+                  v-model="historialFiltroMes"
+                  class="dash-historial-select dash-historial-select--mes"
+                >
+                  <option value="">Todos los Meses</option>
+                  <option v-for="m in mesesDisponibles" :key="m.value" :value="m.value">
+                    {{ m.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="dash-historial-search">
+                <label class="dash-sr-only" for="historial-buscar">Buscar trabajador</label>
+                <input
+                  id="historial-buscar"
+                  v-model="historialBusqueda"
+                  type="search"
+                  placeholder="Buscar por trabajador..."
+                  class="dash-search-input"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div v-if="historialFiltroActivo" class="dash-historial-totales">
+            <div class="dash-historial-total">
+              <span class="dash-historial-total-label">Total Anticipo</span>
+              <span class="dash-historial-total-value">{{ formatMontoCl(totalesHistorial.anticipo) }}</span>
+            </div>
+            <div class="dash-historial-total">
+              <span class="dash-historial-total-label">Total Gastos</span>
+              <span class="dash-historial-total-value">{{ formatMontoCl(totalesHistorial.gastos) }}</span>
+            </div>
+            <div class="dash-historial-total">
+              <span class="dash-historial-total-label">Total por Devolver</span>
+              <span class="dash-historial-total-value dash-historial-total-value--accent">
+                {{ formatMontoCl(totalesHistorial.porDevolver) }}
+              </span>
+            </div>
+          </div>
+
+          <div v-else class="dash-historial-banner">
+            <div class="dash-historial-banner-label">
+              <span class="dash-historial-banner-dot" aria-hidden="true"></span>
+              <span>Mostrando Últimos Ingresos Generales</span>
+            </div>
+            <p class="dash-historial-banner-hint">
+              Selecciona una caja o mes para calcular totales específicos
+            </p>
           </div>
 
           <table class="dash-table">
             <thead>
               <tr>
-                <th>Fecha</th>
+                <th>Fecha Docto</th>
+                <th>Subido el</th>
                 <th>ID / Origen</th>
+                <th>Arrastre</th>
                 <th>Trabajador</th>
                 <th>Pago / Docto</th>
                 <th class="dash-table-right">Monto</th>
@@ -361,26 +456,32 @@
             </thead>
             <tbody>
               <tr
-                v-for="row in movimientos"
+                v-for="row in movimientosFiltrados"
                 :key="row.rinde"
-                :class="{ 'dash-row-legacy': row.legacy }"
+                :class="{
+                  'dash-row-legacy': row.legacy,
+                  'dash-row-arrastre': !!row.arrastreMes
+                }"
               >
                 <td class="dash-mono">{{ row.fecha }}</td>
+                <td class="dash-mono dash-nowrap">{{ row.subidoEl || '—' }}</td>
                 <td>
                   <span v-if="row.legacy" class="dash-badge dash-badge--legacy">Legacy</span>
                   <span v-else class="dash-rinde">{{ row.rinde }}</span>
                 </td>
-                <td class="dash-table-strong">{{ row.trabajador }}</td>
                 <td>
                   <span
-                    v-if="row.esEmpresa"
-                    class="dash-pago-empresa"
-                    title="Tarjeta corporativa — sin devolución al trabajador"
+                    v-if="row.arrastreMes"
+                    class="dash-badge dash-badge--arrastre"
                   >
-                    💳 {{ row.pago }}
+                    Arrastre ({{ row.arrastreMes }})
                   </span>
-                  <span v-else>{{ row.pago }}</span>
-                  <span class="dash-subline">{{ row.docto }}</span>
+                  <span v-else class="dash-muted">—</span>
+                </td>
+                <td class="dash-table-strong">{{ row.trabajador }}</td>
+                <td>
+                  <span>{{ row.pago }}</span>
+                  <span v-if="row.docto" class="dash-subline">{{ row.docto }}</span>
                 </td>
                 <td class="dash-table-right dash-table-amount">{{ row.monto }}</td>
                 <td class="dash-table-center">
@@ -682,8 +783,8 @@
                   <label>Origen de Pago</label>
                   <select v-model="modalCorregir.metodoPago">
                     <option value="efectivo">Efectivo</option>
-                    <option value="empresa_tarjeta">Tarjeta de la Empresa</option>
-                    <option value="personal_tarjeta">Tarjeta Personal</option>
+                    <option value="debito">Débito</option>
+                    <option value="credito">Crédito</option>
                   </select>
                 </div>
                 <div v-if="modalCorregir.campos.comprobante" class="dash-field">
@@ -732,178 +833,381 @@
 
       <!-- Asignación a Conductor -->
       <div v-else-if="activeTab === 'asignacion'" class="dash-assign">
-        <div class="dash-panel dash-assign-form">
-          <h2 class="dash-assign-title">Registrar Anticipo / Fondo</h2>
-
-          <form class="dash-stack-form" @submit.prevent="onSaveAsignacion">
-            <div class="dash-field">
-              <label>Fondo Fijo / Caja</label>
-              <select v-model="asignacion.fondo">
-                <option>ADMINISTRACION CAJA</option>
-                <option>FAENA NORTE</option>
-              </select>
+        <div class="dash-rendicion-gestion">
+          <div class="dash-cajas-toolbar">
+            <div>
+              <h3 class="dash-cajas-toolbar-title">
+                Asignación a Conductor (Anticipos / Fondos)
+              </h3>
+              <p class="dash-cajas-toolbar-hint">
+                Registro de habilitaciones y anticipos entregados a conductores o trabajadores.
+              </p>
             </div>
+            <div class="dash-toolbar-actions">
+              <button class="dash-btn-excel" type="button">
+                <span>📥</span>
+                <span>Importar Excel</span>
+              </button>
+              <button
+                class="dash-btn-primary dash-btn-toggle-caja"
+                type="button"
+                @click="toggleFormAnticipo"
+              >
+                <span>{{ anticipoFormOpen ? '▲' : '＋' }}</span>
+                <span>
+                  {{ anticipoFormOpen ? 'Ocultar Formulario' : 'Registrar Anticipo / Fondo' }}
+                </span>
+              </button>
+            </div>
+          </div>
 
-            <div class="dash-field-row">
-              <div class="dash-field">
-                <label>Fecha</label>
-                <input v-model="asignacion.fecha" type="date" />
+          <div
+            class="dash-collapse"
+            :class="{ 'dash-collapse--open': anticipoFormOpen }"
+          >
+            <div class="dash-collapse-inner">
+              <div class="dash-panel dash-gasto-form-panel dash-collapse-panel">
+            <div class="dash-caja-form-head">
+              <div>
+                <h2 class="dash-assign-title dash-assign-title--flush">
+                  Nuevo Registro de Anticipo
+                </h2>
+                <p class="dash-hint">
+                  Completa los datos de la asignación o fondo entregado.
+                </p>
               </div>
-              <div class="dash-field">
-                <label>Hora</label>
-                <input v-model="asignacion.hora" type="time" />
+              <button
+                class="dash-modal-close"
+                type="button"
+                aria-label="Cerrar formulario"
+                @click="closeFormAnticipo"
+              >
+                ×
+              </button>
+            </div>
+
+            <form class="dash-anticipo-form" @submit.prevent="onSaveAsignacion">
+              <div class="dash-form dash-gasto-grid-4">
+                <div class="dash-field">
+                  <label>Fondo Fijo / Caja</label>
+                  <select v-model="asignacion.fondo">
+                    <option
+                      v-for="c in cajasActivasOpciones"
+                      :key="c.groupKey"
+                      :value="c.groupKey"
+                    >
+                      {{ c.label }}
+                    </option>
+                  </select>
+                </div>
+                <div class="dash-field">
+                  <label>Fecha</label>
+                  <input v-model="asignacion.fecha" type="date" />
+                </div>
+                <div class="dash-field">
+                  <label>Conductor / Trabajador</label>
+                  <select v-model="asignacion.conductor">
+                    <option value="">Seleccionar Conductor...</option>
+                    <option v-for="t in trabajadores" :key="t.id" :value="t.nombre">
+                      {{ t.nombre }}
+                    </option>
+                  </select>
+                </div>
+                <div class="dash-field">
+                  <label>N° Doc / Vale</label>
+                  <input
+                    v-model="asignacion.doc"
+                    type="text"
+                    placeholder="N° de comprobante..."
+                  />
+                </div>
+              </div>
+
+              <div class="dash-form dash-gasto-grid-4 dash-form--section">
+                <div class="dash-field">
+                  <label>Monto ($)</label>
+                  <input
+                    v-model="asignacion.monto"
+                    type="number"
+                    placeholder="0"
+                    class="dash-input-strong"
+                  />
+                </div>
+                <div class="dash-field">
+                  <label>Observaciones / Motivo</label>
+                  <input
+                    v-model="asignacion.observaciones"
+                    type="text"
+                    placeholder="Motivo o faena..."
+                  />
+                </div>
+                <div class="dash-field dash-gasto-span-2">
+                  <label>Adjuntar Comprobante / Vale (opcional)</label>
+                  <input
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg"
+                    class="dash-file"
+                    @change="onAsignacionFile"
+                  />
+                </div>
+              </div>
+
+              <div class="dash-caja-form-actions">
+                <button class="dash-btn-secondary" type="button" @click="closeFormAnticipo">
+                  Cancelar
+                </button>
+                <button class="dash-btn-primary" type="submit">
+                  <span>Guardar Asignación</span>
+                </button>
+              </div>
+            </form>
               </div>
             </div>
-
-            <div class="dash-field">
-              <label>Conductor</label>
-              <select v-model="asignacion.conductor">
-                <option value="">Seleccionar Conductor...</option>
-                <option>Pedro González</option>
-                <option>Mario Silva</option>
-              </select>
-            </div>
-
-            <div class="dash-field-row">
-              <div class="dash-field">
-                <label>Tipo</label>
-                <input
-                  v-model="asignacion.tipo"
-                  type="text"
-                  placeholder="Camión / Camioneta"
-                />
-              </div>
-              <div class="dash-field">
-                <label>Patente</label>
-                <input v-model="asignacion.patente" type="text" placeholder="ABCD-12" />
-              </div>
-            </div>
-
-            <div class="dash-field">
-              <label>N° Doc / Vale</label>
-              <input
-                v-model="asignacion.doc"
-                type="text"
-                placeholder="N° de comprobante..."
-              />
-            </div>
-
-            <div class="dash-field">
-              <label>Observaciones</label>
-              <input
-                v-model="asignacion.observaciones"
-                type="text"
-                placeholder="Motivo o faena..."
-              />
-            </div>
-
-            <div class="dash-field">
-              <label>Monto ($)</label>
-              <input
-                v-model="asignacion.monto"
-                type="number"
-                placeholder="0"
-                class="dash-input-strong"
-              />
-            </div>
-
-            <button class="dash-btn-primary dash-btn-block" type="submit">
-              <span>Guardar asignación</span>
-            </button>
-          </form>
+          </div>
         </div>
 
-        <div class="dash-assign-side">
-          <div class="dash-import-card">
+        <div class="dash-table-wrap">
+          <div class="dash-panel-head dash-cajas-head">
             <div>
-              <h3>Importación Masiva</h3>
-              <p>Carga filas copiadas directamente desde una planilla Excel.</p>
+              <h3>Habilitaciones y Asignaciones Recientes</h3>
+              <p>Listado de anticipos y fondos entregados a conductores.</p>
             </div>
-            <button class="dash-btn-excel" type="button">
-              <span>📥</span>
-              <span>Importar Excel</span>
-            </button>
+            <div class="dash-historial-filters">
+              <div class="dash-historial-filter">
+                <label class="dash-sr-only" for="anticipo-caja">Caja</label>
+                <select
+                  id="anticipo-caja"
+                  v-model="anticipoFiltroCaja"
+                  class="dash-historial-select"
+                >
+                  <option value="">Todas las Cajas</option>
+                  <option
+                    v-for="c in cajasActivasOpciones"
+                    :key="c.groupKey"
+                    :value="c.groupKey"
+                  >
+                    {{ c.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="dash-historial-filter">
+                <label class="dash-sr-only" for="anticipo-mes">Mes</label>
+                <select
+                  id="anticipo-mes"
+                  v-model="anticipoFiltroMes"
+                  class="dash-historial-select dash-historial-select--mes"
+                >
+                  <option value="">Todos los Meses</option>
+                  <option v-for="m in mesesDisponibles" :key="m.value" :value="m.value">
+                    {{ m.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="dash-historial-search">
+                <label class="dash-sr-only" for="anticipo-buscar">Buscar conductor</label>
+                <input
+                  id="anticipo-buscar"
+                  v-model="anticipoBusqueda"
+                  type="search"
+                  placeholder="Buscar por conductor..."
+                  class="dash-search-input"
+                />
+              </div>
+            </div>
           </div>
 
-          <div class="dash-table-wrap">
-            <h3>Habilitaciones y Asignaciones Recientes</h3>
-            <table class="dash-table">
-              <thead>
-                <tr>
-                  <th>Fecha/Hora</th>
-                  <th>Conductor</th>
-                  <th>Patente</th>
-                  <th>N° Doc</th>
-                  <th>Observaciones</th>
-                  <th class="dash-table-right">Monto</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in asignaciones" :key="row.doc">
-                  <td>{{ row.fechaHora }}</td>
-                  <td class="dash-table-strong">{{ row.conductor }}</td>
-                  <td class="dash-mono">{{ row.patente }}</td>
-                  <td>{{ row.doc }}</td>
-                  <td>{{ row.observaciones }}</td>
-                  <td class="dash-table-right dash-rinde">{{ row.monto }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <table class="dash-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Conductor</th>
+                <th>N° Doc / Vale</th>
+                <th>Observaciones</th>
+                <th class="dash-table-center">Adjunto</th>
+                <th class="dash-table-right">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in asignacionesFiltradas" :key="row.doc">
+                <td class="dash-mono">{{ row.fecha }}</td>
+                <td class="dash-table-strong">{{ row.conductor }}</td>
+                <td>{{ row.doc }}</td>
+                <td>{{ row.observaciones }}</td>
+                <td class="dash-table-center">
+                  <button
+                    v-if="row.comprobanteNombre"
+                    type="button"
+                    class="dash-adjunto-btn"
+                    :title="row.comprobanteNombre"
+                  >
+                    📄 {{ labelAdjunto(row.comprobanteNombre) }}
+                  </button>
+                  <span v-else class="dash-adjunto-empty">—</span>
+                </td>
+                <td class="dash-table-right dash-rinde">{{ row.monto }}</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
 
       <!-- Informes y Cartola -->
       <div v-else-if="activeTab === 'informes'" class="dash-informes">
-        <div class="dash-panel">
-          <h2 class="dash-assign-title">Generador de Reportes y Cartolas</h2>
+        <div class="dash-cajas-toolbar">
+          <div>
+            <h3 class="dash-cajas-toolbar-title">Centro de Informes y Cartolas</h3>
+            <p class="dash-cajas-toolbar-hint">
+              Consolidado mensual de movimientos e importación/exportación masiva.
+            </p>
+          </div>
+          <div class="dash-toolbar-actions">
+            <button class="dash-btn-excel" type="button">
+              <span>📥</span>
+              <span>Importar Excel</span>
+            </button>
+            <button
+              class="dash-btn-primary dash-btn-toggle-caja"
+              type="button"
+              @click="toggleFormInforme"
+            >
+              <span>{{ informeFormOpen ? '▲' : '＋' }}</span>
+              <span>{{ informeFormOpen ? 'Ocultar Filtros' : 'Filtros de Informe' }}</span>
+            </button>
+          </div>
+        </div>
 
-          <form class="dash-informe-form" @submit.prevent="onGenerarInforme">
-            <div class="dash-field dash-field--span2">
-              <label>Tipo de Informe</label>
-              <select v-model="informe.tipo">
-                <option>Cartola Caja Completa</option>
-                <option>Cartola Caja entre Fechas</option>
-                <option>Gastos por Ítem / Categoría</option>
-                <option>Gastos por Conductores / Trabajador</option>
-                <option>Resumen por N° Rinde (Manager)</option>
-              </select>
+        <div
+          class="dash-collapse"
+          :class="{ 'dash-collapse--open': informeFormOpen }"
+        >
+          <div class="dash-collapse-inner">
+            <div class="dash-panel dash-gasto-form-panel dash-collapse-panel">
+          <div class="dash-caja-form-head">
+            <div>
+              <h2 class="dash-assign-title dash-assign-title--flush">
+                Configurar Generación de Informe
+              </h2>
+              <p class="dash-hint">La consulta es por período de mes cerrado completo.</p>
+            </div>
+            <button
+              class="dash-modal-close"
+              type="button"
+              aria-label="Cerrar filtros"
+              @click="closeFormInforme"
+            >
+              ×
+            </button>
+          </div>
+
+          <form class="dash-informe-form" @submit.prevent="onAplicarFiltrosInforme">
+            <div class="dash-form dash-form--three">
+              <div class="dash-field">
+                <label>Caja Chica</label>
+                <select v-model="informe.caja">
+                  <option value="">Todas las Cajas</option>
+                  <option
+                    v-for="c in cajasActivasOpciones"
+                    :key="c.groupKey"
+                    :value="c.groupKey"
+                  >
+                    {{ c.label }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="dash-field">
+                <label class="dash-label-accent">Mes Cerrado (1 al 31) 📅</label>
+                <select v-model="informe.mes">
+                  <option
+                    v-for="m in mesesCerradosOpciones"
+                    :key="m.value"
+                    :value="m.value"
+                  >
+                    {{ m.label }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="dash-field">
+                <label>Trabajador / Conductor</label>
+                <select v-model="informe.persona">
+                  <option value="">** Todos los Trabajadores **</option>
+                  <option v-for="t in trabajadores" :key="t.id" :value="t.nombre">
+                    {{ t.nombre }}
+                  </option>
+                  <option value="Juan Pérez">Juan Pérez</option>
+                </select>
+              </div>
             </div>
 
-            <div class="dash-field">
-              <label>Desde</label>
-              <input v-model="informe.desde" type="date" />
+            <div class="dash-informe-tipos">
+              <div class="dash-informe-tipos-head">
+                <label>Tipos de Movimiento a Incluir:</label>
+                <div class="dash-informe-tipos-toggles">
+                  <button
+                    class="dash-link-btn"
+                    type="button"
+                    @click="seleccionarTodosTiposInforme(true)"
+                  >
+                    Seleccionar Todos
+                  </button>
+                  <button
+                    class="dash-link-btn"
+                    type="button"
+                    @click="seleccionarTodosTiposInforme(false)"
+                  >
+                    Desmarcar Todos
+                  </button>
+                </div>
+              </div>
+
+              <div class="dash-informe-tipos-grid">
+                <label class="dash-informe-check">
+                  <input v-model="informe.tipos.apertura" type="checkbox" />
+                  <span>Inyección / Fondo Fijo</span>
+                </label>
+                <label class="dash-informe-check">
+                  <input v-model="informe.tipos.rendicion" type="checkbox" />
+                  <span>Rendición (Gasto)</span>
+                </label>
+                <label class="dash-informe-check">
+                  <input v-model="informe.tipos.anticipo" type="checkbox" />
+                  <span>Anticipo / Vale</span>
+                </label>
+                <label class="dash-informe-check">
+                  <input v-model="informe.tipos.devolucion" type="checkbox" />
+                  <span>Devolución Trabajador</span>
+                </label>
+                <label class="dash-informe-check">
+                  <input v-model="informe.tipos.sobrante" type="checkbox" />
+                  <span>Devolución Sobrante</span>
+                </label>
+              </div>
             </div>
 
-            <div class="dash-field">
-              <label>Hasta</label>
-              <input v-model="informe.hasta" type="date" />
-            </div>
-
-            <div class="dash-field">
-              <label>Trabajador / Conductor</label>
-              <select v-model="informe.persona">
-                <option>**Todos**</option>
-                <option>Juan Pérez</option>
-                <option>Pedro González</option>
-                <option>Carlos Muñoz</option>
-              </select>
-            </div>
-
-            <div class="dash-informe-actions">
-              <button class="dash-btn-secondary" type="button">
-                <span>🖨️</span>
-                <span>Imprimir PDF</span>
-              </button>
-              <button class="dash-btn-excel" type="button">
-                <span>📊</span>
-                <span>Exportar Excel</span>
-              </button>
-              <button class="dash-btn-primary" type="submit">
-                <span>Generar Informe</span>
-              </button>
+            <div class="dash-informe-form-actions">
+              <div class="dash-toolbar-actions">
+                <button class="dash-btn-secondary" type="button">
+                  <span>📊</span>
+                  <span>Exportar Excel</span>
+                </button>
+                <button class="dash-btn-pdf" type="button">
+                  <span>📄</span>
+                  <span>Exportar PDF</span>
+                </button>
+              </div>
+              <div class="dash-toolbar-actions">
+                <button class="dash-btn-secondary" type="button" @click="closeFormInforme">
+                  Cancelar
+                </button>
+                <button class="dash-btn-primary" type="submit">
+                  <span>Aplicar Filtros</span>
+                </button>
+              </div>
             </div>
           </form>
+            </div>
+          </div>
         </div>
 
         <div class="dash-panel">
@@ -912,10 +1216,7 @@
               <h3>{{ informeResultado.titulo }}</h3>
               <p>{{ informeResultado.periodo }}</p>
             </div>
-            <div class="dash-informe-result-meta">
-              <span>Total Movimientos</span>
-              <strong>{{ informeResultado.total }}</strong>
-            </div>
+            <span class="dash-informe-count">{{ informeResultado.total }}</span>
           </div>
 
           <div class="dash-table-scroll">
@@ -927,13 +1228,13 @@
                   <th>Tipo</th>
                   <th>Detalle / Observación</th>
                   <th>Responsable</th>
-                  <th class="dash-table-right">Abono (Ingreso)</th>
-                  <th class="dash-table-right">Cargo (Gasto)</th>
+                  <th class="dash-table-right">Abono</th>
+                  <th class="dash-table-right">Cargo</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="row in cartola" :key="row.doc + row.fecha">
-                  <td>{{ row.fecha }}</td>
+                <tr v-for="row in cartolaFiltrada" :key="row.doc + row.fecha">
+                  <td class="dash-mono">{{ row.fecha }}</td>
                   <td class="dash-mono" :class="row.docClass">{{ row.doc }}</td>
                   <td>
                     <span class="dash-badge" :class="row.badgeClass">{{ row.tipo }}</span>
@@ -949,8 +1250,10 @@
                   <td colspan="5" class="dash-table-right dash-tfoot-label">
                     Totales acumulados:
                   </td>
-                  <td class="dash-table-right dash-metric-value--ok">$ 2.000.000</td>
-                  <td class="dash-table-right dash-rinde">$ 550.000</td>
+                  <td class="dash-table-right dash-metric-value--ok">
+                    {{ cartolaTotales.abono }}
+                  </td>
+                  <td class="dash-table-right dash-rinde">{{ cartolaTotales.cargo }}</td>
                 </tr>
               </tfoot>
             </table>
@@ -959,131 +1262,174 @@
       </div>
 
       <!-- Gestión de Cajas -->
-      <div v-else-if="activeTab === 'cajas'" class="dash-assign">
-        <div class="dash-panel dash-assign-form">
-          <div class="dash-assign-title-block">
-            <h2 class="dash-assign-title dash-assign-title--flush">Configuración de Caja Chica</h2>
-            <p class="dash-hint">
-              El Nombre Real Interno agrupa el histórico anual. El Nombre Exterior es
-              totalmente libre.
+      <div v-else-if="activeTab === 'cajas'" class="dash-cajas-gestion">
+        <div class="dash-cajas-toolbar">
+          <div>
+            <h3 class="dash-cajas-toolbar-title">Presupuestos y Cajas Chicas</h3>
+            <p class="dash-cajas-toolbar-hint">
+              Listado histórico y proyección de fondos por caja.
             </p>
           </div>
+          <button
+            class="dash-btn-primary dash-btn-toggle-caja"
+            type="button"
+            @click="toggleFormCaja"
+          >
+            <span>{{ cajaFormOpen ? '▲' : '＋' }}</span>
+            <span>{{ cajaFormOpen ? 'Ocultar Formulario' : 'Nueva Caja Chica' }}</span>
+          </button>
+        </div>
 
-          <form class="dash-stack-form" @submit.prevent="onSaveCaja">
-            <div class="dash-field">
-              <label class="dash-label-accent">
-                Nombre Real Interno (Clave de Agrupación) 🔑
-              </label>
-              <div class="dash-stack-tight">
-                <select
-                  v-model="cajaForm.groupKeySelect"
-                  :disabled="cajaForm.editIndex !== null"
-                  @change="onGroupKeySelectChange"
-                >
-                  <option value="">-- Seleccionar Grupo Existente --</option>
-                  <option
-                    v-for="g in gruposInternosExistentes"
-                    :key="g.groupKey"
-                    :value="g.groupKey"
-                  >
-                    {{ g.groupKey }} ({{ g.ejemploExterior }})
-                  </option>
-                  <option value="__NUEVO__">+ CREAR NUEVO GRUPO INTERNO</option>
-                </select>
-
-                <input
-                  v-if="cajaForm.groupKeySelect === '__NUEVO__'"
-                  v-model="cajaForm.groupKeyNuevo"
-                  type="text"
-                  placeholder="Ej: FAENA_SUR (Nombre interno sin espacios)"
-                  class="dash-mono dash-input-accent-border"
-                  @input="onGroupKeyNuevoInput"
-                />
-              </div>
-              <span class="dash-field-hint">
-                Clave inmutable para sumatorias anuales (ej. WHERE group_key =
-                'FAENA_NORTE').
-              </span>
+        <div
+          class="dash-collapse"
+          :class="{ 'dash-collapse--open': cajaFormOpen }"
+        >
+          <div class="dash-collapse-inner">
+            <div
+              ref="formCajaEl"
+              class="dash-panel dash-caja-form-panel dash-collapse-panel"
+            >
+          <div class="dash-caja-form-head">
+            <div>
+              <h2 class="dash-assign-title dash-assign-title--flush">
+                {{ cajaForm.editIndex !== null ? 'Editar Presupuesto de Caja' : 'Configuración de Caja Chica' }}
+              </h2>
+              <p class="dash-hint">
+                Asigna la clave interna de agrupación y el presupuesto mensual.
+              </p>
             </div>
-
-            <div class="dash-field">
-              <label>Nombre Exterior / Público (Libre)</label>
-              <input
-                v-model="cajaForm.displayName"
-                type="text"
-                placeholder="Ej: caja pagos x mes julio"
-              />
-            </div>
-
-            <div class="dash-field">
-              <label>Centro de Costo / Empresa</label>
-              <input
-                v-model="cajaForm.centroCosto"
-                type="text"
-                placeholder="Ej: CC-101 / Basalto Drilling SpA"
-              />
-            </div>
-
-            <div class="dash-field">
-              <label>Responsable de Caja</label>
-              <select v-model="cajaForm.responsable">
-                <option value="">Seleccionar Responsable...</option>
-                <option>Carlos Muñoz</option>
-                <option>Juan Sanhueza</option>
-                <option>Pedro González</option>
-              </select>
-            </div>
-
-            <div class="dash-field-row">
-              <div class="dash-field">
-                <label>Mes Asignado</label>
-                <select v-model="cajaForm.mes" class="dash-input-strong">
-                  <option v-for="m in mesesDisponibles" :key="m.value" :value="m.value">
-                    {{ m.label }}
-                  </option>
-                </select>
-              </div>
-              <div class="dash-field">
-                <label>Fondo Estimado Mes ($)</label>
-                <input
-                  v-model="cajaForm.fondoEstimado"
-                  type="number"
-                  placeholder="2000000"
-                  class="dash-input-strong"
-                />
-              </div>
-            </div>
-
-            <div class="dash-field">
-              <label>Estado</label>
-              <select v-model="cajaForm.estado">
-                <option value="activa">Activa</option>
-                <option value="inactiva">Inactiva</option>
-              </select>
-            </div>
-
-            <button class="dash-btn-primary dash-btn-block" type="submit">
-              <span>Guardar Presupuesto Mensual</span>
+            <button
+              class="dash-modal-close"
+              type="button"
+              aria-label="Cerrar formulario"
+              @click="closeFormCaja"
+            >
+              ×
             </button>
+          </div>
+
+          <form class="dash-caja-form" @submit.prevent="onSaveCaja">
+            <div class="dash-caja-block">
+              <span class="dash-caja-block-label dash-caja-block-label--accent">
+                1. Identificación General
+              </span>
+
+              <div class="dash-caja-grid-2">
+                <div class="dash-field">
+                  <label>Nombre Visible (Exterior)</label>
+                  <input
+                    v-model="cajaForm.displayName"
+                    type="text"
+                    placeholder="Ej: caja pagos x mes julio"
+                    required
+                  />
+                </div>
+
+                <div class="dash-field">
+                  <label class="dash-label-accent">Clave Interna (Agrupador) 🔑</label>
+                  <div class="dash-stack-tight">
+                    <select
+                      v-model="cajaForm.groupKeySelect"
+                      class="dash-mono"
+                      :disabled="cajaForm.editIndex !== null"
+                      @change="onGroupKeySelectChange"
+                    >
+                      <option value="">-- Seleccionar Grupo Existente --</option>
+                      <option
+                        v-for="g in gruposInternosExistentes"
+                        :key="g.groupKey"
+                        :value="g.groupKey"
+                      >
+                        {{ g.groupKey }} ({{ g.ejemploExterior }})
+                      </option>
+                      <option value="__NUEVO__">+ Crear Nueva Clave</option>
+                    </select>
+                    <input
+                      v-if="cajaForm.groupKeySelect === '__NUEVO__'"
+                      v-model="cajaForm.groupKeyNuevo"
+                      type="text"
+                      placeholder="Ej: FAENA_SUR"
+                      class="dash-mono dash-input-accent-border"
+                      @input="onGroupKeyNuevoInput"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div class="dash-caja-grid-2">
+                <div class="dash-field">
+                  <label>Responsable</label>
+                  <select v-model="cajaForm.responsable">
+                    <option value="">Seleccionar Responsable...</option>
+                    <option>Carlos Muñoz</option>
+                    <option>Juan Sanhueza</option>
+                    <option>Pedro González</option>
+                  </select>
+                </div>
+
+                <div class="dash-field">
+                  <label>Centro de Costo</label>
+                  <input
+                    v-model="cajaForm.centroCosto"
+                    type="text"
+                    placeholder="Ej: CC-101 / Basalto"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="dash-caja-block dash-caja-block--budget">
+              <span class="dash-caja-block-label">2. Asignación Mensual</span>
+
+              <div class="dash-caja-grid-3">
+                <div class="dash-field">
+                  <label>Mes</label>
+                  <select v-model="cajaForm.mes" class="dash-input-strong">
+                    <option v-for="m in mesesDisponibles" :key="m.value" :value="m.value">
+                      {{ m.label }}
+                    </option>
+                  </select>
+                </div>
+
+                <div class="dash-field">
+                  <label>Fondo ($)</label>
+                  <input
+                    v-model="cajaForm.fondoEstimado"
+                    type="number"
+                    placeholder="2000000"
+                    class="dash-input-strong"
+                  />
+                </div>
+
+                <div class="dash-field">
+                  <label>Estado</label>
+                  <select v-model="cajaForm.estado">
+                    <option value="activa">Activa</option>
+                    <option value="inactiva">Inactiva</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="dash-caja-form-actions">
+              <button class="dash-btn-secondary" type="button" @click="closeFormCaja">
+                Cancelar
+              </button>
+              <button class="dash-btn-primary" type="submit">
+                <span>Guardar Presupuesto</span>
+              </button>
+            </div>
           </form>
+            </div>
+          </div>
         </div>
 
         <div class="dash-table-wrap dash-cajas-list">
-          <div class="dash-panel-head dash-cajas-head">
-            <div>
-              <h3>Presupuestos Mensuales por Agrupador</h3>
-              <p>
-                El group_key agrupa el año. El nombre exterior es libre y no afecta
-                reportes.
-              </p>
-            </div>
-          </div>
-
           <table class="dash-table">
             <thead>
               <tr>
-                <th>ID Interno / Agrupador</th>
-                <th>Nombre Exterior</th>
+                <th>Clave Interna</th>
+                <th>Nombre Visible (Exterior)</th>
                 <th>Mes</th>
                 <th>CC</th>
                 <th>Responsable</th>
@@ -1134,83 +1480,128 @@
           </div>
 
           <!-- Admin Users -->
-          <div v-if="activeAdminTab === 'admin-users'" class="dash-assign">
-            <div v-if="canCreateAdmins" class="dash-panel dash-assign-form">
-              <div class="dash-assign-title-block">
-                <h2 class="dash-assign-title dash-assign-title--flush">Nuevo Administrador</h2>
-                <p class="dash-hint">
-                  Creación de administradores con credenciales temporales. {{ adminCreateHint }}
+          <div v-if="activeAdminTab === 'admin-users'" class="dash-admin-tab">
+            <div class="dash-cajas-toolbar">
+              <div>
+                <h3 class="dash-cajas-toolbar-title">Administradores del Sistema</h3>
+                <p class="dash-cajas-toolbar-hint">
+                  Gestión de usuarios con permisos globales de configuración.
                 </p>
               </div>
+              <button
+                v-if="canCreateAdmins"
+                class="dash-btn-primary dash-btn-toggle-caja"
+                type="button"
+                @click="toggleFormAdminUser"
+              >
+                <span>{{ adminFormOpen ? '▲' : '＋' }}</span>
+                <span>{{ adminFormOpen ? 'Ocultar Formulario' : 'Nuevo Administrador' }}</span>
+              </button>
+            </div>
 
-              <form class="dash-stack-form" @submit.prevent="onSaveAdmin">
-                <div class="dash-field">
-                  <div class="dash-desc-head">
-                    <label>RUT</label>
-                    <span class="dash-rut-status" :class="`dash-rut-status--${adminRutStatus.state}`">
-                      {{ adminRutStatus.text }}
-                    </span>
-                  </div>
-                  <input
-                    v-model="adminForm.rut"
-                    type="text"
-                    placeholder="12345678-9"
-                  />
+            <div
+              v-if="canCreateAdmins"
+              class="dash-collapse"
+              :class="{ 'dash-collapse--open': adminFormOpen }"
+            >
+              <div class="dash-collapse-inner">
+                <div class="dash-panel dash-gasto-form-panel dash-collapse-panel">
+              <div class="dash-caja-form-head">
+                <div>
+                  <h2 class="dash-assign-title dash-assign-title--flush">
+                    Crear Nuevo Administrador
+                  </h2>
+                  <p class="dash-hint">{{ adminCreateHint }}</p>
                 </div>
-
-                <div class="dash-field">
-                  <label>Nombre Completo</label>
-                  <input
-                    v-model="adminForm.nombre"
-                    type="text"
-                    placeholder="Juan Sanhueza"
-                  />
-                </div>
-
-                <div class="dash-field">
-                  <label>Correo Electrónico</label>
-                  <input
-                    v-model="adminForm.correo"
-                    type="email"
-                    placeholder="jsanhueza@basaltodrilling.cl"
-                  />
-                </div>
-
-                <div class="dash-field">
-                  <label>Rol</label>
-                  <select v-model="adminForm.rol">
-                    <option v-for="rol in creatableAdminRoles" :key="rol" :value="rol">
-                      {{ rol }}
-                    </option>
-                  </select>
-                </div>
-
-                <div class="dash-cred-block">
-                  <label class="dash-field-label">Contraseña Temporal</label>
-                  <div class="dash-radio-col">
-                    <label class="dash-radio">
-                      <input v-model="adminForm.passType" type="radio" value="rut" />
-                      <span>Generar automáticamente basada en el RUT</span>
-                    </label>
-                    <label class="dash-radio">
-                      <input v-model="adminForm.passType" type="radio" value="manual" />
-                      <span>Ingresar clave temporal manual</span>
-                    </label>
-                  </div>
-                  <input
-                    v-if="adminForm.passType === 'manual'"
-                    v-model="adminForm.password"
-                    type="password"
-                    class="dash-input-dark"
-                    placeholder="•••••••• (Temporal)"
-                    autocomplete="new-password"
-                  />
-                </div>
-
-                <button class="dash-btn-primary dash-btn-block" type="submit">
-                  <span>Crear Administrador</span>
+                <button
+                  class="dash-modal-close"
+                  type="button"
+                  aria-label="Cerrar"
+                  @click="closeFormAdminUser"
+                >
+                  ×
                 </button>
+              </div>
+
+              <form class="dash-admin-form" @submit.prevent="onSaveAdmin">
+                <div class="dash-caja-grid-3">
+                  <div class="dash-field">
+                    <div class="dash-desc-head">
+                      <label>RUT</label>
+                      <span
+                        class="dash-rut-status"
+                        :class="`dash-rut-status--${adminRutStatus.state}`"
+                      >
+                        {{ adminRutStatus.text }}
+                      </span>
+                    </div>
+                    <input
+                      v-model="adminForm.rut"
+                      type="text"
+                      placeholder="12345678-9"
+                    />
+                  </div>
+                  <div class="dash-field">
+                    <label>Nombre Completo</label>
+                    <input
+                      v-model="adminForm.nombre"
+                      type="text"
+                      placeholder="Juan Sanhueza"
+                    />
+                  </div>
+                  <div class="dash-field">
+                    <label>Correo Electrónico</label>
+                    <input
+                      v-model="adminForm.correo"
+                      type="email"
+                      placeholder="jsanhueza@basaltodrilling.cl"
+                    />
+                  </div>
+                </div>
+
+                <div class="dash-caja-grid-2 dash-admin-form-section">
+                  <div class="dash-field">
+                    <label>Rol</label>
+                    <select v-model="adminForm.rol">
+                      <option v-for="rol in creatableAdminRoles" :key="rol" :value="rol">
+                        {{ rol }}
+                      </option>
+                    </select>
+                  </div>
+                  <div class="dash-field">
+                    <label>Contraseña Temporal</label>
+                    <div class="dash-radio-row">
+                      <label class="dash-radio">
+                        <input v-model="adminForm.passType" type="radio" value="rut" />
+                        <span>Basada en RUT</span>
+                      </label>
+                      <label class="dash-radio">
+                        <input v-model="adminForm.passType" type="radio" value="manual" />
+                        <span>Manual</span>
+                      </label>
+                    </div>
+                    <input
+                      v-if="adminForm.passType === 'manual'"
+                      v-model="adminForm.password"
+                      type="password"
+                      class="dash-input-dark"
+                      placeholder="•••••••• (Temporal)"
+                      autocomplete="new-password"
+                    />
+                  </div>
+                </div>
+
+                <div class="dash-caja-form-actions">
+                  <button class="dash-btn-secondary" type="button" @click="closeFormAdminUser">
+                    Cancelar
+                  </button>
+                  <button class="dash-btn-primary" type="submit">
+                    <span>Crear Administrador</span>
+                  </button>
+                </div>
               </form>
+                </div>
+              </div>
             </div>
 
             <div v-else class="dash-panel dash-panel--placeholder">
@@ -1221,14 +1612,7 @@
               </p>
             </div>
 
-            <div class="dash-table-wrap dash-cajas-list">
-              <div class="dash-panel-head dash-cajas-head">
-                <div>
-                  <h3>Administradores del Sistema</h3>
-                  <p>Usuarios con permisos de configuración y gestión global.</p>
-                </div>
-              </div>
-
+            <div class="dash-table-wrap">
               <table class="dash-table">
                 <thead>
                   <tr>
@@ -1256,62 +1640,67 @@
           </div>
 
           <!-- Usuarios -->
-          <div v-else-if="activeAdminTab === 'usuarios'" class="dash-assign">
-            <div v-if="canCreateUsuarios" class="dash-panel dash-assign-form">
-              <div class="dash-assign-title-block">
-                <h2 class="dash-assign-title dash-assign-title--flush">Crear Usuario Rendidor</h2>
-                <p class="dash-hint">
-                  Todo usuario debe estar asociado a una ficha de trabajador. Pueden crearlos
-                  Admin, Super Admin y Super Admin - Dev.
+          <div v-else-if="activeAdminTab === 'usuarios'" class="dash-admin-tab">
+            <div class="dash-cajas-toolbar">
+              <div>
+                <h3 class="dash-cajas-toolbar-title">Usuarios de Rendición</h3>
+                <p class="dash-cajas-toolbar-hint">
+                  Usuarios asociados a una ficha de trabajador para rendir gastos.
                 </p>
               </div>
+              <button
+                v-if="canCreateUsuarios"
+                class="dash-btn-primary dash-btn-toggle-caja"
+                type="button"
+                @click="toggleFormUsuario"
+              >
+                <span>{{ usuarioFormOpen ? '▲' : '＋' }}</span>
+                <span>{{ usuarioFormOpen ? 'Ocultar Formulario' : 'Crear Usuario' }}</span>
+              </button>
+            </div>
 
-              <form class="dash-stack-form" @submit.prevent="onSaveUsuario">
-                <div class="dash-field">
-                  <label>Trabajador Asociado</label>
-                  <select v-model="usuarioForm.trabajadorId">
-                    <option value="">-- Seleccionar Trabajador Existente --</option>
-                    <option value="nuevo">+ CREAR NUEVO TRABAJADOR SIMULTÁNEAMENTE</option>
-                    <option
-                      v-for="t in trabajadores"
-                      :key="t.id"
-                      :value="String(t.id)"
-                    >
-                      {{ t.nombre }} ({{ t.rut }}) - {{ t.cargo }}
-                    </option>
-                  </select>
+            <div
+              v-if="canCreateUsuarios"
+              class="dash-collapse"
+              :class="{ 'dash-collapse--open': usuarioFormOpen }"
+            >
+              <div class="dash-collapse-inner">
+                <div class="dash-panel dash-gasto-form-panel dash-collapse-panel">
+              <div class="dash-caja-form-head">
+                <div>
+                  <h2 class="dash-assign-title dash-assign-title--flush">
+                    Crear Usuario Rendidor
+                  </h2>
+                  <p class="dash-hint">
+                    Todo usuario debe estar asociado a una ficha de trabajador.
+                  </p>
                 </div>
+                <button
+                  class="dash-modal-close"
+                  type="button"
+                  aria-label="Cerrar"
+                  @click="closeFormUsuario"
+                >
+                  ×
+                </button>
+              </div>
 
-                <div v-if="usuarioForm.trabajadorId === 'nuevo'" class="dash-nested-box">
-                  <span class="dash-nested-label">Ficha Nuevo Trabajador</span>
-                  <div class="dash-desc-head">
-                    <span class="dash-nested-label dash-nested-label--muted">RUT</span>
-                    <span
-                      class="dash-rut-status"
-                      :class="`dash-rut-status--${usuarioNuevoRutStatus.state}`"
-                    >
-                      {{ usuarioNuevoRutStatus.text }}
-                    </span>
+              <form class="dash-admin-form" @submit.prevent="onSaveUsuario">
+                <div class="dash-caja-grid-2">
+                  <div class="dash-field">
+                    <label>Trabajador Asociado</label>
+                    <select v-model="usuarioForm.trabajadorId">
+                      <option value="">-- Seleccionar Trabajador Existente --</option>
+                      <option value="nuevo">+ CREAR NUEVO TRABAJADOR SIMULTÁNEAMENTE</option>
+                      <option
+                        v-for="t in trabajadores"
+                        :key="t.id"
+                        :value="String(t.id)"
+                      >
+                        {{ t.nombre }} ({{ t.rut }}) - {{ t.cargo }}
+                      </option>
+                    </select>
                   </div>
-                  <input
-                    v-model="usuarioForm.nuevoRut"
-                    type="text"
-                    placeholder="12345678-9"
-                  />
-                  <input
-                    v-model="usuarioForm.nuevoNombre"
-                    type="text"
-                    placeholder="Nombre Completo"
-                  />
-                  <input
-                    v-model="usuarioForm.nuevoCargo"
-                    type="text"
-                    placeholder="Cargo / Faena"
-                  />
-                </div>
-
-                <div class="dash-cred-block">
-                  <span class="dash-nested-label dash-nested-label--muted">Credenciales de Acceso</span>
                   <div class="dash-field">
                     <label>Correo de Acceso</label>
                     <input
@@ -1320,16 +1709,56 @@
                       placeholder="usuario@basaltodrilling.cl"
                     />
                   </div>
+                </div>
 
+                <div
+                  v-if="usuarioForm.trabajadorId === 'nuevo'"
+                  class="dash-nested-box dash-caja-grid-3"
+                >
+                  <div class="dash-field">
+                    <div class="dash-desc-head">
+                      <label>RUT</label>
+                      <span
+                        class="dash-rut-status"
+                        :class="`dash-rut-status--${usuarioNuevoRutStatus.state}`"
+                      >
+                        {{ usuarioNuevoRutStatus.text }}
+                      </span>
+                    </div>
+                    <input
+                      v-model="usuarioForm.nuevoRut"
+                      type="text"
+                      placeholder="12345678-9"
+                    />
+                  </div>
+                  <div class="dash-field">
+                    <label>Nombre Completo</label>
+                    <input
+                      v-model="usuarioForm.nuevoNombre"
+                      type="text"
+                      placeholder="Nombre Completo"
+                    />
+                  </div>
+                  <div class="dash-field">
+                    <label>Cargo / Faena</label>
+                    <input
+                      v-model="usuarioForm.nuevoCargo"
+                      type="text"
+                      placeholder="Cargo / Faena"
+                    />
+                  </div>
+                </div>
+
+                <div class="dash-admin-form-section">
                   <label class="dash-field-label">Contraseña Temporal</label>
-                  <div class="dash-radio-col">
+                  <div class="dash-radio-row">
                     <label class="dash-radio">
                       <input v-model="usuarioForm.passType" type="radio" value="rut" />
-                      <span>Generar a partir del RUT del trabajador</span>
+                      <span>Basada en RUT</span>
                     </label>
                     <label class="dash-radio">
                       <input v-model="usuarioForm.passType" type="radio" value="manual" />
-                      <span>Ingresar clave temporal manual</span>
+                      <span>Manual</span>
                     </label>
                   </div>
                   <input
@@ -1342,14 +1771,20 @@
                   />
                 </div>
 
-                <button class="dash-btn-primary dash-btn-block" type="submit">
-                  <span>Guardar Usuario</span>
-                </button>
+                <div class="dash-caja-form-actions">
+                  <button class="dash-btn-secondary" type="button" @click="closeFormUsuario">
+                    Cancelar
+                  </button>
+                  <button class="dash-btn-primary" type="submit">
+                    <span>Guardar Usuario</span>
+                  </button>
+                </div>
               </form>
+                </div>
+              </div>
             </div>
 
-            <div class="dash-table-wrap dash-cajas-list">
-              <h3 class="dash-table-title">Usuarios de Rendición</h3>
+            <div class="dash-table-wrap">
               <table class="dash-table">
                 <thead>
                   <tr>
@@ -1370,52 +1805,100 @@
           </div>
 
           <!-- Trabajadores -->
-          <div v-else-if="activeAdminTab === 'trabajadores'" class="dash-assign">
-            <div class="dash-panel dash-assign-form">
-              <div class="dash-assign-title-block">
-                <h2 class="dash-assign-title dash-assign-title--flush">Nueva Ficha Trabajador</h2>
-                <p class="dash-hint">
-                  Para personal que rinde o recibe anticipos sin requerir usuario.
+          <div v-else-if="activeAdminTab === 'trabajadores'" class="dash-admin-tab">
+            <div class="dash-cajas-toolbar">
+              <div>
+                <h3 class="dash-cajas-toolbar-title">Nómina de Trabajadores</h3>
+                <p class="dash-cajas-toolbar-hint">
+                  Personal habilitado para rendir gastos o recibir anticipos.
                 </p>
               </div>
-
-              <form class="dash-stack-form" @submit.prevent="onSaveTrabajador">
-                <div class="dash-field">
-                  <label>RUT</label>
-                  <input v-model="trabajadorForm.rut" type="text" placeholder="12.345.678-9" />
-                </div>
-                <div class="dash-field">
-                  <label>Nombres y Apellidos</label>
-                  <input
-                    v-model="trabajadorForm.nombre"
-                    type="text"
-                    placeholder="Mario Silva"
-                  />
-                </div>
-                <div class="dash-field">
-                  <label>Cargo / Rol en Faena</label>
-                  <input
-                    v-model="trabajadorForm.cargo"
-                    type="text"
-                    placeholder="Conductor Camión Riego"
-                  />
-                </div>
-
-                <button class="dash-btn-primary dash-btn-block" type="submit">
-                  <span>Guardar Trabajador</span>
-                </button>
-              </form>
+              <button
+                class="dash-btn-primary dash-btn-toggle-caja"
+                type="button"
+                @click="toggleFormTrabajador"
+              >
+                <span>{{ trabajadorFormOpen ? '▲' : '＋' }}</span>
+                <span>{{ trabajadorFormOpen ? 'Ocultar Formulario' : 'Nueva Ficha Trabajador' }}</span>
+              </button>
             </div>
 
-            <div class="dash-table-wrap dash-cajas-list">
-              <h3 class="dash-table-title">Nómina de Trabajadores</h3>
+            <div
+              class="dash-collapse"
+              :class="{ 'dash-collapse--open': trabajadorFormOpen }"
+            >
+              <div class="dash-collapse-inner">
+                <div class="dash-panel dash-gasto-form-panel dash-collapse-panel">
+              <div class="dash-caja-form-head">
+                <div>
+                  <h2 class="dash-assign-title dash-assign-title--flush">
+                    Nueva Ficha de Trabajador
+                  </h2>
+                  <p class="dash-hint">
+                    Para personal que rinde o recibe anticipos sin requerir usuario.
+                  </p>
+                </div>
+                <button
+                  class="dash-modal-close"
+                  type="button"
+                  aria-label="Cerrar"
+                  @click="closeFormTrabajador"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form class="dash-admin-form" @submit.prevent="onSaveTrabajador">
+                <div class="dash-caja-grid-3">
+                  <div class="dash-field">
+                    <label>RUT</label>
+                    <input
+                      v-model="trabajadorForm.rut"
+                      type="text"
+                      placeholder="12.345.678-9"
+                    />
+                  </div>
+                  <div class="dash-field">
+                    <label>Nombres y Apellidos</label>
+                    <input
+                      v-model="trabajadorForm.nombre"
+                      type="text"
+                      placeholder="Mario Silva"
+                    />
+                  </div>
+                  <div class="dash-field">
+                    <label>Cargo / Rol en Faena</label>
+                    <input
+                      v-model="trabajadorForm.cargo"
+                      type="text"
+                      placeholder="Conductor Camión Riego"
+                    />
+                  </div>
+                </div>
+
+                <div class="dash-caja-form-actions">
+                  <button class="dash-btn-secondary" type="button" @click="closeFormTrabajador">
+                    Cancelar
+                  </button>
+                  <button class="dash-btn-primary" type="submit">
+                    <span>Guardar Trabajador</span>
+                  </button>
+                </div>
+              </form>
+                </div>
+              </div>
+            </div>
+
+            <div class="dash-table-wrap">
               <table class="dash-table">
                 <thead>
                   <tr>
                     <th>RUT</th>
                     <th>Nombre</th>
                     <th>Cargo</th>
+                    <th>Cajas asignadas</th>
                     <th class="dash-table-center">Tiene Usuario</th>
+                    <th class="dash-table-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1423,6 +1906,18 @@
                     <td class="dash-mono">{{ t.rut }}</td>
                     <td class="dash-table-strong">{{ t.nombre }}</td>
                     <td>{{ t.cargo }}</td>
+                    <td>
+                      <div v-if="t.cajasAsignadas?.length" class="dash-cajas-tags">
+                        <span
+                          v-for="gk in t.cajasAsignadas"
+                          :key="gk"
+                          class="dash-badge dash-badge--neutral"
+                        >
+                          {{ labelCajaGroup(gk) }}
+                        </span>
+                      </div>
+                      <span v-else class="dash-muted">Sin cajas</span>
+                    </td>
                     <td class="dash-table-center">
                       <span
                         class="dash-badge"
@@ -1431,35 +1926,121 @@
                         {{ t.tieneUsuario ? 'Sí' : 'No' }}
                       </span>
                     </td>
+                    <td class="dash-table-center">
+                      <button
+                        class="dash-btn-edit"
+                        type="button"
+                        @click="openModalAsignarCajas(t)"
+                      >
+                        Asignar cajas
+                      </button>
+                    </td>
                   </tr>
                 </tbody>
               </table>
             </div>
+
+            <!-- Modal asignar cajas -->
+            <div
+              v-if="modalAsignarCajas.open"
+              class="dash-modal-backdrop"
+              @click.self="closeModalAsignarCajas"
+            >
+              <div class="dash-modal" role="dialog" aria-modal="true">
+                <div class="dash-modal-head">
+                  <h3>Asignar cajas — {{ modalAsignarCajas.nombre }}</h3>
+                  <button
+                    class="dash-modal-close"
+                    type="button"
+                    aria-label="Cerrar"
+                    @click="closeModalAsignarCajas"
+                  >
+                    ×
+                  </button>
+                </div>
+                <p class="dash-hint">
+                  Al rendir por su cuenta, el trabajador solo verá estas cajas.
+                </p>
+                <div class="dash-checkbox-list">
+                  <label
+                    v-for="c in cajasActivasOpciones"
+                    :key="c.groupKey"
+                    class="dash-check"
+                  >
+                    <input
+                      v-model="modalAsignarCajas.seleccionadas"
+                      type="checkbox"
+                      :value="c.groupKey"
+                    />
+                    <span>{{ c.label }}</span>
+                  </label>
+                </div>
+                <div class="dash-modal-actions">
+                  <button class="dash-btn-secondary" type="button" @click="closeModalAsignarCajas">
+                    Cancelar
+                  </button>
+                  <button class="dash-btn-primary" type="button" @click="onSaveAsignarCajas">
+                    <span>Guardar cajas</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Tarjetas Empresa -->
-          <div v-else-if="activeAdminTab === 'tarjetas'" class="dash-assign">
-            <div class="dash-panel dash-assign-form">
-              <div class="dash-assign-title-block">
-                <h2 class="dash-assign-title dash-assign-title--flush">
-                  Registrar Tarjeta de la Empresa
-                </h2>
-                <p class="dash-hint">
-                  Los gastos asignados a estas tarjetas no generarán devolución al trabajador.
+          <div v-else-if="activeAdminTab === 'tarjetas'" class="dash-admin-tab">
+            <div class="dash-cajas-toolbar">
+              <div>
+                <h3 class="dash-cajas-toolbar-title">Tarjetas Corporativas Habilitadas</h3>
+                <p class="dash-cajas-toolbar-hint">
+                  Gastos asociados a estas tarjetas no generan devolución al trabajador.
                 </p>
               </div>
+              <button
+                class="dash-btn-primary dash-btn-toggle-caja"
+                type="button"
+                @click="toggleFormTarjeta"
+              >
+                <span>{{ tarjetaFormOpen ? '▲' : '＋' }}</span>
+                <span>{{ tarjetaFormOpen ? 'Ocultar Formulario' : 'Registrar Tarjeta' }}</span>
+              </button>
+            </div>
 
-              <form class="dash-stack-form" @submit.prevent="onSaveTarjeta">
-                <div class="dash-field">
-                  <label>Nombre / Alias Tarjeta</label>
-                  <input
-                    v-model="tarjetaForm.alias"
-                    type="text"
-                    placeholder="Ej: Visa Operaciones Norte"
-                  />
+            <div
+              class="dash-collapse"
+              :class="{ 'dash-collapse--open': tarjetaFormOpen }"
+            >
+              <div class="dash-collapse-inner">
+                <div class="dash-panel dash-gasto-form-panel dash-collapse-panel">
+              <div class="dash-caja-form-head">
+                <div>
+                  <h2 class="dash-assign-title dash-assign-title--flush">
+                    Registrar Tarjeta de la Empresa
+                  </h2>
+                  <p class="dash-hint">
+                    Los gastos asignados a estas tarjetas no generarán devolución al trabajador.
+                  </p>
                 </div>
+                <button
+                  class="dash-modal-close"
+                  type="button"
+                  aria-label="Cerrar"
+                  @click="closeFormTarjeta"
+                >
+                  ×
+                </button>
+              </div>
 
-                <div class="dash-field-row">
+              <form class="dash-admin-form" @submit.prevent="onSaveTarjeta">
+                <div class="dash-caja-grid-3">
+                  <div class="dash-field">
+                    <label>Nombre / Alias Tarjeta</label>
+                    <input
+                      v-model="tarjetaForm.alias"
+                      type="text"
+                      placeholder="Ej: Visa Operaciones Norte"
+                    />
+                  </div>
                   <div class="dash-field">
                     <label>Tipo</label>
                     <select v-model="tarjetaForm.tipo">
@@ -1479,32 +2060,39 @@
                   </div>
                 </div>
 
-                <div class="dash-field">
-                  <label>Banco / Emisor</label>
-                  <input
-                    v-model="tarjetaForm.banco"
-                    type="text"
-                    placeholder="Ej: Banco de Chile"
-                  />
+                <div class="dash-caja-grid-2 dash-admin-form-section">
+                  <div class="dash-field">
+                    <label>Banco / Emisor</label>
+                    <input
+                      v-model="tarjetaForm.banco"
+                      type="text"
+                      placeholder="Ej: Banco de Chile"
+                    />
+                  </div>
+                  <div class="dash-field">
+                    <label>Asignada A (Titular)</label>
+                    <input
+                      v-model="tarjetaForm.titular"
+                      type="text"
+                      placeholder="Ej: Juan Sanhueza / Caja Chica"
+                    />
+                  </div>
                 </div>
 
-                <div class="dash-field">
-                  <label>Asignada a (Titular)</label>
-                  <input
-                    v-model="tarjetaForm.titular"
-                    type="text"
-                    placeholder="Ej: Juan Sanhueza / Caja Chica"
-                  />
+                <div class="dash-caja-form-actions">
+                  <button class="dash-btn-secondary" type="button" @click="closeFormTarjeta">
+                    Cancelar
+                  </button>
+                  <button class="dash-btn-primary" type="submit">
+                    <span>Guardar Tarjeta</span>
+                  </button>
                 </div>
-
-                <button class="dash-btn-primary dash-btn-block" type="submit">
-                  <span>Guardar Tarjeta Empresa</span>
-                </button>
               </form>
+                </div>
+              </div>
             </div>
 
-            <div class="dash-table-wrap dash-cajas-list">
-              <h3 class="dash-table-title">Tarjetas Corporativas Habilitadas</h3>
+            <div class="dash-table-wrap">
               <table class="dash-table">
                 <thead>
                   <tr>
@@ -1597,7 +2185,6 @@
                     <th>Acción</th>
                     <th>Módulo</th>
                     <th>Detalle del Cambio (Antes → Después)</th>
-                    <th class="dash-table-right">IP Origen</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1614,7 +2201,6 @@
                     <td>
                       <span v-html="row.detalleHtml"></span>
                     </td>
-                    <td class="dash-table-right dash-mono dash-muted">{{ row.ip }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -1631,7 +2217,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useAuth } from '../composables/useAuth'
 // TEMP_AUTH_BYPASS — revertir antes de commit
 import { TEMP_AUTH_BYPASS } from '../TEMP_AUTH_BYPASS'
@@ -1655,6 +2241,33 @@ const mesesDisponibles = [
 function labelMes(value) {
   return mesesDisponibles.find((m) => m.value === value)?.label || value
 }
+
+function diasEnMes(yyyyMm) {
+  const [y, m] = String(yyyyMm).split('-').map(Number)
+  if (!y || !m) return 31
+  return new Date(y, m, 0).getDate()
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0')
+}
+
+function labelMesCerrado(yyyyMm) {
+  const [y, m] = String(yyyyMm).split('-')
+  const last = pad2(diasEnMes(yyyyMm))
+  return `${labelMes(yyyyMm)} (01/${m} al ${last}/${m})`
+}
+
+function labelMesCerradoCompleto(yyyyMm) {
+  const [y, m] = String(yyyyMm).split('-')
+  const last = pad2(diasEnMes(yyyyMm))
+  return `${labelMes(yyyyMm)} (01/${m}/${y} al ${last}/${m}/${y})`
+}
+
+const mesesCerradosOpciones = mesesDisponibles.map((m) => ({
+  value: m.value,
+  label: labelMesCerrado(m.value)
+}))
 
 function normalizarGroupKey(value) {
   return String(value || '')
@@ -1702,16 +2315,26 @@ const gasto = reactive({
   tipo: 'Boleta',
   numero: '',
   monto: '',
+  cajaGroupKey: '',
   metodoPago: 'efectivo',
-  tarjetaEmpresaKey: '',
-  tipoPersonal: 'Débito',
-  ultimos4: '',
   comprobanteNombre: '',
   descripcion: ''
 })
 
-const muestraTarjetaEmpresa = computed(() => gasto.metodoPago === 'empresa_tarjeta')
-const muestraTarjetaPersonal = computed(() => gasto.metodoPago === 'personal_tarjeta')
+const historialBusqueda = ref('')
+const historialFiltroCaja = ref('')
+const historialFiltroMes = ref('')
+const gastoFormOpen = ref(false)
+
+const anticipoFormOpen = ref(false)
+const anticipoBusqueda = ref('')
+const anticipoFiltroCaja = ref('')
+const anticipoFiltroMes = ref('')
+
+const adminFormOpen = ref(false)
+const usuarioFormOpen = ref(false)
+const trabajadorFormOpen = ref(false)
+const tarjetaFormOpen = ref(false)
 
 const palabrasDescripcion = computed(() => {
   const palabras = gasto.descripcion.trim().split(/\s+/).filter((w) => w.length > 0)
@@ -1785,23 +2408,48 @@ watch(
 )
 
 const asignacion = reactive({
-  fondo: 'ADMINISTRACION CAJA',
+  fondo: 'FAENA_NORTE',
   fecha: '2026-07-23',
-  hora: '11:37',
   conductor: '',
-  tipo: '',
-  patente: '',
   doc: '',
   observaciones: '',
-  monto: ''
+  monto: '',
+  comprobanteNombre: ''
+})
+
+const modalAsignarCajas = reactive({
+  open: false,
+  trabajadorId: null,
+  nombre: '',
+  seleccionadas: []
+})
+
+const informeFormOpen = ref(false)
+
+const informeTiposDefault = () => ({
+  apertura: true,
+  rendicion: true,
+  anticipo: true,
+  devolucion: true,
+  sobrante: true
 })
 
 const informe = reactive({
-  tipo: 'Cartola Caja entre Fechas',
-  desde: '2026-07-01',
-  hasta: '2026-07-23',
-  persona: '**Todos**'
+  caja: '',
+  mes: '2026-07',
+  persona: '',
+  tipos: informeTiposDefault()
 })
+
+const filtrosInforme = reactive({
+  caja: '',
+  mes: '2026-07',
+  persona: '',
+  tipos: informeTiposDefault()
+})
+
+const cajaFormOpen = ref(false)
+const formCajaEl = ref(null)
 
 const cajaForm = reactive({
   groupKeySelect: '',
@@ -1868,13 +2516,38 @@ function syncGastoLockedFields() {
   }
 }
 
+function onGastoTipoChange() {
+  if (gasto.tipo !== 'Factura') {
+    gasto.numero = ''
+  }
+}
+
 function onGastoTrabajadorChange() {
   if (gasto.trabajadorId === 'me') {
     gasto.trabajador = nombreSesion.value
+  } else {
+    const t = trabajadores.value.find((x) => String(x.id) === gasto.trabajadorId)
+    gasto.trabajador = t?.nombre || nombreSesion.value
+  }
+  syncGastoCajaDisponible()
+}
+
+function trabajadorParaGasto() {
+  if (!canIngresarPorOtros.value || gasto.trabajadorId === 'me') {
+    return trabajadores.value.find((t) => t.nombre === nombreSesion.value) || null
+  }
+  return trabajadores.value.find((x) => String(x.id) === gasto.trabajadorId) || null
+}
+
+function syncGastoCajaDisponible() {
+  const opts = cajasDisponiblesParaGasto.value
+  if (!opts.length) {
+    gasto.cajaGroupKey = ''
     return
   }
-  const t = trabajadores.value.find((x) => String(x.id) === gasto.trabajadorId)
-  gasto.trabajador = t?.nombre || nombreSesion.value
+  if (!opts.some((c) => c.groupKey === gasto.cajaGroupKey)) {
+    gasto.cajaGroupKey = opts[0].groupKey
+  }
 }
 
 watch(
@@ -1944,14 +2617,24 @@ const trabajadores = ref([
     rut: '15.444.333-2',
     nombre: 'Pedro González',
     cargo: 'Conductor',
-    tieneUsuario: false
+    tieneUsuario: false,
+    cajasAsignadas: ['FAENA_NORTE']
   },
   {
     id: 2,
     rut: '11.222.333-K',
     nombre: 'Carlos Muñoz',
     cargo: 'Operador',
-    tieneUsuario: true
+    tieneUsuario: true,
+    cajasAsignadas: ['FAENA_NORTE', 'ADMIN_CENTRAL']
+  },
+  {
+    id: 3,
+    rut: '12.345.678-9',
+    nombre: 'Mario Silva',
+    cargo: 'Mecánico',
+    tieneUsuario: false,
+    cajasAsignadas: ['FAENA_CORDILLERA']
   }
 ])
 
@@ -2152,18 +2835,176 @@ const cajasActivas = computed(() =>
   )
 )
 
+function labelCajaGroup(groupKey) {
+  const opt = cajasActivasOpciones.value.find((c) => c.groupKey === groupKey)
+  return opt?.label || groupKey
+}
+
+/** Cajas disponibles al rendir: asignadas al trabajador; admin por otros ve todas las activas */
+const cajasDisponiblesParaGasto = computed(() => {
+  const all = cajasActivasOpciones.value
+  if (canIngresarPorOtros.value && gasto.trabajadorId !== 'me') {
+    const t = trabajadores.value.find((x) => String(x.id) === gasto.trabajadorId)
+    const keys = t?.cajasAsignadas || []
+    if (!keys.length) return []
+    return all.filter((c) => keys.includes(c.groupKey))
+  }
+  if (canIngresarPorOtros.value && gasto.trabajadorId === 'me') {
+    return all
+  }
+  const t = trabajadorParaGasto()
+  const keys = t?.cajasAsignadas || []
+  if (!keys.length) return []
+  return all.filter((c) => keys.includes(c.groupKey))
+})
+
+const historialFiltroActivo = computed(
+  () =>
+    historialFiltroCaja.value !== '' ||
+    historialFiltroMes.value !== '' ||
+    historialBusqueda.value.trim() !== ''
+)
+
+const MESES_ES = [
+  'Enero',
+  'Febrero',
+  'Marzo',
+  'Abril',
+  'Mayo',
+  'Junio',
+  'Julio',
+  'Agosto',
+  'Septiembre',
+  'Octubre',
+  'Noviembre',
+  'Diciembre'
+]
+
+/** DD/MM/YYYY → YYYY-MM */
+function mesFromFechaDDMMYYYY(fecha) {
+  const parts = String(fecha || '').split('/')
+  if (parts.length !== 3) return ''
+  const [, mm, yyyy] = parts
+  if (!mm || !yyyy) return ''
+  return `${yyyy}-${String(mm).padStart(2, '0')}`
+}
+
+function nombreMesDesdeFechaDDMMYYYY(fecha) {
+  const parts = String(fecha || '').split('/')
+  if (parts.length !== 3) return ''
+  const mm = Number(parts[1])
+  if (!mm || mm < 1 || mm > 12) return ''
+  return MESES_ES[mm - 1]
+}
+
+/** Formato: "24/07/2026 10:17 hrs" */
+function formatSubidoEl(date = new Date()) {
+  const dd = String(date.getDate()).padStart(2, '0')
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const yyyy = date.getFullYear()
+  const hh = String(date.getHours()).padStart(2, '0')
+  const min = String(date.getMinutes()).padStart(2, '0')
+  return `${dd}/${mm}/${yyyy} ${hh}:${min} hrs`
+}
+
+/** Si el mes del documento es anterior al de subida, retorna nombre del mes del documento. */
+function arrastreMesFromFechas(fechaDoctoDDMMYYYY, uploadDate = new Date()) {
+  const docMes = mesFromFechaDDMMYYYY(fechaDoctoDDMMYYYY)
+  if (!docMes) return ''
+  const uploadMes = `${uploadDate.getFullYear()}-${String(uploadDate.getMonth() + 1).padStart(2, '0')}`
+  if (docMes < uploadMes) return nombreMesDesdeFechaDDMMYYYY(fechaDoctoDDMMYYYY)
+  return ''
+}
+
+function matchHistorialFiltros({ nombre, cajaGroupKey, fecha }) {
+  const q = historialBusqueda.value.trim().toLowerCase()
+  if (q && !String(nombre || '').toLowerCase().includes(q)) return false
+  if (historialFiltroCaja.value) {
+    if (!cajaGroupKey || cajaGroupKey !== historialFiltroCaja.value) return false
+  }
+  if (historialFiltroMes.value) {
+    if (mesFromFechaDDMMYYYY(fecha) !== historialFiltroMes.value) return false
+  }
+  return true
+}
+
+const movimientosFiltrados = computed(() =>
+  movimientos.value.filter((m) =>
+    matchHistorialFiltros({
+      nombre: m.trabajador,
+      cajaGroupKey: m.cajaGroupKey,
+      fecha: m.fecha
+    })
+  )
+)
+
+function matchAnticipoFiltros({ nombre, cajaGroupKey, fecha }) {
+  const q = anticipoBusqueda.value.trim().toLowerCase()
+  if (q && !String(nombre || '').toLowerCase().includes(q)) return false
+  if (anticipoFiltroCaja.value) {
+    if (!cajaGroupKey || cajaGroupKey !== anticipoFiltroCaja.value) return false
+  }
+  if (anticipoFiltroMes.value) {
+    if (mesFromFechaDDMMYYYY(fecha) !== anticipoFiltroMes.value) return false
+  }
+  return true
+}
+
+const asignacionesFiltradas = computed(() =>
+  asignaciones.value.filter((a) =>
+    matchAnticipoFiltros({
+      nombre: a.conductor,
+      cajaGroupKey: a.cajaGroupKey || a.fondo,
+      fecha: a.fecha
+    })
+  )
+)
+
+function parseMontoNumber(montoStr) {
+  const n = Number(String(montoStr || '').replace(/\D/g, ''))
+  return Number.isFinite(n) ? n : 0
+}
+
+const totalesHistorial = computed(() => {
+  const movs = movimientosFiltrados.value
+  const gastos = movs.reduce((acc, m) => acc + parseMontoNumber(m.monto), 0)
+  const porDevolver = movs
+    .filter((m) => m.estado === 'Sin Devolución' || m.estado === 'Por Corregir')
+    .reduce((acc, m) => acc + parseMontoNumber(m.monto), 0)
+
+  const anticiposFiltrados = asignaciones.value.filter((a) =>
+    matchHistorialFiltros({
+      nombre: a.conductor,
+      cajaGroupKey: a.cajaGroupKey || a.fondo,
+      fecha: a.fecha
+    })
+  )
+  const anticipo = anticiposFiltrados.reduce((acc, a) => acc + parseMontoNumber(a.monto), 0)
+
+  return { anticipo, gastos, porDevolver }
+})
+
+watch(
+  () => [gasto.trabajadorId, canIngresarPorOtros.value, cajasActivasOpciones.value.length],
+  () => syncGastoCajaDisponible(),
+  { immediate: true }
+)
+
 const informeResultado = reactive({
-  titulo: 'Resultado del Informe: Cartola Caja entre Fechas',
-  periodo: 'Periodo: 01/07/2026 al 23/07/2026 • Caja: FAENA NORTE',
-  total: '16 Registros'
+  titulo: 'Cartola Consolidada del Mes',
+  periodo: 'Período: Julio 2026 (01/07/2026 al 31/07/2026) | Caja: Todas',
+  total: '3 Registros'
 })
 
 const cartola = ref([
   {
     fecha: '01/07/2026',
+    mes: '2026-07',
+    cajaGroupKey: 'FAENA_NORTE',
     doc: 'DEP-001',
     docClass: 'dash-doc-muted',
-    tipo: 'Fondo Fijo',
+    tipoKey: 'apertura',
+    tipo: 'Inyección Fondo',
     badgeClass: 'dash-badge--ok',
     detalle: 'Apertura mensual de caja chica',
     responsable: 'Administración',
@@ -2174,10 +3015,13 @@ const cartola = ref([
   },
   {
     fecha: '22/07/2026',
+    mes: '2026-07',
+    cajaGroupKey: 'FAENA_NORTE',
     doc: 'R-101',
     docClass: 'dash-rinde',
-    tipo: 'Gasto',
-    badgeClass: 'dash-badge--neutral',
+    tipoKey: 'rendicion',
+    tipo: 'Rendición Gasto',
+    badgeClass: 'dash-badge--warn',
     detalle: 'Peajes traslado de personal',
     responsable: 'Carlos Muñoz',
     abono: '-',
@@ -2187,11 +3031,14 @@ const cartola = ref([
   },
   {
     fecha: '23/07/2026',
+    mes: '2026-07',
+    cajaGroupKey: 'FAENA_NORTE',
     doc: 'V-5541',
-    docClass: 'dash-rinde',
+    docClass: 'dash-doc-muted',
+    tipoKey: 'anticipo',
     tipo: 'Anticipo',
-    badgeClass: 'dash-badge--accent',
-    detalle: 'Viático ruta Copiapó (Patente GH-88-12)',
+    badgeClass: 'dash-badge--info',
+    detalle: 'Viático ruta Copiapó',
     responsable: 'Pedro González',
     abono: '-',
     abonoClass: 'dash-muted',
@@ -2200,59 +3047,90 @@ const cartola = ref([
   }
 ])
 
+const cartolaFiltrada = computed(() =>
+  cartola.value.filter((row) => {
+    if (filtrosInforme.mes && row.mes !== filtrosInforme.mes) return false
+    if (filtrosInforme.caja && row.cajaGroupKey !== filtrosInforme.caja) return false
+    if (!filtrosInforme.tipos[row.tipoKey]) return false
+    if (filtrosInforme.persona && row.responsable !== filtrosInforme.persona) return false
+    return true
+  })
+)
+
+const cartolaTotales = computed(() => {
+  let abono = 0
+  let cargo = 0
+  for (const row of cartolaFiltrada.value) {
+    abono += parseMontoNumber(row.abono)
+    cargo += parseMontoNumber(row.cargo)
+  }
+  return {
+    abono: formatMonto(abono),
+    cargo: formatMonto(cargo)
+  }
+})
+
 const movimientos = ref([
   {
     fecha: '23/07/2026',
+    subidoEl: '23/07/2026 14:32 hrs',
     rinde: 'R-103',
     trabajador: 'Juan Pérez',
-    pago: 'Crédito Emp. (•••• 9941)',
+    pago: 'Crédito',
     docto: 'Factura #4601',
     monto: '$ 62.000',
     estado: 'Sin Devolución',
     estadoClass: 'dash-status--warn',
-    esEmpresa: true,
+    metodoPago: 'credito',
+    cajaGroupKey: 'FAENA_NORTE',
     descripcion: 'Repuestos hidráulicos faena norte.',
     intento: 1,
     observacionAdmin: ''
   },
   {
     fecha: '23/07/2026',
+    subidoEl: '23/07/2026 11:05 hrs',
     rinde: 'R-102',
     trabajador: 'Juan Pérez',
-    pago: 'Débito Pers. (•••• 8821)',
+    pago: 'Débito',
     docto: 'Factura #4588',
     monto: '$ 45.000',
     estado: 'Sin Devolución',
     estadoClass: 'dash-status--warn',
-    esEmpresa: false,
+    metodoPago: 'debito',
+    cajaGroupKey: 'FAENA_NORTE',
     descripcion: 'Combustible vehículo de apoyo.',
     intento: 1,
     observacionAdmin: ''
   },
   {
     fecha: '22/07/2026',
+    subidoEl: '22/07/2026 18:40 hrs',
     rinde: 'R-101',
     trabajador: 'Carlos Muñoz',
     pago: 'Efectivo',
-    docto: 'Ticket Peaje',
+    docto: '',
     monto: '$ 12.800',
     estado: 'Devuelto',
     estadoClass: 'dash-status--ok',
-    esEmpresa: false,
+    metodoPago: 'efectivo',
+    cajaGroupKey: 'ADMIN_CENTRAL',
     descripcion: 'Peaje ruta 5 norte.',
     intento: 1,
     observacionAdmin: ''
   },
   {
     fecha: '21/07/2026',
+    subidoEl: '21/07/2026 09:18 hrs',
     rinde: 'R-100',
     trabajador: 'Mario Silva',
-    pago: 'Crédito Pers. (•••• 1024)',
-    docto: 'Boleta #9912',
+    pago: 'Crédito',
+    docto: '',
     monto: '$ 85.000',
     estado: 'Por Corregir',
     estadoClass: 'dash-status--danger',
-    esEmpresa: false,
+    metodoPago: 'credito',
+    cajaGroupKey: 'FAENA_CORDILLERA',
     descripcion: 'Compra de repuestos menores en ferretería Copiapó.',
     intento: 1,
     observacionAdmin:
@@ -2266,7 +3144,25 @@ const movimientos = ref([
     }
   },
   {
+    fecha: '18/06/2026',
+    subidoEl: '24/07/2026 10:17 hrs',
+    arrastreMes: 'Junio',
+    rinde: 'R-098',
+    trabajador: 'Carlos Muñoz',
+    pago: 'Débito',
+    docto: 'Factura #4410',
+    monto: '$ 28.500',
+    estado: 'Devuelto',
+    estadoClass: 'dash-status--ok',
+    metodoPago: 'debito',
+    cajaGroupKey: 'FAENA_NORTE',
+    descripcion: 'Herramientas menores junio.',
+    intento: 1,
+    observacionAdmin: ''
+  },
+  {
     fecha: '15/03/2025',
+    subidoEl: '01/04/2025 08:00 hrs',
     rinde: 'LEG-1092',
     trabajador: 'Carlos Muñoz',
     pago: 'Efectivo',
@@ -2274,7 +3170,8 @@ const movimientos = ref([
     monto: '$ 150.000',
     estado: 'Devuelto',
     estadoClass: 'dash-status--ok',
-    esEmpresa: false,
+    metodoPago: 'efectivo',
+    cajaGroupKey: 'FAENA_NORTE',
     descripcion: 'Registro migrado del sistema anterior.',
     intento: 1,
     observacionAdmin: '',
@@ -2284,20 +3181,40 @@ const movimientos = ref([
 
 const asignaciones = ref([
   {
-    fechaHora: '23/07 11:37',
+    fecha: '23/07/2026',
     conductor: 'Pedro González',
-    patente: 'GH-88-12',
     doc: 'V-5541',
     observaciones: 'Viático ruta Copiapó',
-    monto: '$ 150.000'
+    monto: '$ 150.000',
+    cajaGroupKey: 'FAENA_NORTE',
+    comprobanteNombre: 'vale-5541.pdf'
   },
   {
-    fechaHora: '23/07 09:15',
+    fecha: '20/07/2026',
     conductor: 'Mario Silva',
-    patente: 'KJ-99-00',
-    doc: 'V-5540',
-    observaciones: 'Fondo emergencias peaje',
-    monto: '$ 80.000'
+    doc: 'V-5530',
+    observaciones: 'Fondo faena cordillera',
+    monto: '$ 200.000',
+    cajaGroupKey: 'FAENA_CORDILLERA',
+    comprobanteNombre: ''
+  },
+  {
+    fecha: '12/06/2026',
+    conductor: 'Pedro González',
+    doc: 'V-5488',
+    observaciones: 'Anticipo junio faena norte',
+    monto: '$ 100.000',
+    cajaGroupKey: 'FAENA_NORTE',
+    comprobanteNombre: 'comprobante-junio.jpg'
+  },
+  {
+    fecha: '05/08/2026',
+    conductor: 'Carlos Muñoz',
+    doc: 'V-5602',
+    observaciones: 'Fondo oficina central',
+    monto: '$ 80.000',
+    cajaGroupKey: 'ADMIN_CENTRAL',
+    comprobanteNombre: ''
   }
 ])
 
@@ -2317,6 +3234,20 @@ function peekNextRinde() {
 function onGastoFile(event) {
   const file = event.target.files?.[0]
   gasto.comprobanteNombre = file ? file.name : ''
+}
+
+function onAsignacionFile(event) {
+  const file = event.target.files?.[0]
+  asignacion.comprobanteNombre = file ? file.name : ''
+}
+
+function labelAdjunto(nombre) {
+  const name = String(nombre || '')
+  const ext = name.split('.').pop()?.toUpperCase() || ''
+  if (ext === 'PDF') return 'PDF'
+  if (ext === 'PNG' || ext === 'JPG' || ext === 'JPEG') return ext === 'JPEG' ? 'JPG' : ext
+  if (name.length <= 14) return name
+  return `${name.slice(0, 10)}…`
 }
 
 function openModalResponder(row) {
@@ -2428,8 +3359,8 @@ function formatMontoCl(value) {
 }
 
 function labelPago(metodoPago) {
-  if (metodoPago === 'empresa_tarjeta') return 'Tarjeta Empresa'
-  if (metodoPago === 'personal_tarjeta') return 'Tarjeta Personal'
+  if (metodoPago === 'debito') return 'Débito'
+  if (metodoPago === 'credito') return 'Crédito'
   return 'Efectivo'
 }
 
@@ -2442,7 +3373,10 @@ function onSaveCorreccion() {
 
   const campos = modalCorregir.campos
   if (campos.tipo_docto) {
-    row.docto = `${modalCorregir.tipo} #${modalCorregir.numeroLocked || 'S/N'}`
+    row.docto =
+      modalCorregir.tipo === 'Factura'
+        ? `Factura #${modalCorregir.numeroLocked || 'S/N'}`
+        : ''
   }
   if (campos.monto) {
     row.monto = formatMontoCl(modalCorregir.monto)
@@ -2450,7 +3384,6 @@ function onSaveCorreccion() {
   if (campos.origen_pago) {
     row.metodoPago = modalCorregir.metodoPago
     row.pago = labelPago(modalCorregir.metodoPago)
-    row.esEmpresa = modalCorregir.metodoPago === 'empresa_tarjeta'
   }
   if (campos.descripcion) {
     row.descripcion = modalCorregir.descripcion.trim()
@@ -2489,35 +3422,29 @@ function selectModule(moduleName) {
 
 function onSaveGasto() {
   if (palabrasDescripcion.value > 500) return
-  if (!gasto.numero.trim()) return
+  if (gasto.tipo === 'Factura' && !gasto.numero.trim()) return
+  if (!gasto.cajaGroupKey) return
 
   onGastoTrabajadorChange()
 
-  let pago = 'Efectivo Personal'
-  let esEmpresa = false
-
-  if (gasto.metodoPago === 'empresa_tarjeta' && gasto.tarjetaEmpresaKey) {
-    const [tipo, ultimos4] = gasto.tarjetaEmpresaKey.split('|')
-    pago = `${tipo} Emp. (•••• ${ultimos4})`
-    esEmpresa = true
-  } else if (gasto.metodoPago === 'personal_tarjeta') {
-    pago = `${gasto.tipoPersonal} Pers. (•••• ${gasto.ultimos4 || '----'})`
-  }
-
-  // ID interno autoincremental (no se muestra en el formulario de creación)
   const rinde = peekNextRinde()
+  const now = new Date()
+  const fechaDocto = gasto.fecha.split('-').reverse().join('/')
+  const arrastreMes = arrastreMesFromFechas(fechaDocto, now)
 
   movimientos.value.unshift({
-    fecha: gasto.fecha.split('-').reverse().join('/'),
+    fecha: fechaDocto,
+    subidoEl: formatSubidoEl(now),
+    ...(arrastreMes ? { arrastreMes } : {}),
     rinde,
     trabajador: gasto.trabajador || nombreSesion.value,
-    pago,
-    docto: `${gasto.tipo}${gasto.numero ? ` #${gasto.numero}` : ''}`,
+    pago: labelPago(gasto.metodoPago),
+    docto: gasto.tipo === 'Factura' && gasto.numero ? `Factura #${gasto.numero}` : '',
     monto: formatMonto(gasto.monto),
     estado: 'Sin Devolución',
     estadoClass: 'dash-status--warn',
-    esEmpresa,
     metodoPago: gasto.metodoPago,
+    cajaGroupKey: gasto.cajaGroupKey,
     descripcion: gasto.descripcion || '',
     intento: 1,
     observacionAdmin: '',
@@ -2525,19 +3452,126 @@ function onSaveGasto() {
     legacy: false
   })
 
+  closeFormGasto()
+}
+
+function resetGastoFormFields() {
+  gasto.tipo = 'Boleta'
   gasto.numero = ''
   gasto.monto = ''
+  gasto.metodoPago = 'efectivo'
   gasto.descripcion = ''
   gasto.comprobanteNombre = ''
+  syncGastoLockedFields()
+  syncGastoCajaDisponible()
+}
+
+function toggleFormGasto() {
+  if (gastoFormOpen.value) {
+    closeFormGasto()
+    return
+  }
+  resetGastoFormFields()
+  gastoFormOpen.value = true
+}
+
+function closeFormGasto() {
+  gastoFormOpen.value = false
+  resetGastoFormFields()
+}
+
+function resetAsignacionFormFields() {
+  asignacion.conductor = ''
+  asignacion.doc = ''
+  asignacion.observaciones = ''
+  asignacion.monto = ''
+  asignacion.comprobanteNombre = ''
+}
+
+function toggleFormAnticipo() {
+  if (anticipoFormOpen.value) {
+    closeFormAnticipo()
+    return
+  }
+  resetAsignacionFormFields()
+  anticipoFormOpen.value = true
+}
+
+function closeFormAnticipo() {
+  anticipoFormOpen.value = false
+  resetAsignacionFormFields()
 }
 
 function onSaveAsignacion() {
-  // UI mock por ahora
+  if (!asignacion.conductor || !asignacion.monto) return
+  const fechaFmt = asignacion.fecha.split('-').reverse().join('/')
+  asignaciones.value.unshift({
+    fecha: fechaFmt,
+    conductor: asignacion.conductor,
+    doc: asignacion.doc.trim() || `V-${Date.now().toString().slice(-4)}`,
+    observaciones: asignacion.observaciones.trim() || '—',
+    monto: formatMontoCl(asignacion.monto),
+    cajaGroupKey: asignacion.fondo,
+    comprobanteNombre: asignacion.comprobanteNombre || ''
+  })
+  closeFormAnticipo()
 }
 
-function onGenerarInforme() {
-  informeResultado.titulo = `Resultado del Informe: ${informe.tipo}`
-  informeResultado.periodo = `Periodo: ${informe.desde} al ${informe.hasta} • Caja: FAENA NORTE`
+function openModalAsignarCajas(t) {
+  modalAsignarCajas.open = true
+  modalAsignarCajas.trabajadorId = t.id
+  modalAsignarCajas.nombre = t.nombre
+  modalAsignarCajas.seleccionadas = [...(t.cajasAsignadas || [])]
+}
+
+function closeModalAsignarCajas() {
+  modalAsignarCajas.open = false
+  modalAsignarCajas.trabajadorId = null
+  modalAsignarCajas.nombre = ''
+  modalAsignarCajas.seleccionadas = []
+}
+
+function onSaveAsignarCajas() {
+  const t = trabajadores.value.find((x) => x.id === modalAsignarCajas.trabajadorId)
+  if (t) {
+    t.cajasAsignadas = [...modalAsignarCajas.seleccionadas]
+  }
+  closeModalAsignarCajas()
+  syncGastoCajaDisponible()
+}
+
+function toggleFormInforme() {
+  if (informeFormOpen.value) {
+    closeFormInforme()
+    return
+  }
+  informeFormOpen.value = true
+}
+
+function closeFormInforme() {
+  informeFormOpen.value = false
+}
+
+function seleccionarTodosTiposInforme(value) {
+  for (const key of Object.keys(informe.tipos)) {
+    informe.tipos[key] = value
+  }
+}
+
+function syncInformeResultado() {
+  const cajaLabel = filtrosInforme.caja ? labelCajaGroup(filtrosInforme.caja) : 'Todas'
+  informeResultado.titulo = 'Cartola Consolidada del Mes'
+  informeResultado.periodo = `Período: ${labelMesCerradoCompleto(filtrosInforme.mes)} | Caja: ${cajaLabel}`
+  informeResultado.total = `${cartolaFiltrada.value.length} Registros`
+}
+
+function onAplicarFiltrosInforme() {
+  filtrosInforme.caja = informe.caja
+  filtrosInforme.mes = informe.mes
+  filtrosInforme.persona = informe.persona
+  Object.assign(filtrosInforme.tipos, informe.tipos)
+  syncInformeResultado()
+  closeFormInforme()
 }
 
 function formatMonto(value) {
@@ -2558,6 +3592,27 @@ function resetCajaForm() {
   cajaForm.editIndex = null
   cajaForm.mesOriginal = null
   cajaForm.groupKeyOriginal = null
+}
+
+function toggleFormCaja() {
+  if (cajaFormOpen.value) {
+    closeFormCaja()
+    return
+  }
+  resetCajaForm()
+  cajaFormOpen.value = true
+}
+
+function closeFormCaja() {
+  cajaFormOpen.value = false
+  resetCajaForm()
+}
+
+function openFormCajaForEdit() {
+  cajaFormOpen.value = true
+  nextTick(() => {
+    formCajaEl.value?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+  })
 }
 
 function onGroupKeySelectChange() {
@@ -2599,6 +3654,7 @@ function onEditCaja(sortedIndex) {
   cajaForm.editIndex = realIndex
   cajaForm.mesOriginal = caja.mes
   cajaForm.groupKeyOriginal = caja.groupKey
+  openFormCajaForEdit()
 }
 
 function onSaveCaja() {
@@ -2627,7 +3683,7 @@ function onSaveCaja() {
       cajas.value.push(payloadBase)
     }
     if (!cajaActiva.value) cajaActiva.value = groupKey
-    resetCajaForm()
+    closeFormCaja()
     return
   }
 
@@ -2641,12 +3697,12 @@ function onSaveCaja() {
     } else {
       cajas.value.push(payloadBase)
     }
-    resetCajaForm()
+    closeFormCaja()
     return
   }
 
   cajas.value[cajaForm.editIndex] = payloadBase
-  resetCajaForm()
+  closeFormCaja()
 }
 
 function resetAdminForm() {
@@ -2656,6 +3712,74 @@ function resetAdminForm() {
   adminForm.rol = creatableAdminRoles.value[0] || ROLE_ADMIN_CAJA
   adminForm.passType = 'rut'
   adminForm.password = ''
+}
+
+function toggleFormAdminUser() {
+  if (adminFormOpen.value) {
+    closeFormAdminUser()
+    return
+  }
+  resetAdminForm()
+  adminFormOpen.value = true
+}
+
+function closeFormAdminUser() {
+  adminFormOpen.value = false
+  resetAdminForm()
+}
+
+function toggleFormUsuario() {
+  if (usuarioFormOpen.value) {
+    closeFormUsuario()
+    return
+  }
+  resetUsuarioForm()
+  usuarioFormOpen.value = true
+}
+
+function closeFormUsuario() {
+  usuarioFormOpen.value = false
+  resetUsuarioForm()
+}
+
+function toggleFormTrabajador() {
+  if (trabajadorFormOpen.value) {
+    closeFormTrabajador()
+    return
+  }
+  trabajadorForm.rut = ''
+  trabajadorForm.nombre = ''
+  trabajadorForm.cargo = ''
+  trabajadorFormOpen.value = true
+}
+
+function closeFormTrabajador() {
+  trabajadorFormOpen.value = false
+  trabajadorForm.rut = ''
+  trabajadorForm.nombre = ''
+  trabajadorForm.cargo = ''
+}
+
+function toggleFormTarjeta() {
+  if (tarjetaFormOpen.value) {
+    closeFormTarjeta()
+    return
+  }
+  tarjetaForm.alias = ''
+  tarjetaForm.tipo = 'Crédito'
+  tarjetaForm.ultimos4 = ''
+  tarjetaForm.banco = ''
+  tarjetaForm.titular = ''
+  tarjetaFormOpen.value = true
+}
+
+function closeFormTarjeta() {
+  tarjetaFormOpen.value = false
+  tarjetaForm.alias = ''
+  tarjetaForm.tipo = 'Crédito'
+  tarjetaForm.ultimos4 = ''
+  tarjetaForm.banco = ''
+  tarjetaForm.titular = ''
 }
 
 function shortAdminRol(rol) {
@@ -2690,7 +3814,7 @@ function onSaveAdmin() {
     passwordTemporal
   })
 
-  resetAdminForm()
+  closeFormAdminUser()
 }
 
 function resetUsuarioForm() {
@@ -2722,7 +3846,8 @@ function onSaveUsuario() {
       rut: usuarioForm.nuevoRut.trim(),
       nombre: usuarioForm.nuevoNombre.trim(),
       cargo: usuarioForm.nuevoCargo.trim() || '—',
-      tieneUsuario: true
+      tieneUsuario: true,
+      cajasAsignadas: []
     })
     trabajadorId = nextId
     trabajadorNombre = usuarioForm.nuevoNombre.trim()
@@ -2762,6 +3887,7 @@ function onSaveUsuario() {
   }
 
   resetUsuarioForm()
+  closeFormUsuario()
 }
 
 function onSaveTrabajador() {
@@ -2772,11 +3898,10 @@ function onSaveTrabajador() {
     rut: trabajadorForm.rut.trim(),
     nombre: trabajadorForm.nombre.trim(),
     cargo: trabajadorForm.cargo.trim() || '—',
-    tieneUsuario: false
+    tieneUsuario: false,
+    cajasAsignadas: []
   })
-  trabajadorForm.rut = ''
-  trabajadorForm.nombre = ''
-  trabajadorForm.cargo = ''
+  closeFormTrabajador()
 }
 
 function onSaveTarjeta() {
@@ -2789,11 +3914,7 @@ function onSaveTarjeta() {
     titular: tarjetaForm.titular.trim() || '—',
     estado: 'Activa'
   })
-  tarjetaForm.alias = ''
-  tarjetaForm.tipo = 'Crédito'
-  tarjetaForm.ultimos4 = ''
-  tarjetaForm.banco = ''
-  tarjetaForm.titular = ''
+  closeFormTarjeta()
 }
 
 async function onLogout() {
