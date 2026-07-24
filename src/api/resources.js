@@ -179,6 +179,13 @@ export async function listAuditLogs(params = {}) {
   return unwrapList(await jsonOrThrow(`/api/admin/audit-logs${q ? `?${q}` : ''}`))
 }
 
+export async function syncBidireccional(payload = {}) {
+  return jsonOrThrow('/api/admin/sync-bidireccional', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
 export async function listLegacy(params = {}) {
   const qs = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {

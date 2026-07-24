@@ -445,6 +445,32 @@ async function listAuditLogs(req, res) {
   }
 }
 
+/* ——— Sync bidireccional Turnos ↔ Rendiciones ——— */
+
+async function syncBidireccionalHandler(req, res) {
+  try {
+    const dryRun = Boolean(req.body?.dryRun || req.query?.dryRun)
+    const { syncBidireccional } = require('../utils/syncBidireccional')
+    const result = await syncBidireccional({ dryRun })
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      'MODIFICAR',
+      'Sync',
+      `Sync bidireccional${dryRun ? ' dry-run' : ''} — errores: ${result.stats?.errores?.length || 0}`
+    )
+
+    return res.json(result)
+  } catch (err) {
+    console.error('[syncBidireccional]', err)
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: err.message
+    })
+  }
+}
+
 module.exports = {
   listTrabajadores,
   createTrabajador,
@@ -458,5 +484,6 @@ module.exports = {
   createTarjeta,
   updateTarjeta,
   softDeleteTarjeta,
-  listAuditLogs
+  listAuditLogs,
+  syncBidireccionalHandler
 }

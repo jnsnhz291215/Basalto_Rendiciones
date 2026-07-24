@@ -107,6 +107,10 @@ Si solo cambió una capa, reinicia solo ese proceso PM2.
   - Override en `server/.env`: `STORAGE_PATH=/home/basalto/apps/Basalto_rendiciones/Rendiciones_Storage`
   - Subcarpetas: `comprobantes/`, `anticipos/`, `exports/`, `tmp/`
   - Lectura vía `GET /api/files/...`
+- **Sync Turnos ↔ Rendiciones:**
+  - Env Turnos: `TURNOS_DB_HOST`, `TURNOS_DB_PORT`, `TURNOS_DB_USER`, `TURNOS_DB_PASS`, `TURNOS_DB_NAME` (default `basalto`)
+  - API: `POST /api/admin/sync-bidireccional` (Super Admin), body opcional `{ "dryRun": true }`
+  - CLI: `cd server && node scripts/sync-bidireccional.js [--dry-run]`
 - En producción, `CORS_ORIGIN` debería incluir `https://rendiciones.basalto.app` (además o en lugar de localhost).
 - Archivos `*.ndjson` / `debug-*.ndjson` están en `.gitignore` (logs de debug).
 

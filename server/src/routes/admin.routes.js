@@ -12,7 +12,8 @@ const {
   createTarjeta,
   updateTarjeta,
   softDeleteTarjeta,
-  listAuditLogs
+  listAuditLogs,
+  syncBidireccionalHandler
 } = require('../controllers/admin.controller')
 const { authMiddleware } = require('../middlewares/auth.middleware')
 const { checkRole, ADMINS, SUPER_ADMINS } = require('../middlewares/role.middleware')
@@ -42,5 +43,8 @@ router.delete('/tarjetas/:id', softDeleteTarjeta)
 
 /* Audit logs — solo Super Admins */
 router.get('/audit-logs', checkRole(SUPER_ADMINS), listAuditLogs)
+
+/* Sync Turnos ↔ Rendiciones — solo Super Admins */
+router.post('/sync-bidireccional', checkRole(SUPER_ADMINS), syncBidireccionalHandler)
 
 module.exports = router
