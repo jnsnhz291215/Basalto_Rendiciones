@@ -42,9 +42,11 @@
                 <label for="rut">RUT</label>
                 <input
                   id="rut"
-                  v-model.trim="rut"
+                  :value="rutDisplay"
                   autocomplete="username"
+                  inputmode="text"
                   placeholder="12.345.678-9"
+                  @input="onRutInput"
                 />
               </div>
 
@@ -94,12 +96,22 @@ import { onMounted, ref } from 'vue'
 import { useAuth } from '../composables/useAuth'
 // TEMP_AUTH_BYPASS — revertir antes de commit
 import { TEMP_AUTH_BYPASS } from '../TEMP_AUTH_BYPASS'
+import { cleanRut, formatRut } from '../utils/rut'
 
 const { user, loading, error, bootstrapped, bootstrap, login } = useAuth()
 
-const rut = ref('')
+/** Solo visual (puntos + guión) */
+const rutDisplay = ref('')
+/** Valor limpio para API (sin puntos/guión) */
+const rutClean = ref('')
 const password = ref('')
 const formError = ref('')
+
+function onRutInput(event) {
+  const cleaned = cleanRut(event.target.value).slice(0, 9)
+  rutClean.value = cleaned
+  rutDisplay.value = formatRut(cleaned)
+}
 
 onMounted(async () => {
   await bootstrap()
@@ -114,7 +126,8 @@ async function onLogin() {
       sessionStorage.setItem('TEMP_AUTH_BYPASS_OK', '1')
     }
 
-    await login(rut.value, password.value)
+    const rut = rutClean.value || cleanRut(rutDisplay.value)
+    await login(rut, password.value)
     password.value = ''
     redirectAfterLogin()
   } catch (e) {

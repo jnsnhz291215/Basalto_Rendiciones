@@ -17,6 +17,7 @@ async function login(req, res) {
         .trim()
         .toUpperCase()
         .replace(/\./g, '')
+        .replace(/-/g, '')
         .replace(/\s+/g, '')
 
     const rows = correo
@@ -32,7 +33,8 @@ async function login(req, res) {
           `SELECT u.*, t.nombre_completo
            FROM usuarios u
            LEFT JOIN trabajadores t ON t.id = u.trabajador_id AND t.is_deleted = FALSE
-           WHERE REPLACE(UPPER(u.rut), '.', '') = ? AND u.is_deleted = FALSE
+           WHERE REPLACE(REPLACE(UPPER(u.rut), '.', ''), '-', '') = ?
+             AND u.is_deleted = FALSE
            LIMIT 1`,
           [normalizeRut(rut)]
         )

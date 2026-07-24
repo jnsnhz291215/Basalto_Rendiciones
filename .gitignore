@@ -5,3 +5,16 @@ dist/
 .env.local
 .env.*.local
 .DS_Store
+
+# Debug / logs generados en runtime
+*.ndjson
+debug-*.ndjson
+server/debug-404.ndjson
+server/*.ndjson
+.cursor/debug-*.log
+
+# Storage de comprobantes (fuera del repo en prod; por si hay symlink/local)
+Rendiciones_Storage/
+**/Rendiciones_Storage/
+uploads/
+server/uploads/

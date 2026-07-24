@@ -8,15 +8,15 @@ git pull
 
 echo "2/5. Actualizando e instalando Frontend (Vue)..."
 npm install
-npm run build
+# Same-origin en prod: no embeber localhost:3002 en el build
+VITE_API_BASE_URL=https://rendiciones.basalto.app npm run build
 
 echo "3/5. Actualizando Backend (Express)..."
 cd server
 npm install
-# El API ahora también sirve dist/ (front). Reiniciar API es obligatorio.
+# El API también sirve dist/ (front)
 pm2 restart basalto_rendiciones_api
 
-# Proceso front aparte (si existe en PM2); no falla el script si no está
 pm2 restart basalto_rendiciones 2>/dev/null || echo "(omitido: basalto_rendiciones no está en PM2)"
 
 echo "¡Listo! Aplicación actualizada correctamente."

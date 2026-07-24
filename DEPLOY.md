@@ -103,6 +103,12 @@ Si solo cambió una capa, reinicia solo ese proceso PM2.
 - Auth: JWT Bearer (`Authorization`), no cookie de Turnos. El cliente normaliza bases que terminen en `/api` para evitar `/api/api/...`.
 - Sustituye `basalto_rendiciones` / `basalto_rendiciones_api` por los nombres de `pm2 list` si difieren.
 - El Dashboard ya no usa mocks: carga cajas, gastos, anticipos, admin y legacy desde la API. Sin datos en BD, las tablas se ven vacías.
+- **Storage (fuera de git):** `/home/basalto/apps/Basalto_rendiciones/Rendiciones_Storage`
+  - Override en `server/.env`: `STORAGE_PATH=/home/basalto/apps/Basalto_rendiciones/Rendiciones_Storage`
+  - Subcarpetas: `comprobantes/`, `anticipos/`, `exports/`, `tmp/`
+  - Lectura vía `GET /api/files/...`
+- En producción, `CORS_ORIGIN` debería incluir `https://rendiciones.basalto.app` (además o en lugar de localhost).
+- Archivos `*.ndjson` / `debug-*.ndjson` están en `.gitignore` (logs de debug).
 
 ## Probar login local
 

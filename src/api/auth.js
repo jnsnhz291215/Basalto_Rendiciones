@@ -4,6 +4,7 @@
  */
 
 import { apiFetch, clearToken, setToken, API_BASE_URL } from './client'
+import { cleanRut } from '../utils/rut'
 
 export { API_BASE_URL }
 
@@ -147,10 +148,11 @@ export function loginRedirectUrl(returnTo = window.location.href) {
 }
 
 export async function login(rut, password) {
+  const rutLimpio = cleanRut(rut)
   const { res, data } = await apiFetch('/api/auth/login', {
     method: 'POST',
     auth: false,
-    body: JSON.stringify({ rut: String(rut || '').trim(), password })
+    body: JSON.stringify({ rut: rutLimpio, password })
   })
 
   if (!res.ok || !data?.token || !data?.user) {
