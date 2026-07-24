@@ -232,11 +232,20 @@ async function createUsuario(req, res) {
     )
 
     const created = await query(
-      `SELECT id, trabajador_id, rut, correo, rol, estado, created_at
-       FROM usuarios WHERE id = ? AND is_deleted = FALSE`,
+      `SELECT u.id, u.trabajador_id, u.rut, u.correo, u.rol, u.estado, u.created_at,
+              t.nombre_completo AS trabajador_nombre
+       FROM usuarios u
+       LEFT JOIN trabajadores t ON t.id = u.trabajador_id
+       WHERE u.id = ? AND u.is_deleted = FALSE`,
       [result.insertId]
     )
-    return res.status(201).json(created[0])
+    const row = created[0] || {}
+    // password solo en esta respuesta inicial (nunca se vuelve a exponer)
+    return res.status(201).json({
+      ...row,
+      nombre: row.trabajador_nombre || adminFormNombre(req.body) || row.correo,
+      password
+    })
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ error: 'RUT o correo ya registrado' })
@@ -244,6 +253,10 @@ async function createUsuario(req, res) {
     console.error('[createUsuario]', err)
     return res.status(500).json({ error: 'Internal Server Error' })
   }
+}
+
+function adminFormNombre(body) {
+  return body?.nombre?.trim() || body?.nombre_completo?.trim() || null
 }
 
 async function softDeleteUsuario(req, res) {
@@ -327,6 +340,58 @@ async function createTarjeta(req, res) {
   }
 }
 
+async function updateTarjeta(req, res) {
+  try {
+    const id = Number(req.params.id)
+    const existing = await query(
+      `SELECT * FROM tarjetas_empresa WHERE id = ? AND is_deleted = FALSE`,
+      [id]
+    )
+    if (!existing[0]) return res.status(404).json({ error: 'Tarjeta no encontrada' })
+
+    const { alias, tipo, ultimos_digitos, banco, titular_nombre, estado } = req.body || {}
+
+    await query(
+      `UPDATE tarjetas_empresa
+       SET alias = ?,
+           tipo = ?,
+           ultimos_digitos = ?,
+           banco = ?,
+           titular_nombre = ?,
+           estado = ?
+       WHERE id = ? AND is_deleted = FALSE`,
+      [
+        alias?.trim() || existing[0].alias,
+        tipo || existing[0].tipo,
+        ultimos_digitos !== undefined
+          ? String(ultimos_digitos).slice(-4)
+          : existing[0].ultimos_digitos,
+        banco !== undefined ? banco : existing[0].banco,
+        titular_nombre !== undefined ? titular_nombre : existing[0].titular_nombre,
+        estado || existing[0].estado,
+        id
+      ]
+    )
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      'MODIFICAR',
+      'Tarjetas',
+      `Tarjeta id=${id} actualizada`
+    )
+
+    const updated = await query(
+      `SELECT * FROM tarjetas_empresa WHERE id = ? AND is_deleted = FALSE`,
+      [id]
+    )
+    return res.json(updated[0])
+  } catch (err) {
+    console.error('[updateTarjeta]', err)
+    return res.status(500).json({ error: 'Internal Server Error' })
+  }
+}
+
 async function softDeleteTarjeta(req, res) {
   try {
     const id = Number(req.params.id)
@@ -391,6 +456,7 @@ module.exports = {
   softDeleteUsuario,
   listTarjetas,
   createTarjeta,
+  updateTarjeta,
   softDeleteTarjeta,
   listAuditLogs
 }

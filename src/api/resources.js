@@ -137,12 +137,11 @@ export async function createUsuario(payload) {
   })
 }
 
-export async function deleteUsuario(id) {
-  return jsonOrThrow(`/api/admin/usuarios/${id}`, { method: 'DELETE' })
-}
-
-export async function listTarjetas() {
-  return unwrapList(await jsonOrThrow('/api/admin/tarjetas'))
+export async function updateMe(payload) {
+  return jsonOrThrow('/api/auth/me', {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
 }
 
 export async function createTarjeta(payload) {
@@ -152,8 +151,23 @@ export async function createTarjeta(payload) {
   })
 }
 
+export async function updateTarjeta(id, payload) {
+  return jsonOrThrow(`/api/admin/tarjetas/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
 export async function deleteTarjeta(id) {
   return jsonOrThrow(`/api/admin/tarjetas/${id}`, { method: 'DELETE' })
+}
+
+export async function deleteUsuario(id) {
+  return jsonOrThrow(`/api/admin/usuarios/${id}`, { method: 'DELETE' })
+}
+
+export async function listTarjetas() {
+  return unwrapList(await jsonOrThrow('/api/admin/tarjetas'))
 }
 
 export async function listAuditLogs(params = {}) {

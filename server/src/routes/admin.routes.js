@@ -10,6 +10,7 @@ const {
   softDeleteUsuario,
   listTarjetas,
   createTarjeta,
+  updateTarjeta,
   softDeleteTarjeta,
   listAuditLogs
 } = require('../controllers/admin.controller')
@@ -36,6 +37,7 @@ router.delete('/usuarios/:id', softDeleteUsuario)
 /* Tarjetas */
 router.get('/tarjetas', listTarjetas)
 router.post('/tarjetas', createTarjeta)
+router.put('/tarjetas/:id', updateTarjeta)
 router.delete('/tarjetas/:id', softDeleteTarjeta)
 
 /* Audit logs — solo Super Admins */

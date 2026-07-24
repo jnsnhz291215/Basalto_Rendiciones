@@ -132,4 +132,87 @@ async function me(req, res) {
   })
 }
 
-module.exports = { login, me, normalizePasswordHash }
+/**
+ * Actualiza correo y/o contraseña del usuario autenticado.
+ * Body: { correo?, password_actual?, password_nueva? }
+ */
+async function updateMe(req, res) {
+  try {
+    const { correo, password_actual, password_nueva } = req.body || {}
+    const userId = req.user.id
+
+    const rows = await query(
+      `SELECT id, rut, correo, password_hash, rol, trabajador_id, estado
+       FROM usuarios
+       WHERE id = ? AND is_deleted = FALSE
+       LIMIT 1`,
+      [userId]
+    )
+    const user = rows[0]
+    if (!user || user.estado !== 'activo') {
+      return res.status(401).json({ error: 'Unauthorized' })
+    }
+
+    let nextCorreo = user.correo
+    if (correo !== undefined) {
+      const trimmed = String(correo).trim()
+      if (!trimmed) {
+        return res.status(400).json({ error: 'correo no puede estar vacío' })
+      }
+      nextCorreo = trimmed
+    }
+
+    let nextHash = user.password_hash
+    const quiereCambiarClave =
+      password_nueva !== undefined && String(password_nueva).length > 0
+
+    if (quiereCambiarClave) {
+      if (!password_actual) {
+        return res.status(400).json({ error: 'password_actual es requerida' })
+      }
+      const hash = normalizePasswordHash(user.password_hash)
+      const ok = await bcrypt.compare(String(password_actual), hash)
+      if (!ok) {
+        return res.status(401).json({ error: 'Contraseña actual incorrecta' })
+      }
+      if (String(password_nueva).length < 6) {
+        return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' })
+      }
+      nextHash = await bcrypt.hash(String(password_nueva), 10)
+    }
+
+    await query(
+      `UPDATE usuarios SET correo = ?, password_hash = ? WHERE id = ? AND is_deleted = FALSE`,
+      [nextCorreo, nextHash, userId]
+    )
+
+    await registrarAuditoria(
+      userId,
+      req.user.nombre,
+      'MODIFICAR',
+      'Perfil',
+      quiereCambiarClave
+        ? `Actualizó correo/clave (correo=${nextCorreo})`
+        : `Actualizó correo=${nextCorreo}`
+    )
+
+    return res.json({
+      user: {
+        id: user.id,
+        rut: user.rut,
+        correo: nextCorreo,
+        rol: user.rol,
+        trabajador_id: user.trabajador_id,
+        nombre: req.user.nombre
+      }
+    })
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Correo ya registrado' })
+    }
+    console.error('[updateMe]', err)
+    return res.status(500).json({ error: 'Internal Server Error' })
+  }
+}
+
+module.exports = { login, me, updateMe, normalizePasswordHash }

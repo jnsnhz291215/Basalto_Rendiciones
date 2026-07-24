@@ -6,12 +6,102 @@
       </div>
 
       <div class="dash-header-actions">
-        <div class="dash-user">
-          <div class="dash-avatar">{{ initials }}</div>
-          <button class="dash-logout" type="button" @click="onLogout">Salir</button>
+        <div class="dash-user-menu" ref="userMenuEl">
+          <button
+            class="dash-user-menu-btn"
+            type="button"
+            :aria-expanded="userMenuOpen"
+            aria-haspopup="menu"
+            @click="userMenuOpen = !userMenuOpen"
+          >
+            <div class="dash-avatar">{{ initials }}</div>
+            <span class="dash-user-menu-caret">▾</span>
+          </button>
+          <div v-if="userMenuOpen" class="dash-user-dropdown" role="menu">
+            <button class="dash-user-dropdown-item" type="button" role="menuitem" @click="openModalPerfil">
+              Mi Perfil / Cambiar Contraseña
+            </button>
+            <button class="dash-user-dropdown-item dash-user-dropdown-item--danger" type="button" role="menuitem" @click="onLogout">
+              Cerrar Sesión
+            </button>
+          </div>
         </div>
       </div>
     </header>
+
+    <!-- Modal credenciales tras crear usuario -->
+    <div
+      v-if="modalCredenciales.open"
+      class="dash-modal-backdrop"
+      @click.self="closeModalCredenciales"
+    >
+      <div class="dash-modal" role="dialog" aria-modal="true">
+        <div class="dash-modal-head">
+          <h3>Usuario creado</h3>
+          <button class="dash-modal-close" type="button" aria-label="Cerrar" @click="closeModalCredenciales">
+            ×
+          </button>
+        </div>
+        <p class="dash-hint">Guarda estas credenciales. La contraseña no se volverá a mostrar.</p>
+        <div class="dash-cred-grid">
+          <div><span class="dash-cred-label">Nombre</span><strong>{{ modalCredenciales.nombre }}</strong></div>
+          <div><span class="dash-cred-label">RUT</span><strong class="dash-mono">{{ modalCredenciales.rut }}</strong></div>
+          <div><span class="dash-cred-label">Correo</span><strong>{{ modalCredenciales.correo }}</strong></div>
+          <div><span class="dash-cred-label">Rol</span><strong>{{ modalCredenciales.rol }}</strong></div>
+          <div class="dash-cred-pass">
+            <span class="dash-cred-label">Contraseña</span>
+            <strong class="dash-mono">{{ modalCredenciales.password }}</strong>
+          </div>
+        </div>
+        <div class="dash-modal-actions">
+          <button class="dash-btn-secondary" type="button" @click="closeModalCredenciales">Cerrar</button>
+          <button class="dash-btn-primary" type="button" @click="copyCredenciales">
+            {{ credencialesCopied ? '✓ Copiado' : 'Copiar Credenciales' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Mi Perfil -->
+    <div
+      v-if="modalPerfil.open"
+      class="dash-modal-backdrop"
+      @click.self="closeModalPerfil"
+    >
+      <div class="dash-modal" role="dialog" aria-modal="true">
+        <div class="dash-modal-head">
+          <h3>Mi Perfil</h3>
+          <button class="dash-modal-close" type="button" aria-label="Cerrar" @click="closeModalPerfil">
+            ×
+          </button>
+        </div>
+        <form class="dash-admin-form" @submit.prevent="onSavePerfil">
+          <div class="dash-field">
+            <label>RUT</label>
+            <input :value="user?.rut || ''" type="text" disabled class="dash-mono" />
+          </div>
+          <div class="dash-field">
+            <label>Correo</label>
+            <input v-model="modalPerfil.correo" type="email" required placeholder="correo@empresa.cl" />
+          </div>
+          <p class="dash-hint">Cambiar contraseña (opcional)</p>
+          <div class="dash-field">
+            <label>Contraseña actual</label>
+            <input v-model="modalPerfil.passwordActual" type="password" autocomplete="current-password" />
+          </div>
+          <div class="dash-field">
+            <label>Nueva contraseña</label>
+            <input v-model="modalPerfil.passwordNueva" type="password" autocomplete="new-password" />
+          </div>
+          <p v-if="modalPerfil.error" class="error" role="alert">{{ modalPerfil.error }}</p>
+          <p v-if="modalPerfil.ok" class="dash-hint dash-hint--ok">{{ modalPerfil.ok }}</p>
+          <div class="dash-modal-actions">
+            <button class="dash-btn-secondary" type="button" @click="closeModalPerfil">Cancelar</button>
+            <button class="dash-btn-primary" type="submit">Guardar cambios</button>
+          </div>
+        </form>
+      </div>
+    </div>
 
     <div class="dash-body">
       <div
@@ -2030,7 +2120,7 @@
               <div class="dash-caja-form-head">
                 <div>
                   <h2 class="dash-assign-title dash-assign-title--flush">
-                    Registrar Tarjeta de la Empresa
+                    {{ tarjetaForm.editId ? 'Editar Tarjeta de la Empresa' : 'Registrar Tarjeta de la Empresa' }}
                   </h2>
                   <p class="dash-hint">
                     Los gastos asignados a estas tarjetas no generarán devolución al trabajador.
@@ -2099,7 +2189,7 @@
                     Cancelar
                   </button>
                   <button class="dash-btn-primary" type="submit">
-                    <span>Guardar Tarjeta</span>
+                    <span>{{ tarjetaForm.editId ? 'Actualizar Tarjeta' : 'Guardar Tarjeta' }}</span>
                   </button>
                 </div>
               </form>
@@ -2116,16 +2206,30 @@
                     <th>Banco</th>
                     <th>Titular / Asignado</th>
                     <th class="dash-table-center">Estado</th>
+                    <th class="dash-table-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="t in tarjetasEmpresa" :key="t.ultimos4 + t.alias">
+                  <tr v-for="t in tarjetasEmpresa" :key="t.id || t.ultimos4 + t.alias">
                     <td class="dash-table-strong">💳 {{ t.alias }}</td>
                     <td class="dash-mono dash-rinde">{{ t.tipo }} (•••• {{ t.ultimos4 }})</td>
                     <td>{{ t.banco }}</td>
                     <td>{{ t.titular }}</td>
                     <td class="dash-table-center">
                       <span class="dash-status dash-status--ok">{{ t.estado }}</span>
+                    </td>
+                    <td class="dash-table-center dash-table-actions">
+                      <button class="dash-btn-icon" type="button" title="Editar" @click="onEditTarjeta(t)">
+                        ✎
+                      </button>
+                      <button
+                        class="dash-btn-icon dash-btn-icon--danger"
+                        type="button"
+                        title="Eliminar"
+                        @click="onDeleteTarjeta(t)"
+                      >
+                        🗑
+                      </button>
                     </td>
                   </tr>
                 </tbody>
@@ -2232,12 +2336,13 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useAuth } from '../composables/useAuth'
 // TEMP_AUTH_BYPASS — revertir antes de commit
 import { TEMP_AUTH_BYPASS } from '../TEMP_AUTH_BYPASS'
 import { passwordFromRut, rutStatusLabel, validarRutChileno } from '../utils/rut'
 import * as api from '../api/resources'
+import { persistSessionProfile } from '../api/auth'
 import {
   buildCartola,
   mapAdminFromUsuario,
@@ -2251,10 +2356,101 @@ import {
   mapUsuario,
   origenFromMetodo,
   parseMontoInput,
-  rolApiFromUi
+  rolApiFromUi,
+  rolUiFromApi
 } from '../api/mappers'
 
 const { user, bootstrap, logout } = useAuth()
+
+const userMenuOpen = ref(false)
+const userMenuEl = ref(null)
+const credencialesCopied = ref(false)
+
+const modalCredenciales = reactive({
+  open: false,
+  nombre: '',
+  rut: '',
+  correo: '',
+  rol: '',
+  password: ''
+})
+
+const modalPerfil = reactive({
+  open: false,
+  correo: '',
+  passwordActual: '',
+  passwordNueva: '',
+  error: '',
+  ok: ''
+})
+
+function onDocClick(event) {
+  if (!userMenuOpen.value) return
+  if (userMenuEl.value && !userMenuEl.value.contains(event.target)) {
+    userMenuOpen.value = false
+  }
+}
+
+function openModalCredenciales(payload) {
+  modalCredenciales.open = true
+  modalCredenciales.nombre = payload.nombre || payload.trabajador_nombre || '—'
+  modalCredenciales.rut = payload.rut || ''
+  modalCredenciales.correo = payload.correo || ''
+  modalCredenciales.rol = rolUiFromApi(payload.rol) || payload.rol || ''
+  modalCredenciales.password = payload.password || ''
+  credencialesCopied.value = false
+}
+
+function closeModalCredenciales() {
+  modalCredenciales.open = false
+  credencialesCopied.value = false
+}
+
+async function copyCredenciales() {
+  const text = `RUT: ${modalCredenciales.rut} | Correo: ${modalCredenciales.correo} | Clave: ${modalCredenciales.password}`
+  try {
+    await navigator.clipboard.writeText(text)
+    credencialesCopied.value = true
+  } catch {
+    saveError.value = 'No se pudo copiar al portapapeles'
+  }
+}
+
+function openModalPerfil() {
+  userMenuOpen.value = false
+  modalPerfil.open = true
+  modalPerfil.correo = user.value?.correo || ''
+  modalPerfil.passwordActual = ''
+  modalPerfil.passwordNueva = ''
+  modalPerfil.error = ''
+  modalPerfil.ok = ''
+}
+
+function closeModalPerfil() {
+  modalPerfil.open = false
+  modalPerfil.error = ''
+  modalPerfil.ok = ''
+}
+
+async function onSavePerfil() {
+  modalPerfil.error = ''
+  modalPerfil.ok = ''
+  try {
+    const payload = { correo: modalPerfil.correo.trim() }
+    if (modalPerfil.passwordNueva) {
+      payload.password_actual = modalPerfil.passwordActual
+      payload.password_nueva = modalPerfil.passwordNueva
+    }
+    const data = await api.updateMe(payload)
+    persistSessionProfile(data)
+    await bootstrap()
+    modalPerfil.ok = 'Perfil actualizado'
+    modalPerfil.passwordActual = ''
+    modalPerfil.passwordNueva = ''
+  } catch (err) {
+    modalPerfil.error = err?.message || 'No se pudo actualizar el perfil'
+  }
+}
 
 const dataLoading = ref(false)
 const dataError = ref('')
@@ -2715,6 +2911,7 @@ const trabajadorForm = reactive({
 })
 
 const tarjetaForm = reactive({
+  editId: null,
   alias: '',
   tipo: 'Crédito',
   ultimos4: '',
@@ -3130,9 +3327,14 @@ const movimientos = ref([])
 const asignaciones = ref([])
 
 onMounted(async () => {
+  document.addEventListener('click', onDocClick)
   await bootstrap()
   syncGastoLockedFields()
   await loadDashboardData()
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', onDocClick)
 })
 
 function peekNextRinde() {
@@ -3679,21 +3881,44 @@ function toggleFormTarjeta() {
     closeFormTarjeta()
     return
   }
+  resetTarjetaForm()
+  tarjetaFormOpen.value = true
+}
+
+function resetTarjetaForm() {
+  tarjetaForm.editId = null
   tarjetaForm.alias = ''
   tarjetaForm.tipo = 'Crédito'
   tarjetaForm.ultimos4 = ''
   tarjetaForm.banco = ''
   tarjetaForm.titular = ''
-  tarjetaFormOpen.value = true
 }
 
 function closeFormTarjeta() {
   tarjetaFormOpen.value = false
-  tarjetaForm.alias = ''
-  tarjetaForm.tipo = 'Crédito'
-  tarjetaForm.ultimos4 = ''
-  tarjetaForm.banco = ''
-  tarjetaForm.titular = ''
+  resetTarjetaForm()
+}
+
+function onEditTarjeta(t) {
+  tarjetaForm.editId = t.id
+  tarjetaForm.alias = t.alias || ''
+  tarjetaForm.tipo = t.tipo === 'Débito' || t.tipo === 'Debito' ? 'Débito' : 'Crédito'
+  tarjetaForm.ultimos4 = t.ultimos4 || ''
+  tarjetaForm.banco = t.banco === '—' ? '' : t.banco || ''
+  tarjetaForm.titular = t.titular === '—' ? '' : t.titular || ''
+  tarjetaFormOpen.value = true
+}
+
+async function onDeleteTarjeta(t) {
+  if (!t?.id) return
+  if (!confirm(`¿Eliminar la tarjeta "${t.alias}"? (soft delete)`)) return
+  try {
+    saveError.value = ''
+    await api.deleteTarjeta(t.id)
+    await loadDashboardData()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo eliminar la tarjeta'
+  }
 }
 
 function shortAdminRol(rol) {
@@ -3720,15 +3945,21 @@ async function onSaveAdmin() {
 
   try {
     saveError.value = ''
-    await api.createUsuario({
+    const created = await api.createUsuario({
       rut: adminForm.rut.trim(),
       correo: adminForm.correo.trim(),
       password: passwordTemporal,
       rol: rolApiFromUi(adminForm.rol),
-      estado: 'activo'
+      estado: 'activo',
+      nombre: adminForm.nombre.trim()
     })
     await loadDashboardData()
     closeFormAdminUser()
+    openModalCredenciales({
+      ...created,
+      nombre: adminForm.nombre.trim(),
+      password: created.password || passwordTemporal
+    })
   } catch (err) {
     saveError.value = err?.message || 'No se pudo crear el admin'
   }
@@ -3751,6 +3982,7 @@ async function onSaveUsuario() {
 
   let trabajadorId = null
   let rutTrabajador = ''
+  let nombreTrabajador = ''
 
   try {
     saveError.value = ''
@@ -3758,18 +3990,20 @@ async function onSaveUsuario() {
     if (usuarioForm.trabajadorId === 'nuevo') {
       if (!usuarioForm.nuevoRut.trim() || !usuarioForm.nuevoNombre.trim()) return
       if (!validarRutChileno(usuarioForm.nuevoRut)) return
-      const created = await api.createTrabajador({
+      const createdTrab = await api.createTrabajador({
         rut: usuarioForm.nuevoRut.trim(),
         nombre_completo: usuarioForm.nuevoNombre.trim(),
         cargo: usuarioForm.nuevoCargo.trim() || null
       })
-      trabajadorId = created.id
+      trabajadorId = createdTrab.id
       rutTrabajador = usuarioForm.nuevoRut.trim()
+      nombreTrabajador = usuarioForm.nuevoNombre.trim()
     } else {
       const t = trabajadores.value.find((x) => String(x.id) === usuarioForm.trabajadorId)
       if (!t) return
       trabajadorId = t.id
       rutTrabajador = t.rut
+      nombreTrabajador = t.nombre
     }
 
     if (usuarioForm.passType === 'manual' && !usuarioForm.password.trim()) return
@@ -3781,18 +4015,24 @@ async function onSaveUsuario() {
 
     if (!passwordTemporal) return
 
-    await api.createUsuario({
+    const created = await api.createUsuario({
       trabajador_id: trabajadorId,
       rut: rutTrabajador,
       correo: usuarioForm.correo.trim(),
       password: passwordTemporal,
       rol: 'USER_RENDIDOR',
-      estado: 'activo'
+      estado: 'activo',
+      nombre: nombreTrabajador
     })
 
     await loadDashboardData()
     resetUsuarioForm()
     closeFormUsuario()
+    openModalCredenciales({
+      ...created,
+      nombre: created.nombre || nombreTrabajador,
+      password: created.password || passwordTemporal
+    })
   } catch (err) {
     saveError.value = err?.message || 'No se pudo crear el usuario'
   }
@@ -3818,22 +4058,28 @@ async function onSaveTarjeta() {
   if (!tarjetaForm.alias.trim() || !tarjetaForm.ultimos4.trim()) return
   try {
     saveError.value = ''
-    await api.createTarjeta({
+    const payload = {
       alias: tarjetaForm.alias.trim(),
       tipo: tarjetaForm.tipo === 'Débito' ? 'Debito' : 'Credito',
       ultimos_digitos: tarjetaForm.ultimos4.trim(),
       banco: tarjetaForm.banco.trim() || null,
       titular_nombre: tarjetaForm.titular.trim() || null,
       estado: 'activa'
-    })
+    }
+    if (tarjetaForm.editId) {
+      await api.updateTarjeta(tarjetaForm.editId, payload)
+    } else {
+      await api.createTarjeta(payload)
+    }
     await loadDashboardData()
     closeFormTarjeta()
   } catch (err) {
-    saveError.value = err?.message || 'No se pudo crear la tarjeta'
+    saveError.value = err?.message || 'No se pudo guardar la tarjeta'
   }
 }
 
 async function onLogout() {
+  userMenuOpen.value = false
   // TEMP_AUTH_BYPASS — revertir antes de commit
   if (TEMP_AUTH_BYPASS) {
     sessionStorage.removeItem('TEMP_AUTH_BYPASS_OK')
