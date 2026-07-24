@@ -36,14 +36,22 @@
               <p>Ingresa tus credenciales para acceder al sistema.</p>
             </div>
 
-            <!-- TEMP_AUTH_BYPASS: novalidate + inputs sin required — revertir antes de commit -->
-            <form class="login-form" novalidate @submit.prevent="onLogin">
+            <!-- Credenciales aisladas de Turnos: section + name propios -->
+            <form
+              class="login-form"
+              name="rendiciones-login"
+              autocomplete="on"
+              novalidate
+              @submit.prevent="onLogin"
+            >
               <div class="field">
-                <label for="rut">RUT</label>
+                <label for="rendiciones-rut">RUT</label>
                 <input
-                  id="rut"
+                  id="rendiciones-rut"
+                  name="rendiciones_rut"
+                  type="text"
                   :value="rutDisplay"
-                  autocomplete="username"
+                  autocomplete="section-rendiciones username"
                   inputmode="text"
                   placeholder="12.345.678-9"
                   @input="onRutInput"
@@ -51,12 +59,13 @@
               </div>
 
               <div class="field">
-                <label for="password">Contraseña</label>
+                <label for="rendiciones-password">Contraseña</label>
                 <input
-                  id="password"
+                  id="rendiciones-password"
+                  name="rendiciones_password"
                   v-model="password"
                   type="password"
-                  autocomplete="current-password"
+                  autocomplete="section-rendiciones current-password"
                   placeholder="••••••••"
                 />
               </div>
