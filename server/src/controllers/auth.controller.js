@@ -7,9 +7,17 @@ const { registrarAuditoria } = require('../utils/audit')
 async function login(req, res) {
   try {
     const { correo, rut, password } = req.body || {}
-    if (!password || (!correo && !rut)) {
+    const identifier = correo?.trim() || rut?.trim()
+    if (!password || !identifier) {
       return res.status(400).json({ error: 'correo o rut, y password son requeridos' })
     }
+
+    const normalizeRut = (value) =>
+      String(value || '')
+        .trim()
+        .toUpperCase()
+        .replace(/\./g, '')
+        .replace(/\s+/g, '')
 
     const rows = correo
       ? await query(
@@ -24,9 +32,9 @@ async function login(req, res) {
           `SELECT u.*, t.nombre_completo
            FROM usuarios u
            LEFT JOIN trabajadores t ON t.id = u.trabajador_id AND t.is_deleted = FALSE
-           WHERE u.rut = ? AND u.is_deleted = FALSE
+           WHERE REPLACE(UPPER(u.rut), '.', '') = ? AND u.is_deleted = FALSE
            LIMIT 1`,
-          [rut.trim()]
+          [normalizeRut(rut)]
         )
 
     const user = rows[0]

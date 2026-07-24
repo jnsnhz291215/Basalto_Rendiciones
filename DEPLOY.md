@@ -102,6 +102,7 @@ Si solo cambió una capa, reinicia solo ese proceso PM2.
 - La API **no** embebe el front; corre aparte en **:3002**.
 - Auth: JWT Bearer (`Authorization`), no cookie de Turnos. El cliente normaliza bases que terminen en `/api` para evitar `/api/api/...`.
 - Sustituye `basalto_rendiciones` / `basalto_rendiciones_api` por los nombres de `pm2 list` si difieren.
+- El Dashboard ya no usa mocks: carga cajas, gastos, anticipos, admin y legacy desde la API. Sin datos en BD, las tablas se ven vacías.
 
 ## Probar login local
 

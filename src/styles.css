@@ -2730,3 +2730,19 @@ a:hover {
 .dash-rut-status--bad {
   color: #f87171;
 }
+
+.dash-banner {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.dash-banner--info {
+  background: #e0f2fe;
+  color: #075985;
+}
+.dash-banner--danger {
+  background: #fee2e2;
+  color: #991b1b;
+}

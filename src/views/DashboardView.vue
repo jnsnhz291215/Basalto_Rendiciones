@@ -111,6 +111,9 @@
       </aside>
 
       <main class="dash-main">
+        <p v-if="dataLoading" class="dash-banner dash-banner--info">Cargando datos…</p>
+        <p v-if="dataError" class="dash-banner dash-banner--danger">{{ dataError }}</p>
+        <p v-if="saveError" class="dash-banner dash-banner--danger">{{ saveError }}</p>
         <template v-if="activeModule === 'caja'">
         <section class="dash-metrics">
           <div class="dash-metrics-head">
@@ -906,9 +909,9 @@
                 </div>
                 <div class="dash-field">
                   <label>Conductor / Trabajador</label>
-                  <select v-model="asignacion.conductor">
+                  <select v-model="asignacion.conductorId">
                     <option value="">Seleccionar Conductor...</option>
-                    <option v-for="t in trabajadores" :key="t.id" :value="t.nombre">
+                    <option v-for="t in trabajadores" :key="t.id" :value="String(t.id)">
                       {{ t.nombre }}
                     </option>
                   </select>
@@ -1359,11 +1362,11 @@
               <div class="dash-caja-grid-2">
                 <div class="dash-field">
                   <label>Responsable</label>
-                  <select v-model="cajaForm.responsable">
+                  <select v-model="cajaForm.responsableId">
                     <option value="">Seleccionar Responsable...</option>
-                    <option>Carlos Muñoz</option>
-                    <option>Juan Sanhueza</option>
-                    <option>Pedro González</option>
+                    <option v-for="t in trabajadores" :key="t.id" :value="String(t.id)">
+                      {{ t.nombre }}
+                    </option>
                   </select>
                 </div>
 
@@ -2222,13 +2225,33 @@ import { useAuth } from '../composables/useAuth'
 // TEMP_AUTH_BYPASS — revertir antes de commit
 import { TEMP_AUTH_BYPASS } from '../TEMP_AUTH_BYPASS'
 import { passwordFromRut, rutStatusLabel, validarRutChileno } from '../utils/rut'
+import * as api from '../api/resources'
+import {
+  buildCartola,
+  mapAdminFromUsuario,
+  mapAnticipo,
+  mapAuditLog,
+  mapCaja,
+  mapLegacy,
+  mapRendicion,
+  mapTarjeta,
+  mapTrabajador,
+  mapUsuario,
+  origenFromMetodo,
+  parseMontoInput,
+  rolApiFromUi
+} from '../api/mappers'
 
 const { user, bootstrap, logout } = useAuth()
 
-const cajaActiva = ref('FAENA_NORTE')
-const mesActivo = ref('2026-07')
+const dataLoading = ref(false)
+const dataError = ref('')
+const saveError = ref('')
 
-const mesesDisponibles = [
+const cajaActiva = ref('')
+const mesActivo = ref('')
+
+const mesesDisponibles = ref([
   { value: '2026-06', label: 'Junio 2026' },
   { value: '2026-07', label: 'Julio 2026' },
   { value: '2026-08', label: 'Agosto 2026' },
@@ -2236,10 +2259,10 @@ const mesesDisponibles = [
   { value: '2026-10', label: 'Octubre 2026' },
   { value: '2026-11', label: 'Noviembre 2026' },
   { value: '2026-12', label: 'Diciembre 2026' }
-]
+])
 
 function labelMes(value) {
-  return mesesDisponibles.find((m) => m.value === value)?.label || value
+  return mesesDisponibles.value.find((m) => m.value === value)?.label || value
 }
 
 function diasEnMes(yyyyMm) {
@@ -2264,10 +2287,12 @@ function labelMesCerradoCompleto(yyyyMm) {
   return `${labelMes(yyyyMm)} (01/${m}/${y} al ${last}/${m}/${y})`
 }
 
-const mesesCerradosOpciones = mesesDisponibles.map((m) => ({
-  value: m.value,
-  label: labelMesCerrado(m.value)
-}))
+const mesesCerradosOpciones = computed(() =>
+  mesesDisponibles.value.map((m) => ({
+    value: m.value,
+    label: labelMesCerrado(m.value)
+  }))
+)
 
 function normalizarGroupKey(value) {
   return String(value || '')
@@ -2309,7 +2334,7 @@ const initials = computed(() => {
 })
 
 const gasto = reactive({
-  fecha: '2026-07-23',
+  fecha: new Date().toISOString().slice(0, 10),
   trabajadorId: 'me',
   trabajador: '',
   tipo: 'Boleta',
@@ -2408,9 +2433,9 @@ watch(
 )
 
 const asignacion = reactive({
-  fondo: 'FAENA_NORTE',
-  fecha: '2026-07-23',
-  conductor: '',
+  fondo: '',
+  fecha: new Date().toISOString().slice(0, 10),
+  conductorId: '',
   doc: '',
   observaciones: '',
   monto: '',
@@ -2456,11 +2481,12 @@ const cajaForm = reactive({
   groupKeyNuevo: '',
   displayName: '',
   centroCosto: '',
-  responsable: '',
+  responsableId: '',
   fondoEstimado: '',
-  mes: '2026-07',
+  mes: '',
   estado: 'activa',
   editIndex: null,
+  editId: null,
   mesOriginal: null,
   groupKeyOriginal: null
 })
@@ -2587,26 +2613,7 @@ const adminCreateHint = computed(() => {
   return ''
 })
 
-const admins = ref([
-  {
-    rut: '12.345.678-9',
-    nombre: 'Juan Sanhueza',
-    rol: ROLE_DEV,
-    estado: 'Activo'
-  },
-  {
-    rut: '11.111.111-1',
-    nombre: 'Ana Super',
-    rol: ROLE_SUPER,
-    estado: 'Activo'
-  },
-  {
-    rut: '22.222.222-2',
-    nombre: 'Luis Caja',
-    rol: 'Admin Caja',
-    estado: 'Activo'
-  }
-])
+const admins = ref([])
 
 watch(
   creatableAdminRoles,
@@ -2618,32 +2625,7 @@ watch(
   { immediate: true }
 )
 
-const trabajadores = ref([
-  {
-    id: 1,
-    rut: '15.444.333-2',
-    nombre: 'Pedro González',
-    cargo: 'Conductor',
-    tieneUsuario: false,
-    cajasAsignadas: ['FAENA_NORTE']
-  },
-  {
-    id: 2,
-    rut: '11.222.333-K',
-    nombre: 'Carlos Muñoz',
-    cargo: 'Operador',
-    tieneUsuario: true,
-    cajasAsignadas: ['FAENA_NORTE', 'ADMIN_CENTRAL']
-  },
-  {
-    id: 3,
-    rut: '12.345.678-9',
-    nombre: 'Mario Silva',
-    cargo: 'Mecánico',
-    tieneUsuario: false,
-    cajasAsignadas: ['FAENA_CORDILLERA']
-  }
-])
+const trabajadores = ref([])
 
 const usuarioForm = reactive({
   trabajadorId: '',
@@ -2664,14 +2646,7 @@ const rutTrabajadorSeleccionado = computed(() => {
   return t?.rut || ''
 })
 
-const usuarios = ref([
-  {
-    correo: 'cmunoz@basaltodrilling.cl',
-    trabajador: 'Carlos Muñoz',
-    cargo: 'Operador Faena Norte',
-    trabajadorId: 2
-  }
-])
+const usuarios = ref([])
 
 const trabajadorForm = reactive({
   rut: '',
@@ -2687,116 +2662,177 @@ const tarjetaForm = reactive({
   titular: ''
 })
 
-const tarjetasEmpresa = ref([
-  {
-    alias: 'Visa Operaciones Norte',
-    tipo: 'Crédito',
-    ultimos4: '9941',
-    banco: 'Banco de Chile',
-    titular: 'Juan Sanhueza',
-    estado: 'Activa'
-  },
-  {
-    alias: 'Débito Caja Chica Central',
-    tipo: 'Débito',
-    ultimos4: '1050',
-    banco: 'Banco Estado',
-    titular: 'Carlos Muñoz',
-    estado: 'Activa'
-  }
-])
+const tarjetasEmpresa = ref([])
 
 const auditoriaFiltro = reactive({
   modulo: '**Todos los Módulos**',
   accion: '**Todas las Acciones**',
   actor: '**Todos los Usuarios**',
-  fecha: '2026-07-23'
+  fecha: new Date().toISOString().slice(0, 10)
 })
 
-const auditoriaLogs = ref([
-  {
-    fechaHora: '23/07/2026 11:02:15',
-    actor: 'Juan Sanhueza',
-    rol: 'Super Admin - Dev',
-    accion: 'ELIMINAR',
-    accionClass: 'dash-badge--danger',
-    modulo: 'Admin Users',
-    detalleHtml:
-      'Se eliminó al usuario <code class="dash-code dash-code--danger">admin_temp@basaltodrilling.cl</code>',
-    ip: '190.160.20.11'
-  },
-  {
-    fechaHora: '23/07/2026 10:45:00',
-    actor: 'Carlos Muñoz',
-    rol: 'Admin Caja',
-    accion: 'MODIFICAR',
-    accionClass: 'dash-badge--warn',
-    modulo: 'Gastos',
-    detalleHtml:
-      'Rinde <span class="dash-mono dash-rinde">R-102</span> (Monto cambiado): <span class="dash-strike">$40.000</span> → <span class="dash-metric-value--ok dash-table-amount">$45.000</span>',
-    ip: '201.238.12.5'
-  },
-  {
-    fechaHora: '23/07/2026 09:30:12',
-    actor: 'Carlos Muñoz',
-    rol: 'Admin Caja',
-    accion: 'CREAR',
-    accionClass: 'dash-badge--ok',
-    modulo: 'Anticipos',
-    detalleHtml:
-      'Asignado anticipo <span class="dash-mono dash-rinde">V-5541</span> a conductor Pedro González ($150.000)',
-    ip: '201.238.12.5'
-  },
-  {
-    fechaHora: '23/07/2026 08:30:00',
-    actor: 'Juan Sanhueza',
-    rol: 'Super Admin - Dev',
-    accion: 'LOGIN',
-    accionClass: 'dash-badge--info',
-    modulo: 'Autenticación',
-    detalleHtml: 'Inicio de sesión exitoso desde Chrome / macOS',
-    ip: '190.160.20.11'
-  }
-])
+const auditoriaLogs = ref([])
 
-const cajas = ref([
-  {
-    groupKey: 'FAENA_NORTE',
-    displayName: 'caja pagos x mes julio',
-    centroCosto: 'CC-101',
-    responsable: 'Carlos Muñoz',
-    fondoEstimado: '$ 2.000.000',
-    mes: '2026-07',
-    estado: 'activa'
-  },
-  {
-    groupKey: 'FAENA_NORTE',
-    displayName: 'Faena Norte Terreno - Junio',
-    centroCosto: 'CC-101',
-    responsable: 'Carlos Muñoz',
-    fondoEstimado: '$ 1.800.000',
-    mes: '2026-06',
-    estado: 'activa'
-  },
-  {
-    groupKey: 'ADMIN_CENTRAL',
-    displayName: 'Administración Central',
-    centroCosto: 'CC-100',
-    responsable: 'Juan Sanhueza',
-    fondoEstimado: '$ 5.000.000',
-    mes: '2026-07',
-    estado: 'activa'
-  },
-  {
-    groupKey: 'FAENA_CORDILLERA',
-    displayName: 'Faena Cordillera (cerrada)',
-    centroCosto: 'CC-099',
-    responsable: 'Pedro González',
-    fondoEstimado: '$ 1.000.000',
-    mes: '2026-06',
-    estado: 'inactiva'
+const cajas = ref([])
+
+async function safeList(fn, fallback = []) {
+  try {
+    return await fn()
+  } catch (err) {
+    console.warn('[dashboard load]', err?.message || err)
+    return fallback
   }
-])
+}
+
+function applyTieneUsuario(trabajadoresList, usuariosList) {
+  const ids = new Set(
+    usuariosList.filter((u) => u.trabajadorId != null).map((u) => Number(u.trabajadorId))
+  )
+  for (const t of trabajadoresList) {
+    t.tieneUsuario = ids.has(Number(t.id))
+  }
+}
+
+function syncSelectoresCajaMes() {
+  if (!cajas.value.length) {
+    cajaActiva.value = ''
+    mesActivo.value = ''
+    return
+  }
+
+  const nombres = [
+    'Enero',
+    'Febrero',
+    'Marzo',
+    'Abril',
+    'Mayo',
+    'Junio',
+    'Julio',
+    'Agosto',
+    'Septiembre',
+    'Octubre',
+    'Noviembre',
+    'Diciembre'
+  ]
+  const known = new Set(mesesDisponibles.value.map((m) => m.value))
+  for (const c of cajas.value) {
+    if (c.mes && !known.has(c.mes)) {
+      const [y, m] = String(c.mes).split('-')
+      const mi = Number(m) - 1
+      mesesDisponibles.value.push({
+        value: c.mes,
+        label: `${nombres[mi] || m} ${y}`
+      })
+      known.add(c.mes)
+    }
+  }
+  mesesDisponibles.value.sort((a, b) => a.value.localeCompare(b.value))
+
+  const keys = [...new Set(cajas.value.map((c) => c.groupKey))]
+  if (!keys.includes(cajaActiva.value)) {
+    cajaActiva.value = keys[0] || ''
+  }
+  const meses = [
+    ...new Set(cajas.value.filter((c) => c.groupKey === cajaActiva.value).map((c) => c.mes))
+  ].sort()
+  if (!meses.includes(mesActivo.value)) {
+    mesActivo.value = meses[0] || ''
+  }
+  if (!asignacion.fondo && cajaActiva.value) {
+    asignacion.fondo = cajaActiva.value
+  }
+  if (!cajaForm.mes && mesActivo.value) {
+    cajaForm.mes = mesActivo.value
+  }
+}
+
+function rebuildCartola() {
+  cartola.value = buildCartola({
+    cajas: cajas.value,
+    movimientos: movimientos.value,
+    asignaciones: asignaciones.value
+  })
+}
+
+async function loadDashboardData() {
+  dataLoading.value = true
+  dataError.value = ''
+  saveError.value = ''
+  try {
+    const [cajasRaw, rendRaw, trabRaw, legRaw] = await Promise.all([
+      safeList(api.listCajas),
+      safeList(api.listRendiciones),
+      safeList(api.listTrabajadores),
+      safeList(api.listLegacy)
+    ])
+
+    cajas.value = cajasRaw.map(mapCaja)
+    trabajadores.value = trabRaw.map(mapTrabajador)
+
+    const movOps = rendRaw.map(mapRendicion)
+    const legOps = legRaw.map(mapLegacy)
+    movimientos.value = [...movOps, ...legOps]
+
+    const anticiposRaw = await safeList(api.listAnticipos)
+    asignaciones.value = anticiposRaw.map(mapAnticipo)
+
+    const usuariosRaw = await safeList(api.listUsuarios)
+    const mappedUsers = usuariosRaw.map(mapUsuario)
+    applyTieneUsuario(trabajadores.value, mappedUsers)
+
+    admins.value = mappedUsers
+      .filter((u) =>
+        ['SUPER_ADMIN_DEV', 'SUPER_ADMIN', 'ADMIN_CAJA'].includes(u.rol)
+      )
+      .map((u) =>
+        mapAdminFromUsuario({
+          id: u.id,
+          rut: u.rut,
+          correo: u.correo,
+          rol: u.rol,
+          estado: u.estado,
+          trabajador_nombre: u.trabajador
+        })
+      )
+
+    usuarios.value = mappedUsers
+      .filter((u) => u.rol === 'USER_RENDIDOR')
+      .map((u) => ({
+        id: u.id,
+        correo: u.correo,
+        trabajador: u.trabajador,
+        cargo: u.cargo,
+        trabajadorId: u.trabajadorId
+      }))
+
+    const tarjetasRaw = await safeList(api.listTarjetas)
+    tarjetasEmpresa.value = tarjetasRaw.map(mapTarjeta)
+
+    const logsRaw = await safeList(api.listAuditLogs)
+    auditoriaLogs.value = logsRaw.map(mapAuditLog)
+
+    syncSelectoresCajaMes()
+    rebuildCartola()
+    syncInformeResultado()
+  } catch (err) {
+    dataError.value = err?.message || 'No se pudieron cargar los datos'
+  } finally {
+    dataLoading.value = false
+  }
+}
+
+function findCajaIdByGroupMes(groupKey, mes) {
+  const c = cajas.value.find((x) => x.groupKey === groupKey && x.mes === mes)
+  return c?.id ?? null
+}
+
+function findCajaIdForGasto(groupKey) {
+  return (
+    findCajaIdByGroupMes(groupKey, mesActivo.value) ||
+    cajas.value.find((x) => x.groupKey === groupKey && x.estado === 'activa')?.id ||
+    null
+  )
+}
 
 const cajasOrdenadas = computed(() =>
   [...cajas.value].sort((a, b) => {
@@ -2861,7 +2897,7 @@ const cajasDisponiblesParaGasto = computed(() => {
   }
   const t = trabajadorParaGasto()
   const keys = t?.cajasAsignadas || []
-  if (!keys.length) return []
+  if (!keys.length) return all
   return all.filter((c) => keys.includes(c.groupKey))
 })
 
@@ -2999,60 +3035,11 @@ watch(
 
 const informeResultado = reactive({
   titulo: 'Cartola Consolidada del Mes',
-  periodo: 'Período: Julio 2026 (01/07/2026 al 31/07/2026) | Caja: Todas',
-  total: '3 Registros'
+  periodo: 'Período: — | Caja: Todas',
+  total: '0 Registros'
 })
 
-const cartola = ref([
-  {
-    fecha: '01/07/2026',
-    mes: '2026-07',
-    cajaGroupKey: 'FAENA_NORTE',
-    doc: 'DEP-001',
-    docClass: 'dash-doc-muted',
-    tipoKey: 'apertura',
-    tipo: 'Inyección Fondo',
-    badgeClass: 'dash-badge--ok',
-    detalle: 'Apertura mensual de caja chica',
-    responsable: 'Administración',
-    abono: '$ 2.000.000',
-    abonoClass: 'dash-metric-value--ok dash-table-amount',
-    cargo: '-',
-    cargoClass: 'dash-muted'
-  },
-  {
-    fecha: '22/07/2026',
-    mes: '2026-07',
-    cajaGroupKey: 'FAENA_NORTE',
-    doc: 'R-101',
-    docClass: 'dash-rinde',
-    tipoKey: 'rendicion',
-    tipo: 'Rendición Gasto',
-    badgeClass: 'dash-badge--warn',
-    detalle: 'Peajes traslado de personal',
-    responsable: 'Carlos Muñoz',
-    abono: '-',
-    abonoClass: 'dash-muted',
-    cargo: '$ 12.800',
-    cargoClass: 'dash-table-amount'
-  },
-  {
-    fecha: '23/07/2026',
-    mes: '2026-07',
-    cajaGroupKey: 'FAENA_NORTE',
-    doc: 'V-5541',
-    docClass: 'dash-doc-muted',
-    tipoKey: 'anticipo',
-    tipo: 'Anticipo',
-    badgeClass: 'dash-badge--info',
-    detalle: 'Viático ruta Copiapó',
-    responsable: 'Pedro González',
-    abono: '-',
-    abonoClass: 'dash-muted',
-    cargo: '$ 150.000',
-    cargoClass: 'dash-rinde'
-  }
-])
+const cartola = ref([])
 
 const cartolaFiltrada = computed(() =>
   cartola.value.filter((row) => {
@@ -3077,157 +3064,14 @@ const cartolaTotales = computed(() => {
   }
 })
 
-const movimientos = ref([
-  {
-    fecha: '23/07/2026',
-    subidoEl: '23/07/2026 14:32 hrs',
-    rinde: 'R-103',
-    trabajador: 'Juan Pérez',
-    pago: 'Crédito',
-    docto: 'Factura #4601',
-    monto: '$ 62.000',
-    estado: 'Sin Devolución',
-    estadoClass: 'dash-status--warn',
-    metodoPago: 'credito',
-    cajaGroupKey: 'FAENA_NORTE',
-    descripcion: 'Repuestos hidráulicos faena norte.',
-    intento: 1,
-    observacionAdmin: ''
-  },
-  {
-    fecha: '23/07/2026',
-    subidoEl: '23/07/2026 11:05 hrs',
-    rinde: 'R-102',
-    trabajador: 'Juan Pérez',
-    pago: 'Débito',
-    docto: 'Factura #4588',
-    monto: '$ 45.000',
-    estado: 'Sin Devolución',
-    estadoClass: 'dash-status--warn',
-    metodoPago: 'debito',
-    cajaGroupKey: 'FAENA_NORTE',
-    descripcion: 'Combustible vehículo de apoyo.',
-    intento: 1,
-    observacionAdmin: ''
-  },
-  {
-    fecha: '22/07/2026',
-    subidoEl: '22/07/2026 18:40 hrs',
-    rinde: 'R-101',
-    trabajador: 'Carlos Muñoz',
-    pago: 'Efectivo',
-    docto: '',
-    monto: '$ 12.800',
-    estado: 'Devuelto',
-    estadoClass: 'dash-status--ok',
-    metodoPago: 'efectivo',
-    cajaGroupKey: 'ADMIN_CENTRAL',
-    descripcion: 'Peaje ruta 5 norte.',
-    intento: 1,
-    observacionAdmin: ''
-  },
-  {
-    fecha: '21/07/2026',
-    subidoEl: '21/07/2026 09:18 hrs',
-    rinde: 'R-100',
-    trabajador: 'Mario Silva',
-    pago: 'Crédito',
-    docto: '',
-    monto: '$ 85.000',
-    estado: 'Por Corregir',
-    estadoClass: 'dash-status--danger',
-    metodoPago: 'credito',
-    cajaGroupKey: 'FAENA_CORDILLERA',
-    descripcion: 'Compra de repuestos menores en ferretería Copiapó.',
-    intento: 1,
-    observacionAdmin:
-      'El comprobante adjunto está borroso y no se distingue el número de folio ni el monto total. Favor subir foto clara.',
-    camposCorregir: {
-      monto: true,
-      comprobante: true,
-      tipo_docto: false,
-      origen_pago: false,
-      descripcion: false
-    }
-  },
-  {
-    fecha: '18/06/2026',
-    subidoEl: '24/07/2026 10:17 hrs',
-    arrastreMes: 'Junio',
-    rinde: 'R-098',
-    trabajador: 'Carlos Muñoz',
-    pago: 'Débito',
-    docto: 'Factura #4410',
-    monto: '$ 28.500',
-    estado: 'Devuelto',
-    estadoClass: 'dash-status--ok',
-    metodoPago: 'debito',
-    cajaGroupKey: 'FAENA_NORTE',
-    descripcion: 'Herramientas menores junio.',
-    intento: 1,
-    observacionAdmin: ''
-  },
-  {
-    fecha: '15/03/2025',
-    subidoEl: '01/04/2025 08:00 hrs',
-    rinde: 'LEG-1092',
-    trabajador: 'Carlos Muñoz',
-    pago: 'Efectivo',
-    docto: 'Factura #1092',
-    monto: '$ 150.000',
-    estado: 'Devuelto',
-    estadoClass: 'dash-status--ok',
-    metodoPago: 'efectivo',
-    cajaGroupKey: 'FAENA_NORTE',
-    descripcion: 'Registro migrado del sistema anterior.',
-    intento: 1,
-    observacionAdmin: '',
-    legacy: true
-  }
-])
+const movimientos = ref([])
 
-const asignaciones = ref([
-  {
-    fecha: '23/07/2026',
-    conductor: 'Pedro González',
-    doc: 'V-5541',
-    observaciones: 'Viático ruta Copiapó',
-    monto: '$ 150.000',
-    cajaGroupKey: 'FAENA_NORTE',
-    comprobanteNombre: 'vale-5541.pdf'
-  },
-  {
-    fecha: '20/07/2026',
-    conductor: 'Mario Silva',
-    doc: 'V-5530',
-    observaciones: 'Fondo faena cordillera',
-    monto: '$ 200.000',
-    cajaGroupKey: 'FAENA_CORDILLERA',
-    comprobanteNombre: ''
-  },
-  {
-    fecha: '12/06/2026',
-    conductor: 'Pedro González',
-    doc: 'V-5488',
-    observaciones: 'Anticipo junio faena norte',
-    monto: '$ 100.000',
-    cajaGroupKey: 'FAENA_NORTE',
-    comprobanteNombre: 'comprobante-junio.jpg'
-  },
-  {
-    fecha: '05/08/2026',
-    conductor: 'Carlos Muñoz',
-    doc: 'V-5602',
-    observaciones: 'Fondo oficina central',
-    monto: '$ 80.000',
-    cajaGroupKey: 'ADMIN_CENTRAL',
-    comprobanteNombre: ''
-  }
-])
+const asignaciones = ref([])
 
 onMounted(async () => {
   await bootstrap()
   syncGastoLockedFields()
+  await loadDashboardData()
 })
 
 function peekNextRinde() {
@@ -3276,51 +3120,39 @@ function onRespuestaFile(event) {
   modalResponder.comprobanteNombre = file ? file.name : ''
 }
 
-function onSaveRespuesta() {
+async function onSaveRespuesta() {
   if (comentarioRequeridoAdmin.value && !modalResponder.comentario.trim()) {
     return
   }
 
   const row = movimientos.value.find((m) => m.rinde === modalResponder.rinde)
-  if (row) {
-    if (modalResponder.estado === 'corregir') {
-      const campos = { ...modalResponder.campos }
-      const alguno =
-        campos.monto ||
-        campos.comprobante ||
-        campos.tipo_docto ||
-        campos.origen_pago ||
-        campos.descripcion
-      if (!alguno) {
-        campos.monto = true
-        campos.comprobante = true
-      }
-      row.estado = 'Por Corregir'
-      row.estadoClass = 'dash-status--danger'
-      row.observacionAdmin = modalResponder.comentario.trim()
-      row.visibilidadComentario = 'todos'
-      row.camposCorregir = campos
-    } else if (modalResponder.estado === 'rechazado') {
-      row.estado = 'Rechazado'
-      row.estadoClass = 'dash-status--danger'
-      row.observacionAdmin = modalResponder.comentario.trim()
-      row.visibilidadComentario = 'todos'
-      row.camposCorregir = null
-    } else if (modalResponder.comprobanteNombre) {
-      row.estado = 'Devuelto'
-      row.estadoClass = 'dash-status--ok'
-      row.observacionAdmin = modalResponder.comentario.trim()
-      row.visibilidadComentario = modalResponder.visibilidad
-      row.camposCorregir = null
-    } else {
-      row.estado = 'Aprobado'
-      row.estadoClass = 'dash-status--ok'
-      row.observacionAdmin = modalResponder.comentario.trim()
-      row.visibilidadComentario = modalResponder.visibilidad
-      row.camposCorregir = null
-    }
+  if (!row || row.legacy || !row.id) {
+    closeModalResponder()
+    return
   }
-  closeModalResponder()
+
+  let estado = 'Aprobado'
+  if (modalResponder.estado === 'corregir') estado = 'Por Corregir'
+  else if (modalResponder.estado === 'rechazado') estado = 'Rechazado'
+  else if (modalResponder.comprobanteNombre) estado = 'Devuelto'
+
+  const payload = { estado }
+  if (modalResponder.comprobanteNombre) {
+    payload.comprobante_url = modalResponder.comprobanteNombre
+  }
+  // Persistimos el comentario admin en descripción solo si no hay una (columna dedicada aún no existe)
+  if (modalResponder.comentario.trim() && !row.descripcion) {
+    payload.descripcion = `[Admin] ${modalResponder.comentario.trim()}`
+  }
+
+  try {
+    saveError.value = ''
+    await api.updateRendicion(row.id, payload)
+    await loadDashboardData()
+    closeModalResponder()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo actualizar la rendición'
+  }
 }
 
 function openModalCorregir(row) {
@@ -3371,43 +3203,42 @@ function labelPago(metodoPago) {
   return 'Efectivo'
 }
 
-function onSaveCorreccion() {
+async function onSaveCorreccion() {
   const row = movimientos.value.find((m) => m.rinde === modalCorregir.rinde)
-  if (!row) {
+  if (!row || row.legacy || !row.id) {
     closeModalCorregir()
     return
   }
 
   const campos = modalCorregir.campos
+  const payload = { estado: 'Sin Devolución' }
+
   if (campos.tipo_docto) {
-    row.docto =
-      modalCorregir.tipo === 'Factura'
-        ? `Factura #${modalCorregir.numeroLocked || 'S/N'}`
-        : ''
+    payload.tipo_documento = modalCorregir.tipo
+    payload.numero_documento =
+      modalCorregir.tipo === 'Factura' ? modalCorregir.numeroLocked || null : null
   }
   if (campos.monto) {
-    row.monto = formatMontoCl(modalCorregir.monto)
+    payload.monto = parseMontoInput(modalCorregir.monto)
   }
   if (campos.origen_pago) {
-    row.metodoPago = modalCorregir.metodoPago
-    row.pago = labelPago(modalCorregir.metodoPago)
+    payload.origen_pago = origenFromMetodo(modalCorregir.metodoPago)
   }
   if (campos.descripcion) {
-    row.descripcion = modalCorregir.descripcion.trim()
-  }
-  if (modalCorregir.respuesta.trim()) {
-    row.respuestaUsuario = modalCorregir.respuesta.trim()
+    payload.descripcion = modalCorregir.descripcion.trim()
   }
   if (campos.comprobante && modalCorregir.comprobanteNombre) {
-    row.comprobanteNombre = modalCorregir.comprobanteNombre
+    payload.comprobante_url = modalCorregir.comprobanteNombre
   }
 
-  row.intento = (row.intento || 1) + 1
-  row.estado = 'Sin Devolución'
-  row.estadoClass = 'dash-status--warn'
-  row.observacionAdmin = ''
-  row.camposCorregir = null
-  closeModalCorregir()
+  try {
+    saveError.value = ''
+    await api.updateRendicion(row.id, payload)
+    await loadDashboardData()
+    closeModalCorregir()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo guardar la corrección'
+  }
 }
 
 function openSidebar() {
@@ -3427,39 +3258,48 @@ function selectModule(moduleName) {
   activeModule.value = moduleName
 }
 
-function onSaveGasto() {
+async function onSaveGasto() {
   if (palabrasDescripcion.value > 500) return
   if (gasto.tipo === 'Factura' && !gasto.numero.trim()) return
   if (!gasto.cajaGroupKey) return
 
   onGastoTrabajadorChange()
 
-  const rinde = peekNextRinde()
-  const now = new Date()
-  const fechaDocto = gasto.fecha.split('-').reverse().join('/')
-  const arrastreMes = arrastreMesFromFechas(fechaDocto, now)
+  const cajaId = findCajaIdForGasto(gasto.cajaGroupKey)
+  if (!cajaId) {
+    saveError.value = 'No hay caja/presupuesto para la clave y mes seleccionados'
+    return
+  }
 
-  movimientos.value.unshift({
-    fecha: fechaDocto,
-    subidoEl: formatSubidoEl(now),
-    ...(arrastreMes ? { arrastreMes } : {}),
-    rinde,
-    trabajador: gasto.trabajador || nombreSesion.value,
-    pago: labelPago(gasto.metodoPago),
-    docto: gasto.tipo === 'Factura' && gasto.numero ? `Factura #${gasto.numero}` : '',
-    monto: formatMonto(gasto.monto),
-    estado: 'Sin Devolución',
-    estadoClass: 'dash-status--warn',
-    metodoPago: gasto.metodoPago,
-    cajaGroupKey: gasto.cajaGroupKey,
-    descripcion: gasto.descripcion || '',
-    intento: 1,
-    observacionAdmin: '',
-    camposCorregir: null,
-    legacy: false
-  })
+  let trabajadorId = null
+  if (canIngresarPorOtros.value && gasto.trabajadorId !== 'me') {
+    trabajadorId = Number(gasto.trabajadorId)
+  } else {
+    trabajadorId = user.value?.trabajador_id || null
+  }
+  if (!trabajadorId) {
+    saveError.value = 'No hay trabajador asociado para registrar el gasto'
+    return
+  }
 
-  closeFormGasto()
+  try {
+    saveError.value = ''
+    await api.createRendicion({
+      caja_id: cajaId,
+      trabajador_id: trabajadorId,
+      fecha_documento: gasto.fecha,
+      tipo_documento: gasto.tipo,
+      numero_documento: gasto.tipo === 'Factura' ? gasto.numero.trim() : null,
+      monto: parseMontoInput(gasto.monto),
+      origen_pago: origenFromMetodo(gasto.metodoPago),
+      comprobante_url: gasto.comprobanteNombre || null,
+      descripcion: gasto.descripcion || null
+    })
+    await loadDashboardData()
+    closeFormGasto()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo guardar el gasto'
+  }
 }
 
 function resetGastoFormFields() {
@@ -3488,11 +3328,12 @@ function closeFormGasto() {
 }
 
 function resetAsignacionFormFields() {
-  asignacion.conductor = ''
+  asignacion.conductorId = ''
   asignacion.doc = ''
   asignacion.observaciones = ''
   asignacion.monto = ''
   asignacion.comprobanteNombre = ''
+  if (cajaActiva.value) asignacion.fondo = cajaActiva.value
 }
 
 function toggleFormAnticipo() {
@@ -3509,19 +3350,33 @@ function closeFormAnticipo() {
   resetAsignacionFormFields()
 }
 
-function onSaveAsignacion() {
-  if (!asignacion.conductor || !asignacion.monto) return
-  const fechaFmt = asignacion.fecha.split('-').reverse().join('/')
-  asignaciones.value.unshift({
-    fecha: fechaFmt,
-    conductor: asignacion.conductor,
-    doc: asignacion.doc.trim() || `V-${Date.now().toString().slice(-4)}`,
-    observaciones: asignacion.observaciones.trim() || '—',
-    monto: formatMontoCl(asignacion.monto),
-    cajaGroupKey: asignacion.fondo,
-    comprobanteNombre: asignacion.comprobanteNombre || ''
-  })
-  closeFormAnticipo()
+async function onSaveAsignacion() {
+  if (!asignacion.conductorId || !asignacion.monto) return
+
+  const cajaId =
+    findCajaIdByGroupMes(asignacion.fondo, mesActivo.value) ||
+    findCajaIdForGasto(asignacion.fondo)
+  if (!cajaId) {
+    saveError.value = 'Selecciona una caja con presupuesto para el mes activo'
+    return
+  }
+
+  try {
+    saveError.value = ''
+    await api.createAnticipo({
+      caja_id: cajaId,
+      trabajador_id: Number(asignacion.conductorId),
+      fecha: asignacion.fecha,
+      monto: parseMontoInput(asignacion.monto),
+      observacion: asignacion.observaciones.trim() || null,
+      comprobante_url: asignacion.comprobanteNombre || null,
+      codigo_vale: asignacion.doc.trim() || undefined
+    })
+    await loadDashboardData()
+    closeFormAnticipo()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo guardar el anticipo'
+  }
 }
 
 function openModalAsignarCajas(t) {
@@ -3538,13 +3393,18 @@ function closeModalAsignarCajas() {
   modalAsignarCajas.seleccionadas = []
 }
 
-function onSaveAsignarCajas() {
-  const t = trabajadores.value.find((x) => x.id === modalAsignarCajas.trabajadorId)
-  if (t) {
-    t.cajasAsignadas = [...modalAsignarCajas.seleccionadas]
+async function onSaveAsignarCajas() {
+  const id = modalAsignarCajas.trabajadorId
+  if (!id) return
+  try {
+    saveError.value = ''
+    await api.setTrabajadorCajas(id, [...modalAsignarCajas.seleccionadas])
+    await loadDashboardData()
+    closeModalAsignarCajas()
+    syncGastoCajaDisponible()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudieron asignar las cajas'
   }
-  closeModalAsignarCajas()
-  syncGastoCajaDisponible()
 }
 
 function toggleFormInforme() {
@@ -3592,11 +3452,12 @@ function resetCajaForm() {
   cajaForm.groupKeyNuevo = ''
   cajaForm.displayName = ''
   cajaForm.centroCosto = ''
-  cajaForm.responsable = ''
+  cajaForm.responsableId = ''
   cajaForm.fondoEstimado = ''
   cajaForm.mes = mesActivo.value
   cajaForm.estado = 'activa'
   cajaForm.editIndex = null
+  cajaForm.editId = null
   cajaForm.mesOriginal = null
   cajaForm.groupKeyOriginal = null
 }
@@ -3654,62 +3515,47 @@ function onEditCaja(sortedIndex) {
   cajaForm.groupKeyNuevo = ''
   cajaForm.displayName = caja.displayName
   cajaForm.centroCosto = caja.centroCosto
-  cajaForm.responsable = caja.responsable
+  cajaForm.responsableId = caja.responsableId != null ? String(caja.responsableId) : ''
   cajaForm.fondoEstimado = String(caja.fondoEstimado).replace(/\D/g, '')
   cajaForm.mes = caja.mes
   cajaForm.estado = caja.estado
   cajaForm.editIndex = realIndex
+  cajaForm.editId = caja.id
   cajaForm.mesOriginal = caja.mes
   cajaForm.groupKeyOriginal = caja.groupKey
   openFormCajaForEdit()
 }
 
-function onSaveCaja() {
+async function onSaveCaja() {
   const groupKey = resolveGroupKey()
   const displayName = cajaForm.displayName.trim()
   if (!groupKey || !displayName) return
   if (!cajaForm.fondoEstimado) return
 
-  const payloadBase = {
-    groupKey,
-    displayName,
-    centroCosto: cajaForm.centroCosto.trim() || '—',
-    responsable: cajaForm.responsable || '—',
-    fondoEstimado: formatMonto(cajaForm.fondoEstimado),
-    mes: cajaForm.mes,
+  const payload = {
+    clave_interna: groupKey,
+    nombre_exterior: displayName,
+    centro_costo: cajaForm.centroCosto.trim() || '—',
+    responsable_id: cajaForm.responsableId ? Number(cajaForm.responsableId) : null,
+    mes_asignado: cajaForm.mes,
+    fondo_estimado_mes: parseMontoInput(cajaForm.fondoEstimado),
     estado: cajaForm.estado
   }
 
-  if (cajaForm.editIndex === null) {
-    const existente = cajas.value.findIndex(
-      (c) => c.groupKey === groupKey && c.mes === cajaForm.mes
-    )
-    if (existente >= 0) {
-      cajas.value[existente] = payloadBase
+  try {
+    saveError.value = ''
+    if (cajaForm.editId && cajaForm.mesOriginal === cajaForm.mes) {
+      const { clave_interna, ...updatePayload } = payload
+      await api.updateCaja(cajaForm.editId, updatePayload)
     } else {
-      cajas.value.push(payloadBase)
+      await api.createCaja(payload)
     }
     if (!cajaActiva.value) cajaActiva.value = groupKey
+    await loadDashboardData()
     closeFormCaja()
-    return
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo guardar la caja'
   }
-
-  // Edición: cambiar mes → nuevo registro del mismo group_key
-  if (cajaForm.mesOriginal && cajaForm.mes !== cajaForm.mesOriginal) {
-    const existente = cajas.value.findIndex(
-      (c) => c.groupKey === groupKey && c.mes === cajaForm.mes
-    )
-    if (existente >= 0) {
-      cajas.value[existente] = payloadBase
-    } else {
-      cajas.value.push(payloadBase)
-    }
-    closeFormCaja()
-    return
-  }
-
-  cajas.value[cajaForm.editIndex] = payloadBase
-  closeFormCaja()
 }
 
 function resetAdminForm() {
@@ -3797,14 +3643,13 @@ function shortAdminRol(rol) {
   return ROLE_SUPER
 }
 
-function onSaveAdmin() {
+async function onSaveAdmin() {
   if (!canCreateAdmins.value) return
   if (!adminForm.rut.trim() || !adminForm.nombre.trim() || !adminForm.correo.trim()) return
   if (!validarRutChileno(adminForm.rut)) return
   if (!creatableAdminRoles.value.includes(adminForm.rol)) return
   if (adminForm.passType === 'manual' && !adminForm.password.trim()) return
 
-  // Mock: clave temporal (RUT o manual) lista para BD
   const passwordTemporal =
     adminForm.passType === 'manual'
       ? adminForm.password
@@ -3812,16 +3657,20 @@ function onSaveAdmin() {
 
   if (!passwordTemporal) return
 
-  admins.value.push({
-    rut: adminForm.rut.trim(),
-    nombre: adminForm.nombre.trim(),
-    correo: adminForm.correo.trim(),
-    rol: shortAdminRol(adminForm.rol),
-    estado: 'Activo',
-    passwordTemporal
-  })
-
-  closeFormAdminUser()
+  try {
+    saveError.value = ''
+    await api.createUsuario({
+      rut: adminForm.rut.trim(),
+      correo: adminForm.correo.trim(),
+      password: passwordTemporal,
+      rol: rolApiFromUi(adminForm.rol),
+      estado: 'activo'
+    })
+    await loadDashboardData()
+    closeFormAdminUser()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo crear el admin'
+  }
 }
 
 function resetUsuarioForm() {
@@ -3835,93 +3684,92 @@ function resetUsuarioForm() {
   usuarioForm.editIndex = null
 }
 
-function onSaveUsuario() {
+async function onSaveUsuario() {
   if (!canCreateUsuarios.value) return
   if (!usuarioForm.correo.trim() || !usuarioForm.trabajadorId) return
 
-  let trabajadorNombre = ''
-  let cargo = ''
   let trabajadorId = null
   let rutTrabajador = ''
 
-  if (usuarioForm.trabajadorId === 'nuevo') {
-    if (!usuarioForm.nuevoRut.trim() || !usuarioForm.nuevoNombre.trim()) return
-    if (!validarRutChileno(usuarioForm.nuevoRut)) return
-    const nextId = Math.max(0, ...trabajadores.value.map((t) => t.id)) + 1
-    trabajadores.value.push({
-      id: nextId,
-      rut: usuarioForm.nuevoRut.trim(),
-      nombre: usuarioForm.nuevoNombre.trim(),
-      cargo: usuarioForm.nuevoCargo.trim() || '—',
-      tieneUsuario: true,
-      cajasAsignadas: []
+  try {
+    saveError.value = ''
+
+    if (usuarioForm.trabajadorId === 'nuevo') {
+      if (!usuarioForm.nuevoRut.trim() || !usuarioForm.nuevoNombre.trim()) return
+      if (!validarRutChileno(usuarioForm.nuevoRut)) return
+      const created = await api.createTrabajador({
+        rut: usuarioForm.nuevoRut.trim(),
+        nombre_completo: usuarioForm.nuevoNombre.trim(),
+        cargo: usuarioForm.nuevoCargo.trim() || null
+      })
+      trabajadorId = created.id
+      rutTrabajador = usuarioForm.nuevoRut.trim()
+    } else {
+      const t = trabajadores.value.find((x) => String(x.id) === usuarioForm.trabajadorId)
+      if (!t) return
+      trabajadorId = t.id
+      rutTrabajador = t.rut
+    }
+
+    if (usuarioForm.passType === 'manual' && !usuarioForm.password.trim()) return
+
+    const passwordTemporal =
+      usuarioForm.passType === 'manual'
+        ? usuarioForm.password
+        : passwordFromRut(rutTrabajador)
+
+    if (!passwordTemporal) return
+
+    await api.createUsuario({
+      trabajador_id: trabajadorId,
+      rut: rutTrabajador,
+      correo: usuarioForm.correo.trim(),
+      password: passwordTemporal,
+      rol: 'USER_RENDIDOR',
+      estado: 'activo'
     })
-    trabajadorId = nextId
-    trabajadorNombre = usuarioForm.nuevoNombre.trim()
-    cargo = usuarioForm.nuevoCargo.trim() || '—'
-    rutTrabajador = usuarioForm.nuevoRut.trim()
-  } else {
-    const t = trabajadores.value.find((x) => String(x.id) === usuarioForm.trabajadorId)
-    if (!t) return
-    t.tieneUsuario = true
-    trabajadorId = t.id
-    trabajadorNombre = t.nombre
-    cargo = t.cargo
-    rutTrabajador = t.rut
+
+    await loadDashboardData()
+    resetUsuarioForm()
+    closeFormUsuario()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo crear el usuario'
   }
-
-  if (usuarioForm.passType === 'manual' && !usuarioForm.password.trim()) return
-
-  const passwordTemporal =
-    usuarioForm.passType === 'manual'
-      ? usuarioForm.password
-      : passwordFromRut(rutTrabajador)
-
-  if (!passwordTemporal) return
-
-  const payload = {
-    correo: usuarioForm.correo.trim(),
-    trabajador: trabajadorNombre,
-    cargo,
-    trabajadorId,
-    passwordTemporal
-  }
-
-  if (usuarioForm.editIndex === null) {
-    usuarios.value.push(payload)
-  } else {
-    usuarios.value[usuarioForm.editIndex] = payload
-  }
-
-  resetUsuarioForm()
-  closeFormUsuario()
 }
 
-function onSaveTrabajador() {
+async function onSaveTrabajador() {
   if (!trabajadorForm.rut.trim() || !trabajadorForm.nombre.trim()) return
-  const nextId = Math.max(0, ...trabajadores.value.map((t) => t.id)) + 1
-  trabajadores.value.push({
-    id: nextId,
-    rut: trabajadorForm.rut.trim(),
-    nombre: trabajadorForm.nombre.trim(),
-    cargo: trabajadorForm.cargo.trim() || '—',
-    tieneUsuario: false,
-    cajasAsignadas: []
-  })
-  closeFormTrabajador()
+  try {
+    saveError.value = ''
+    await api.createTrabajador({
+      rut: trabajadorForm.rut.trim(),
+      nombre_completo: trabajadorForm.nombre.trim(),
+      cargo: trabajadorForm.cargo.trim() || null
+    })
+    await loadDashboardData()
+    closeFormTrabajador()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo crear el trabajador'
+  }
 }
 
-function onSaveTarjeta() {
+async function onSaveTarjeta() {
   if (!tarjetaForm.alias.trim() || !tarjetaForm.ultimos4.trim()) return
-  tarjetasEmpresa.value.push({
-    alias: tarjetaForm.alias.trim(),
-    tipo: tarjetaForm.tipo,
-    ultimos4: tarjetaForm.ultimos4.trim(),
-    banco: tarjetaForm.banco.trim() || '—',
-    titular: tarjetaForm.titular.trim() || '—',
-    estado: 'Activa'
-  })
-  closeFormTarjeta()
+  try {
+    saveError.value = ''
+    await api.createTarjeta({
+      alias: tarjetaForm.alias.trim(),
+      tipo: tarjetaForm.tipo === 'Débito' ? 'Debito' : 'Credito',
+      ultimos_digitos: tarjetaForm.ultimos4.trim(),
+      banco: tarjetaForm.banco.trim() || null,
+      titular_nombre: tarjetaForm.titular.trim() || null,
+      estado: 'activa'
+    })
+    await loadDashboardData()
+    closeFormTarjeta()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo crear la tarjeta'
+  }
 }
 
 async function onLogout() {
