@@ -36,24 +36,52 @@
               <p>Ingresa tus credenciales para acceder al sistema.</p>
             </div>
 
+            <!--
+              Brave/Chrome comparten vault entre *.basalto.app (Turnos ↔ Rendiciones).
+              Señuelos absorben el autofill; los campos reales no usan autocomplete=username.
+            -->
             <form
               id="rendiciones-login-form"
               class="login-form"
               name="rendiciones-login"
-              autocomplete="on"
+              autocomplete="off"
               novalidate
               @submit.prevent="handleLogin"
             >
+              <div class="login-autofill-decoy" aria-hidden="true">
+                <input
+                  type="text"
+                  name="username"
+                  tabindex="-1"
+                  autocomplete="username"
+                />
+                <input
+                  type="password"
+                  name="password"
+                  tabindex="-1"
+                  autocomplete="current-password"
+                />
+              </div>
+
               <div class="field">
                 <label for="rendiciones-username">RUT</label>
                 <input
                   id="rendiciones-username"
-                  name="username"
+                  name="rendiciones_user"
                   type="text"
                   :value="rutDisplay"
-                  autocomplete="username"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  autocorrect="off"
+                  spellcheck="false"
                   inputmode="text"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
+                  readonly
                   placeholder="12345678-9"
+                  @focus="unlockAutofillField"
                   @input="onRutInput"
                 />
               </div>
@@ -62,11 +90,17 @@
                 <label for="rendiciones-password">Contraseña</label>
                 <input
                   id="rendiciones-password"
-                  name="password"
+                  name="rendiciones_pass"
                   v-model="password"
                   type="password"
-                  autocomplete="current-password"
+                  autocomplete="new-password"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
+                  readonly
                   placeholder="••••••••"
+                  @focus="unlockAutofillField"
                 />
               </div>
 
@@ -120,6 +154,11 @@ function onRutInput(event) {
   const cleaned = cleanRut(event.target.value).slice(0, 9)
   rutClean.value = cleaned
   rutDisplay.value = formatRut(cleaned)
+}
+
+/** Evita autofill al cargar; se desbloquea al enfocar. */
+function unlockAutofillField(event) {
+  event.target.removeAttribute('readonly')
 }
 
 onMounted(async () => {
