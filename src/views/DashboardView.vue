@@ -2487,9 +2487,16 @@ const ROLE_DEV = 'Super Admin - Dev'
 const ROLE_SUPER = 'Super Admin'
 const ROLE_ADMIN_CAJA = 'Administrador de Caja'
 
+const API_ROL_TO_NIVEL = {
+  SUPER_ADMIN_DEV: ROLE_DEV,
+  SUPER_ADMIN: ROLE_SUPER,
+  ADMIN_CAJA: ROLE_ADMIN_CAJA
+}
+
 const sessionAdminNivel = computed(() => {
-  // TEMP_AUTH_BYPASS / futuro: vendrá de BD en el perfil de sesión
   if (user.value?.adminNivel) return user.value.adminNivel
+  const fromApi = API_ROL_TO_NIVEL[user.value?.rol]
+  if (fromApi) return fromApi
   if (TEMP_AUTH_BYPASS) return ROLE_DEV
   return ROLE_ADMIN_CAJA
 })

@@ -1,6 +1,6 @@
 import { reactive, computed } from 'vue'
 import * as authApi from '../api/auth'
-// TEMP_AUTH_BYPASS — revertir antes de commit
+// TEMP_AUTH_BYPASS — solo para maquetar UI sin API; en local con server debe ser false
 import { TEMP_AUTH_BYPASS, TEMP_BYPASS_USER } from '../TEMP_AUTH_BYPASS'
 
 const state = reactive({
@@ -20,14 +20,16 @@ export function useAuth() {
     state.loading = true
     state.error = ''
     try {
-      // TEMP_AUTH_BYPASS — revertir antes de commit
       if (TEMP_AUTH_BYPASS) {
         if (sessionStorage.getItem('TEMP_AUTH_BYPASS_OK') === '1') {
           state.user = { ...TEMP_BYPASS_USER }
           authApi.persistSessionProfile({
-            success: true,
-            ...TEMP_BYPASS_USER,
-            es_super_admin: 1
+            user: {
+              rut: TEMP_BYPASS_USER.rut,
+              nombre: TEMP_BYPASS_USER.nombre,
+              rol: 'SUPER_ADMIN_DEV',
+              correo: ''
+            }
           })
         } else {
           state.user = null
@@ -36,7 +38,7 @@ export function useAuth() {
       }
 
       const me = await authApi.fetchMe()
-      const user = me?.success ? authApi.persistSessionProfile(me) : null
+      const user = me ? authApi.persistSessionProfile(me) : null
       if (user) {
         state.user = user
       } else {
@@ -56,23 +58,21 @@ export function useAuth() {
     state.loading = true
     state.error = ''
     try {
-      // TEMP_AUTH_BYPASS — revertir antes de commit (no llama API/BD)
       if (TEMP_AUTH_BYPASS) {
         state.user = { ...TEMP_BYPASS_USER }
         authApi.persistSessionProfile({
-          success: true,
-          ...TEMP_BYPASS_USER,
-          es_super_admin: 1
+          user: {
+            rut: TEMP_BYPASS_USER.rut,
+            nombre: TEMP_BYPASS_USER.nombre,
+            rol: 'SUPER_ADMIN_DEV',
+            correo: ''
+          }
         })
         return state.user
       }
 
       const data = await authApi.login(rut, password)
-      state.user = {
-        rut: data.rut,
-        nombre: data.nombre,
-        role: data.role
-      }
+      state.user = authApi.persistSessionProfile(data)
       return data
     } catch (e) {
       state.error = e.message || 'Error al iniciar sesión'
@@ -85,7 +85,6 @@ export function useAuth() {
   async function logout() {
     state.loading = true
     try {
-      // TEMP_AUTH_BYPASS — revertir antes de commit
       if (TEMP_AUTH_BYPASS) {
         sessionStorage.removeItem('TEMP_AUTH_BYPASS_OK')
         authApi.clearProfile()

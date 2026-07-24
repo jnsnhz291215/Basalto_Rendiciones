@@ -1,168 +1,143 @@
 /**
- * Cliente auth contra el backend centralizado (cookie JWT httpOnly `token`).
- *
- * Usa `credentials: 'include'` para enviar y recibir la cookie entre subdominios.
+ * Auth contra la API local de Rendiciones (JWT Bearer).
+ * No usa cookie httpOnly ni el backend de Turnos.
  */
 
-const DEFAULT_API_BASE_URL = 'https://turnos.basalto.app'
+import { apiFetch, clearToken, setToken, API_BASE_URL } from './client'
+
+export { API_BASE_URL }
+
 const DEFAULT_LOGIN_URL = '/login'
-const DEFAULT_LOGOUT_URL = 'https://turnos.basalto.app/api/auth/logout'
 
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '')
 export const LOGIN_URL = import.meta.env.VITE_LOGIN_URL || DEFAULT_LOGIN_URL
-export const LOGOUT_URL = import.meta.env.VITE_LOGOUT_URL || DEFAULT_LOGOUT_URL
 
-function apiUrl(path) {
-  return `${API_BASE_URL}${path}`
-}
-
-async function parseJson(res) {
-  try {
-    return await res.json()
-  } catch {
-    return null
-  }
+/** Roles API → etiquetas UI del Dashboard */
+const ROL_TO_ADMIN_NIVEL = {
+  SUPER_ADMIN_DEV: 'Super Admin - Dev',
+  SUPER_ADMIN: 'Super Admin',
+  ADMIN_CAJA: 'Administrador de Caja',
+  USER_RENDIDOR: ''
 }
 
 const PROFILE_KEYS = [
+  'rendiciones_token',
   'user_role',
   'user_rut',
   'user_name',
-  'session_version',
-  'user_permissions_cargo',
-  'user_permissions_cargo_ids',
-  'user_permissions_solo_cargo',
-  'user_permissions_especiales_trabajador',
-  'user_permissions_total',
-  'user_cargo_name',
-  'user_cargo_id',
-  'user_grupo',
-  'user_super_admin',
-  'user_permisos',
+  'user_correo',
+  'user_id',
+  'user_trabajador_id',
   'user_admin_nivel',
+  'user_api_rol',
   'usuarioActivo',
   'adminData',
   'userRUT',
-  'userName',
-  'password_predeterminada'
+  'userName'
 ]
 
 export function clearProfile() {
-  localStorage.clear()
-  sessionStorage.clear()
+  for (const key of PROFILE_KEYS) {
+    localStorage.removeItem(key)
+  }
+  clearToken()
+  sessionStorage.removeItem('TEMP_AUTH_BYPASS_OK')
 }
 
-export function persistLoginProfile(data) {
-  localStorage.setItem('user_role', data.role)
-  localStorage.setItem('user_rut', data.rut)
-  localStorage.setItem('user_name', data.nombre)
-
-  if (data.session_version) {
-    localStorage.setItem('session_version', String(data.session_version))
-  }
-
-  localStorage.setItem('user_permissions_cargo', JSON.stringify(data.permisos_cargo || []))
-  localStorage.setItem('user_permissions_cargo_ids', JSON.stringify(data.permisos_cargo_ids || []))
-  localStorage.setItem('user_permissions_solo_cargo', JSON.stringify(data.permisos_solo_cargo || []))
-  localStorage.setItem(
-    'user_permissions_especiales_trabajador',
-    JSON.stringify(data.permisos_especiales_trabajador || [])
-  )
-  localStorage.setItem('user_permissions_total', JSON.stringify(data.permisos_totales || []))
-  localStorage.setItem('user_cargo_name', data.cargo?.nombre_cargo || '')
-  localStorage.setItem('user_cargo_id', data.cargo?.id_cargo ? String(data.cargo.id_cargo) : '')
-  localStorage.setItem('user_grupo', data.grupo || '')
-
-  if (data.role === 'admin') {
-    localStorage.setItem('user_super_admin', data.es_super_admin ? '1' : '0')
-    localStorage.setItem('user_permisos', JSON.stringify(data.permisos || []))
-    if (data.user) {
-      localStorage.setItem(
-        'adminData',
-        JSON.stringify({
-          ...data.user,
-          isAdmin: true,
-          es_super_admin: data.es_super_admin,
-          permisos: data.permisos || []
-        })
-      )
-      localStorage.setItem('userRUT', data.rut)
-      localStorage.setItem('userName', data.nombre)
-    }
-  } else {
-    localStorage.removeItem('user_super_admin')
-    localStorage.removeItem('user_permisos')
-  }
-
-  localStorage.setItem(
-    'usuarioActivo',
-    JSON.stringify({
-      rol: data.role,
-      nombre: data.nombre,
-      rut: data.rut,
-      isAdmin: data.role === 'admin',
-      es_super_admin: data.es_super_admin || 0,
-      permisos: data.permisos || [],
-      permisos_cargo: data.permisos_cargo || [],
-      permisos_especiales_trabajador: data.permisos_especiales_trabajador || [],
-      permisos_totales: data.permisos_totales || [],
-      cargo: data.cargo || null,
-      id_grupo: data.id_grupo || null,
-      grupo: data.grupo || data.id_grupo || null
-    })
-  )
+function mapAdminNivel(rol) {
+  return ROL_TO_ADMIN_NIVEL[rol] ?? ''
 }
 
+function isAdminRol(rol) {
+  return rol === 'SUPER_ADMIN_DEV' || rol === 'SUPER_ADMIN' || rol === 'ADMIN_CAJA'
+}
+
+/**
+ * Normaliza respuesta login/me del server nuevo.
+ * Server login: { token, user: { id, rut, correo, rol, trabajador_id, nombre } }
+ * Server me:    { user: { id, trabajador_id, rut, correo, rol, nombre } }
+ */
 export function normalizeAuthUser(data) {
-  const source = data?.user && (data.user.rut || data.user.role) ? data.user : data
-  const nombre = source?.nombre || data?.nombre || [
-    source?.nombres,
-    source?.apellido_paterno,
-    source?.apellido_materno
-  ].filter(Boolean).join(' ')
+  const source = data?.user && (data.user.rut || data.user.rol || data.user.role) ? data.user : data
+  if (!source) return null
+
+  const rolApi = source.rol || source.role || ''
+  const nombre =
+    source.nombre ||
+    [source.nombres, source.apellido_paterno, source.apellido_materno].filter(Boolean).join(' ') ||
+    source.correo ||
+    ''
 
   const user = {
-    rut: source?.rut || data?.rut || '',
-    nombre: nombre || '',
-    role: source?.role || data?.role || '',
-    adminNivel: source?.adminNivel || data?.adminNivel || ''
+    id: source.id ?? null,
+    rut: source.rut || '',
+    correo: source.correo || '',
+    nombre,
+    /** Rol API canónico */
+    rol: rolApi,
+    /** Compat UI legacy (turnos usaba role admin|...) */
+    role: isAdminRol(rolApi) ? 'admin' : rolApi === 'USER_RENDIDOR' ? 'usuario' : rolApi,
+    adminNivel: mapAdminNivel(rolApi),
+    trabajador_id: source.trabajador_id ?? null
   }
 
-  return user.rut || user.role ? user : null
+  return user.rut || user.rol ? user : null
 }
 
 export function persistSessionProfile(data) {
   const user = normalizeAuthUser(data)
   if (!user) return null
 
+  if (user.id != null) localStorage.setItem('user_id', String(user.id))
   if (user.rut) localStorage.setItem('user_rut', user.rut)
   if (user.nombre) localStorage.setItem('user_name', user.nombre)
+  if (user.correo) localStorage.setItem('user_correo', user.correo)
   if (user.role) localStorage.setItem('user_role', user.role)
+  if (user.rol) localStorage.setItem('user_api_rol', user.rol)
   if (user.adminNivel) localStorage.setItem('user_admin_nivel', user.adminNivel)
-  if (data?.session_version) {
-    localStorage.setItem('session_version', String(data.session_version))
+  else localStorage.removeItem('user_admin_nivel')
+  if (user.trabajador_id != null) {
+    localStorage.setItem('user_trabajador_id', String(user.trabajador_id))
   }
 
   localStorage.setItem(
     'usuarioActivo',
     JSON.stringify({
       rol: user.role,
+      apiRol: user.rol,
       nombre: user.nombre,
       rut: user.rut,
+      correo: user.correo,
       isAdmin: user.role === 'admin',
       adminNivel: user.adminNivel || '',
-      es_super_admin: data?.es_super_admin || 0,
-      permisos: data?.permisos || [],
-      permisos_cargo: data?.permisos_cargo || [],
-      permisos_especiales_trabajador: data?.permisos_especiales_trabajador || [],
-      permisos_totales: data?.permisos_totales || [],
-      cargo: data?.cargo || null,
-      id_grupo: data?.id_grupo || null,
-      grupo: data?.grupo || data?.id_grupo || null
+      trabajador_id: user.trabajador_id
     })
   )
 
+  if (user.role === 'admin') {
+    localStorage.setItem(
+      'adminData',
+      JSON.stringify({
+        id: user.id,
+        rut: user.rut,
+        nombre: user.nombre,
+        correo: user.correo,
+        rol: user.rol,
+        isAdmin: true,
+        adminNivel: user.adminNivel
+      })
+    )
+    localStorage.setItem('userRUT', user.rut)
+    localStorage.setItem('userName', user.nombre)
+  } else {
+    localStorage.removeItem('adminData')
+  }
+
   return user
+}
+
+/** @deprecated alias — login ya persiste con persistSessionProfile */
+export function persistLoginProfile(data) {
+  return persistSessionProfile(data)
 }
 
 export function loginRedirectUrl(returnTo = window.location.href) {
@@ -172,55 +147,45 @@ export function loginRedirectUrl(returnTo = window.location.href) {
 }
 
 export async function login(rut, password) {
-  const res = await fetch(apiUrl('/api/auth/login'), {
+  const { res, data } = await apiFetch('/api/auth/login', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify({ rut, password })
+    auth: false,
+    body: JSON.stringify({ rut: String(rut || '').trim(), password })
   })
-  const data = await parseJson(res)
-  if (!res.ok || !data?.success) {
-    throw new Error(data?.message || 'Credenciales inválidas')
+
+  if (!res.ok || !data?.token || !data?.user) {
+    throw new Error(data?.error || data?.message || 'Credenciales inválidas')
   }
-  persistLoginProfile(data)
+
+  setToken(data.token)
+  persistSessionProfile(data)
   return data
 }
 
 export async function fetchMe() {
-  const headers = { 'Content-Type': 'application/json' }
-  const sv = localStorage.getItem('session_version')
-  const rut = localStorage.getItem('user_rut')
-  if (sv) headers['X-Session-Version'] = sv
-  if (rut) headers['X-Requested-With'] = 'XMLHttpRequest'
+  const token = localStorage.getItem('rendiciones_token')
+  if (!token) return null
 
-  const res = await fetch(apiUrl('/api/auth/me'), {
-    method: 'GET',
-    headers,
-    credentials: 'include'
-  })
-  const data = await parseJson(res)
-  if (!res.ok || !data) {
-    return null
-  }
+  const { res, data } = await apiFetch('/api/auth/me', { method: 'GET' })
+  if (!res.ok || !data?.user) return null
   return data
 }
 
+/**
+ * JWT es stateless: logout = borrar token local.
+ * No hay cookie de Turnos ni POST obligatorio al server.
+ */
 export async function logout() {
-  try {
-    await fetch(LOGOUT_URL, {
-      method: 'POST',
-      credentials: 'include'
-    })
-  } finally {
-    clearProfile()
-  }
+  clearProfile()
 }
 
 export function readCachedUser() {
   const rut = localStorage.getItem('user_rut')
   const nombre = localStorage.getItem('user_name')
   const role = localStorage.getItem('user_role')
+  const rol = localStorage.getItem('user_api_rol') || ''
   const adminNivel = localStorage.getItem('user_admin_nivel') || ''
-  if (!rut && !role) return null
-  return { rut, nombre, role, adminNivel }
+  const correo = localStorage.getItem('user_correo') || ''
+  if (!rut && !role && !rol) return null
+  return { rut, nombre, role, rol, adminNivel, correo }
 }

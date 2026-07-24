@@ -15,8 +15,9 @@ cd /ruta/a/Basalto_Rendiciones
 
 Variables típicas:
 
-- Raíz `.env`: `VITE_API_BASE_URL=http://localhost:3002` (origen **sin** `/api` al final; el cliente ya agrega `/api/...`)
-- `server/.env`: `PORT=3002`, DB, `JWT_SECRET`, `CORS_ORIGIN=http://localhost:5174`
+- Raíz `.env`: `VITE_API_BASE_URL=http://localhost:3002` (origen **sin** `/api` al final; el cliente ya agrega `/api/...`). Alternativa en dev: vacío → proxy Vite `/api` → `:3002`.
+- `server/.env`: `PORT=3002`, DB (`DB_PASS` o `DB_PASSWORD`), `JWT_SECRET_RENDICIONES` (o fallback `JWT_SECRET`), `CORS_ORIGIN=http://localhost:5174`
+- Front: `TEMP_AUTH_BYPASS=false` en `src/TEMP_AUTH_BYPASS.js` para login real contra la API.
 
 > Confirma los nombres reales de PM2 con `pm2 list`. Los de abajo son placeholders (`basalto_rendiciones` / `basalto_rendiciones_api`).
 
@@ -99,5 +100,13 @@ Si solo cambió una capa, reinicia solo ese proceso PM2.
 
 - El front de producción es el build estático (`dist/`) servido por el proceso PM2 del front (mismo patrón que Basalto Inicio).
 - La API **no** embebe el front; corre aparte en **:3002**.
-- Si `VITE_API_BASE_URL` termina en `/api`, las rutas quedan duplicadas (`/api/api/...`).
+- Auth: JWT Bearer (`Authorization`), no cookie de Turnos. El cliente normaliza bases que terminen en `/api` para evitar `/api/api/...`.
 - Sustituye `basalto_rendiciones` / `basalto_rendiciones_api` por los nombres de `pm2 list` si difieren.
+
+## Probar login local
+
+1. Arrancar API (`cd server && npm run dev`) y front (`npm run dev`).
+2. Confirmar `GET http://localhost:3002/api/health` → `{ ok: true, ... }`.
+3. Abrir http://localhost:5174/login e ingresar `rut` + `password` de un usuario en `usuarios` (`estado=activo`, `is_deleted=FALSE`).
+4. En DevTools → Application → Local Storage debe aparecer `rendiciones_token`.
+5. Requests autenticados llevan `Authorization: Bearer <token>`.

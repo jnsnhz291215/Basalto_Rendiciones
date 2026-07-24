@@ -3,7 +3,7 @@ import * as authApi from '../api/auth'
 import IndexView from '../views/IndexView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import SinPermisoView from '../views/SinPermisoView.vue'
-// TEMP_AUTH_BYPASS — revertir antes de commit
+// TEMP_AUTH_BYPASS — solo UI sin API; con server local debe ser false
 import { TEMP_AUTH_BYPASS, TEMP_BYPASS_USER } from '../TEMP_AUTH_BYPASS'
 
 const router = createRouter({
@@ -25,13 +25,15 @@ function hasRequiredRole(userRole, requiredRole) {
 router.beforeEach(async (to) => {
   if (!to.meta.requiresAuth) return true
 
-  // TEMP_AUTH_BYPASS — revertir antes de commit (no llama API/BD)
   if (TEMP_AUTH_BYPASS) {
     if (sessionStorage.getItem('TEMP_AUTH_BYPASS_OK') === '1') {
       authApi.persistSessionProfile({
-        success: true,
-        ...TEMP_BYPASS_USER,
-        es_super_admin: 1
+        user: {
+          rut: TEMP_BYPASS_USER.rut,
+          nombre: TEMP_BYPASS_USER.nombre,
+          rol: 'SUPER_ADMIN_DEV',
+          correo: ''
+        }
       })
       return true
     }
@@ -40,7 +42,7 @@ router.beforeEach(async (to) => {
 
   try {
     const response = await authApi.fetchMe()
-    const user = response?.success ? authApi.persistSessionProfile(response) : null
+    const user = response ? authApi.persistSessionProfile(response) : null
 
     if (!user) {
       authApi.clearProfile()

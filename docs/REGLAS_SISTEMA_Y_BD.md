@@ -12,7 +12,9 @@ La emisión y validación de tokens JWT del módulo **Rendiciones / Caja Chica**
 
 - `POST /api/auth/login`
 - Valida `correo` **o** `rut` + `password_hash` contra la tabla `usuarios` (MariaDB).
-- Emite JWT firmado con clave propia: `JWT_SECRET_RENDICIONES`.
+- Emite JWT firmado con clave propia: `JWT_SECRET_RENDICIONES` (fallback de código: `JWT_SECRET`).
+- Respuesta: `{ token, user: { id, rut, correo, rol, trabajador_id, nombre } }`.
+- El front guarda el token en `localStorage` (`rendiciones_token`) y envía `Authorization: Bearer <token>`.
 
 ### Payload JWT (mínimo)
 
@@ -553,11 +555,13 @@ Objetivo: backend **sin atajos de desarrollo** en producción / staging.
 
 | Ítem | Estado |
 |------|--------|
-| Sin bypass en middleware backend | Pendiente (repo API) |
-| JWT + recheck activo/no borrado | Pendiente |
-| `checkRole` en rutas críticas | Pendiente |
-| Prepared statements en todas las queries | Pendiente |
-| Front: `TEMP_AUTH_BYPASS = false` | Pendiente |
+| Sin bypass en middleware backend | Hecho (`server/` Bearer estricto) |
+| JWT + recheck activo/no borrado | Hecho (`auth.middleware.js`) |
+| `checkRole` en rutas críticas | Hecho (cajas, anticipos, admin, legacy) |
+| Prepared statements en todas las queries | Hecho (`mysql2` placeholders) |
+| Front: `TEMP_AUTH_BYPASS = false` | Hecho (reabrir solo para maquetar UI) |
+| Front: clientes API CRUD (cajas/rendiciones/…) | Pendiente — Dashboard aún mock en memoria |
+| Endpoint `/api/reportes` | Pendiente (doc §5; no montado en server) |
 
 ---
 
@@ -565,6 +569,7 @@ Objetivo: backend **sin atajos de desarrollo** en producción / staging.
 
 | Fecha | Cambio |
 |-------|--------|
+| 2026-07-24 | Front alineado a Bearer JWT local; checklist §9 actualizado; gap clientes CRUD / reportes |
 | 2026-07-24 | Alta inicial: JWT desacoplado + Soft Delete (Ley 21.719 / SII 6 años) |
 | 2026-07-24 | API (auth, arrastre, audit, endpoints) + modelo de tablas validado vs UI |
 | 2026-07-24 | DDL canónico MariaDB + ALTERs recomendados post-creación |

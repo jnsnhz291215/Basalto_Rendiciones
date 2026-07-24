@@ -17,7 +17,7 @@
     "@vitejs/plugin-vue": "^5.2.1",
     "vite": "^6.0.7"
   },
-  "description": "App hermana de **proyecto_basalto**. Comparte la sesión JWT (cookie httpOnly `token`).",
+  "description": "Basalto Rendiciones / Caja Chica — Vue 3 + API Express local (JWT Bearer).",
   "main": "vite.config.js",
   "directories": {
     "doc": "docs"

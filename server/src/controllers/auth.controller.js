@@ -77,7 +77,16 @@ async function login(req, res) {
 }
 
 async function me(req, res) {
-  return res.json({ user: req.user })
+  return res.json({
+    user: {
+      id: req.user.id,
+      rut: req.user.rut,
+      correo: req.user.correo,
+      rol: req.user.rol,
+      trabajador_id: req.user.trabajador_id,
+      nombre: req.user.nombre
+    }
+  })
 }
 
 module.exports = { login, me }

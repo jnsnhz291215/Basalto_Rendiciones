@@ -1,25 +1,19 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
- * TEMP / REVERTIR ANTES DE COMMIT
- * ═══════════════════════════════════════════════════════════════════════════
+ * Bypass local para maquetar UI **sin** API/BD.
  *
- * Bypass local para probar UI sin backend/BD.
- * Para restaurar auth real: pon `false` o elimina este archivo y los usos
- * marcados con `TEMP_AUTH_BYPASS` en:
- *   - src/composables/useAuth.js
- *   - src/router/index.js
- *   - src/views/IndexView.vue
- *   - src/views/DashboardView.vue
+ * Con el server Express en `/server` y MariaDB disponibles, debe quedar en `false`
+ * para probar login real (Bearer JWT).
  *
+ * Usos: useAuth.js, router/index.js, IndexView.vue, DashboardView.vue
  * Buscar en el repo: TEMP_AUTH_BYPASS
- * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Ver también: docs/REGLAS_SISTEMA_Y_BD.md §9 y DEPLOY.md
  */
-export const TEMP_AUTH_BYPASS = true
+export const TEMP_AUTH_BYPASS = false
 
 export const TEMP_BYPASS_USER = {
   rut: '11.111.111-1',
   nombre: 'Juan Sanhueza',
   role: 'admin',
-  // Jerarquía mock: acceso total de Super Admin - Dev
   adminNivel: 'Super Admin - Dev'
 }
