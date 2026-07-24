@@ -16,6 +16,15 @@ export async function listCajas() {
   return unwrapList(await jsonOrThrow('/api/cajas'))
 }
 
+/** Resumen métricas: { clave_interna, mes } */
+export async function resumenCaja(params = {}) {
+  const qs = new URLSearchParams()
+  if (params.clave_interna) qs.set('clave_interna', params.clave_interna)
+  if (params.mes) qs.set('mes', params.mes)
+  const q = qs.toString()
+  return jsonOrThrow(`/api/cajas/resumen${q ? `?${q}` : ''}`)
+}
+
 export async function createCaja(payload) {
   return jsonOrThrow('/api/cajas', {
     method: 'POST',

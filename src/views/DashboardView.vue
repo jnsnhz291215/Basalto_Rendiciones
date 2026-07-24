@@ -151,25 +151,37 @@
             <div class="dash-metric-card">
               <div>
                 <p class="dash-metric-label">Saldo en Caja</p>
-                <p class="dash-metric-value dash-metric-value--ok">$ 1.450.000</p>
+                <p class="dash-metric-value dash-metric-value--ok">
+                  {{ formatMonto(resumenCaja.saldo_caja) }}
+                </p>
               </div>
-              <span class="dash-chip dash-chip--ok">Disponible</span>
+              <span class="dash-chip dash-chip--ok">
+                {{ resumenLoading ? '…' : 'Disponible' }}
+              </span>
             </div>
 
             <div class="dash-metric-card">
               <div>
                 <p class="dash-metric-label">Gastos Rendidos (Mes)</p>
-                <p class="dash-metric-value">$ 820.500</p>
+                <p class="dash-metric-value">
+                  {{ formatMonto(resumenCaja.gastos_rendidos.total) }}
+                </p>
               </div>
-              <span class="dash-chip">14 Doctos</span>
+              <span class="dash-chip">
+                {{ resumenCaja.gastos_rendidos.cantidad }} Doctos
+              </span>
             </div>
 
             <div class="dash-metric-card">
               <div>
                 <p class="dash-metric-label">Anticipos Conductores</p>
-                <p class="dash-metric-value dash-metric-value--accent">$ 350.000</p>
+                <p class="dash-metric-value dash-metric-value--accent">
+                  {{ formatMonto(resumenCaja.anticipos_pendientes.total) }}
+                </p>
               </div>
-              <span class="dash-chip dash-chip--accent">3 Pendientes</span>
+              <span class="dash-chip dash-chip--accent">
+                {{ resumenCaja.anticipos_pendientes.cantidad }} Pendientes
+              </span>
             </div>
           </div>
         </section>
@@ -2251,6 +2263,54 @@ const saveError = ref('')
 const cajaActiva = ref('')
 const mesActivo = ref('')
 
+const resumenLoading = ref(false)
+const resumenCaja = reactive({
+  saldo_caja: 0,
+  fondo_estimado: 0,
+  gastos_rendidos: { total: 0, cantidad: 0 },
+  anticipos_pendientes: { total: 0, cantidad: 0 }
+})
+
+function resetResumen() {
+  resumenCaja.saldo_caja = 0
+  resumenCaja.fondo_estimado = 0
+  resumenCaja.gastos_rendidos = { total: 0, cantidad: 0 }
+  resumenCaja.anticipos_pendientes = { total: 0, cantidad: 0 }
+}
+
+async function loadResumenCaja() {
+  if (!cajaActiva.value || !mesActivo.value) {
+    resetResumen()
+    return
+  }
+  resumenLoading.value = true
+  try {
+    const data = await api.resumenCaja({
+      clave_interna: cajaActiva.value,
+      mes: mesActivo.value
+    })
+    resumenCaja.saldo_caja = Number(data?.saldo_caja) || 0
+    resumenCaja.fondo_estimado = Number(data?.fondo_estimado) || 0
+    resumenCaja.gastos_rendidos = {
+      total: Number(data?.gastos_rendidos?.total) || 0,
+      cantidad: Number(data?.gastos_rendidos?.cantidad) || 0
+    }
+    resumenCaja.anticipos_pendientes = {
+      total: Number(data?.anticipos_pendientes?.total) || 0,
+      cantidad: Number(data?.anticipos_pendientes?.cantidad) || 0
+    }
+  } catch (err) {
+    console.warn('[loadResumenCaja]', err?.message || err)
+    resetResumen()
+  } finally {
+    resumenLoading.value = false
+  }
+}
+
+watch([cajaActiva, mesActivo], () => {
+  loadResumenCaja()
+})
+
 const mesesDisponibles = ref([
   { value: '2026-06', label: 'Junio 2026' },
   { value: '2026-07', label: 'Julio 2026' },
@@ -2814,6 +2874,7 @@ async function loadDashboardData() {
     syncSelectoresCajaMes()
     rebuildCartola()
     syncInformeResultado()
+    await loadResumenCaja()
   } catch (err) {
     dataError.value = err?.message || 'No se pudieron cargar los datos'
   } finally {

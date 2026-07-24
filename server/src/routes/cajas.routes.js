@@ -1,6 +1,7 @@
 const express = require('express')
 const {
   listCajas,
+  resumenCaja,
   createCaja,
   updateCaja,
   softDeleteCaja
@@ -12,6 +13,7 @@ const router = express.Router()
 
 router.use(authMiddleware)
 
+router.get('/resumen', resumenCaja)
 router.get('/', listCajas)
 router.post('/', checkRole(ADMINS), createCaja)
 router.put('/:id', checkRole(ADMINS), updateCaja)

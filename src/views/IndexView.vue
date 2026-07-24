@@ -36,24 +36,24 @@
               <p>Ingresa tus credenciales para acceder al sistema.</p>
             </div>
 
-            <!-- Credenciales aisladas de Turnos: section + name propios -->
             <form
+              id="rendiciones-login-form"
               class="login-form"
               name="rendiciones-login"
               autocomplete="on"
               novalidate
-              @submit.prevent="onLogin"
+              @submit.prevent="handleLogin"
             >
               <div class="field">
-                <label for="rendiciones-rut">RUT</label>
+                <label for="rendiciones-username">RUT</label>
                 <input
-                  id="rendiciones-rut"
-                  name="rendiciones_rut"
+                  id="rendiciones-username"
+                  name="username"
                   type="text"
                   :value="rutDisplay"
-                  autocomplete="section-rendiciones username"
+                  autocomplete="username"
                   inputmode="text"
-                  placeholder="12.345.678-9"
+                  placeholder="12345678-9"
                   @input="onRutInput"
                 />
               </div>
@@ -62,10 +62,10 @@
                 <label for="rendiciones-password">Contraseña</label>
                 <input
                   id="rendiciones-password"
-                  name="rendiciones_password"
+                  name="password"
                   v-model="password"
                   type="password"
-                  autocomplete="section-rendiciones current-password"
+                  autocomplete="current-password"
                   placeholder="••••••••"
                 />
               </div>
@@ -127,7 +127,7 @@ onMounted(async () => {
   if (user.value) redirectAfterLogin()
 })
 
-async function onLogin() {
+async function handleLogin() {
   formError.value = ''
   try {
     // TEMP_AUTH_BYPASS — revertir antes de commit

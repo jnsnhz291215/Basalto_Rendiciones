@@ -17,6 +17,105 @@ async function listCajas(req, res) {
   }
 }
 
+/**
+ * Resumen de métricas para una caja (clave_interna) + mes (YYYY-MM).
+ * Query: ?clave_interna=FAENA_NORTE&mes=2026-07
+ */
+async function resumenCaja(req, res) {
+  try {
+    const clave = String(req.query.clave_interna || req.query.caja || '')
+      .trim()
+      .toUpperCase()
+    const mes = String(req.query.mes || '').trim()
+
+    if (!clave || !mes) {
+      return res.status(400).json({
+        error: 'clave_interna y mes son requeridos (ej. mes=2026-07)'
+      })
+    }
+
+    const cajas = await query(
+      `SELECT id, clave_interna, nombre_exterior, mes_asignado, fondo_estimado_mes, estado
+       FROM cajas_chicas
+       WHERE is_deleted = FALSE
+         AND clave_interna = ?
+         AND mes_asignado = ?
+       LIMIT 1`,
+      [clave, mes]
+    )
+
+    if (!cajas[0]) {
+      return res.json({
+        caja_id: null,
+        clave_interna: clave,
+        mes,
+        fondo_estimado: 0,
+        saldo_caja: 0,
+        gastos_rendidos: { total: 0, cantidad: 0 },
+        anticipos_pendientes: { total: 0, cantidad: 0 }
+      })
+    }
+
+    const caja = cajas[0]
+    const fondo = Number(caja.fondo_estimado_mes) || 0
+
+    const gastosAprobados = await query(
+      `SELECT COALESCE(SUM(monto), 0) AS total
+       FROM rendiciones_gastos
+       WHERE is_deleted = FALSE
+         AND caja_id = ?
+         AND estado IN ('Aprobado', 'Devuelto')`,
+      [caja.id]
+    )
+
+    const gastosMes = await query(
+      `SELECT COALESCE(SUM(monto), 0) AS total, COUNT(*) AS cantidad
+       FROM rendiciones_gastos
+       WHERE is_deleted = FALSE
+         AND caja_id = ?
+         AND estado <> 'Rechazado'`,
+      [caja.id]
+    )
+
+    const anticiposMes = await query(
+      `SELECT COALESCE(SUM(monto), 0) AS total, COUNT(*) AS cantidad
+       FROM anticipos
+       WHERE is_deleted = FALSE
+         AND caja_id = ?`,
+      [caja.id]
+    )
+
+    const totalAprobados = Number(gastosAprobados[0]?.total) || 0
+    const gastosTotal = Number(gastosMes[0]?.total) || 0
+    const gastosCantidad = Number(gastosMes[0]?.cantidad) || 0
+    const anticiposTotal = Number(anticiposMes[0]?.total) || 0
+    const anticiposCantidad = Number(anticiposMes[0]?.cantidad) || 0
+
+    // Saldo = fondo − gastos aprobados/devueltos − anticipos del mes
+    const saldo = fondo - totalAprobados - anticiposTotal
+
+    return res.json({
+      caja_id: caja.id,
+      clave_interna: caja.clave_interna,
+      nombre_exterior: caja.nombre_exterior,
+      mes: caja.mes_asignado,
+      fondo_estimado: fondo,
+      saldo_caja: saldo,
+      gastos_rendidos: {
+        total: gastosTotal,
+        cantidad: gastosCantidad
+      },
+      anticipos_pendientes: {
+        total: anticiposTotal,
+        cantidad: anticiposCantidad
+      }
+    })
+  } catch (err) {
+    console.error('[resumenCaja]', err)
+    return res.status(500).json({ error: 'Internal Server Error' })
+  }
+}
+
 async function createCaja(req, res) {
   try {
     const {
@@ -168,4 +267,4 @@ async function softDeleteCaja(req, res) {
   }
 }
 
-module.exports = { listCajas, createCaja, updateCaja, softDeleteCaja }
+module.exports = { listCajas, resumenCaja, createCaja, updateCaja, softDeleteCaja }
