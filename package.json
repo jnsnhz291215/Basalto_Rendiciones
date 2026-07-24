@@ -15,5 +15,13 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.1",
     "vite": "^6.0.7"
-  }
+  },
+  "description": "App hermana de **proyecto_basalto**. Comparte la sesión JWT (cookie httpOnly `token`).",
+  "main": "vite.config.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }
