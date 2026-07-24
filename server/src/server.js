@@ -1,3 +1,6 @@
+const path = require('path')
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
+
 const express = require('express')
 const cors = require('cors')
 
@@ -9,12 +12,11 @@ const adminRoutes = require('./routes/admin.routes')
 const legacyRoutes = require('./routes/legacy.routes')
 
 const app = express()
-const PORT = Number(process.env.PORT) || 3001
+const PORT = Number(process.env.PORT) || 3002
 
-const corsOrigin = process.env.CORS_ORIGIN || true
 app.use(
   cors({
-    origin: corsOrigin === 'true' ? true : corsOrigin,
+    origin: process.env.CORS_ORIGIN || 'http://localhost:5174',
     credentials: true
   })
 )
