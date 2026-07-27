@@ -1891,7 +1891,7 @@
                               title="Eliminar"
                               @click="onDeleteCaja(caja)"
                             >
-                              🗑
+                              <i class="fa-solid fa-trash" aria-hidden="true"></i>
                             </button>
                           </template>
                         </td>
@@ -2001,7 +2001,7 @@
                       title="Editar"
                       @click="onEditCentroCosto(cc)"
                     >
-                      ✎
+                      <i class="fa-solid fa-pen" aria-hidden="true"></i>
                     </button>
                     <button
                       class="dash-btn-icon dash-btn-icon--danger"
@@ -2009,7 +2009,7 @@
                       title="Eliminar"
                       @click="onDeleteCentroCosto(cc)"
                     >
-                      🗑
+                      <i class="fa-solid fa-trash" aria-hidden="true"></i>
                     </button>
                   </template>
                 </td>
@@ -2237,7 +2237,7 @@
                         title="Editar"
                         @click="onEditAdmin(admin)"
                       >
-                        ✎
+                        <i class="fa-solid fa-pen" aria-hidden="true"></i>
                       </button>
                       <button
                         v-if="canResetPassword"
@@ -2247,7 +2247,7 @@
                         :disabled="admin.id === user?.id"
                         @click="onResetPasswordAdmin(admin)"
                       >
-                        🔑
+                        <i class="fa-solid fa-key" aria-hidden="true"></i>
                       </button>
                       <button
                         v-if="canHardDelete"
@@ -2257,7 +2257,7 @@
                         :disabled="admin.id === user?.id"
                         @click="onDeleteAdmin(admin)"
                       >
-                        🗑
+                        <i class="fa-solid fa-trash" aria-hidden="true"></i>
                       </button>
                     </td>
                   </tr>
@@ -2281,7 +2281,7 @@
                 type="button"
                 @click="openModalPersonalCreate"
               >
-                <span>＋</span>
+                <i class="fa-solid fa-plus" aria-hidden="true"></i>
                 <span>Nuevo Personal</span>
               </button>
             </div>
@@ -2366,7 +2366,7 @@
                         title="Editar"
                         @click="openModalPersonalEdit(p)"
                       >
-                        ✎
+                        <i class="fa-solid fa-pen" aria-hidden="true"></i>
                       </button>
                       <button
                         v-if="canEditPersonal && !p.tieneUsuario"
@@ -2375,7 +2375,7 @@
                         title="Crear usuario"
                         @click="openModalPersonalCrearUsuario(p)"
                       >
-                        ＋
+                        <i class="fa-solid fa-plus" aria-hidden="true"></i>
                       </button>
                       <button
                         class="dash-btn-icon"
@@ -2383,7 +2383,7 @@
                         title="Asignar cajas"
                         @click="openModalAsignarCajas(p)"
                       >
-                        ▦
+                        <i class="fa-solid fa-table-cells" aria-hidden="true"></i>
                       </button>
                       <button
                         v-if="canResetPassword && p.usuarioId"
@@ -2392,7 +2392,7 @@
                         title="Reiniciar contraseña"
                         @click="onResetPasswordPersonal(p)"
                       >
-                        🔑
+                        <i class="fa-solid fa-key" aria-hidden="true"></i>
                       </button>
                       <button
                         v-if="canHardDelete"
@@ -2401,7 +2401,7 @@
                         title="Eliminar ficha"
                         @click="onDeletePersonal(p)"
                       >
-                        🗑
+                        <i class="fa-solid fa-trash" aria-hidden="true"></i>
                       </button>
                     </td>
                   </tr>
@@ -2609,7 +2609,7 @@
                     </td>
                     <td class="dash-table-center dash-table-actions">
                       <button class="dash-btn-icon" type="button" title="Editar" @click="onEditTarjeta(t)">
-                        ✎
+                        <i class="fa-solid fa-pen" aria-hidden="true"></i>
                       </button>
                       <button
                         v-if="canHardDelete"
@@ -2618,7 +2618,7 @@
                         title="Eliminar"
                         @click="onDeleteTarjeta(t)"
                       >
-                        🗑
+                        <i class="fa-solid fa-trash" aria-hidden="true"></i>
                       </button>
                     </td>
                   </tr>
