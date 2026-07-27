@@ -386,7 +386,7 @@
           </div>
         </div>
 
-        <div class="dash-sidebar-bottom">
+        <div v-if="isAdminSession" class="dash-sidebar-bottom">
           <button
             type="button"
             class="dash-nav-item"
@@ -466,13 +466,18 @@
           <div class="dash-metrics-inner">
             <div class="dash-metric-card">
               <div>
-                <p class="dash-metric-label">Saldo en Caja</p>
-                <p class="dash-metric-value dash-metric-value--ok">
-                  {{ formatMonto(resumenCaja.saldo_caja) }}
+                <p class="dash-metric-label">
+                  {{ cajaSeleccionadaCc || 'Centro de cobro / empresa' }}
+                </p>
+                <p class="dash-metric-value dash-metric-value--ok dash-metric-value--text">
+                  {{ cajaSeleccionadaExterior }}
                 </p>
               </div>
-              <span class="dash-chip dash-chip--ok">
-                {{ resumenLoading ? '…' : 'Disponible' }}
+              <span
+                class="dash-chip"
+                :class="cajaSeleccionadaEstadoClass"
+              >
+                {{ resumenLoading ? '…' : cajaSeleccionadaEstado }}
               </span>
             </div>
 
@@ -490,6 +495,18 @@
 
             <div class="dash-metric-card">
               <div>
+                <p class="dash-metric-label">Gastos agregados (Mes)</p>
+                <p class="dash-metric-value">
+                  {{ resumenCaja.gastos_rendidos.cantidad }}
+                </p>
+              </div>
+              <span class="dash-chip">
+                {{ labelMesCorto(mesActivo) }}
+              </span>
+            </div>
+
+            <div class="dash-metric-card">
+              <div>
                 <p class="dash-metric-label">Anticipos Conductores</p>
                 <p class="dash-metric-value dash-metric-value--accent">
                   {{ formatMonto(resumenCaja.anticipos_pendientes.total) }}
@@ -502,10 +519,10 @@
           </div>
         </section>
 
-        <div class="dash-tabs-bar">
+        <div v-if="visibleTabs.length > 1" class="dash-tabs-bar">
           <div class="dash-tabs">
             <button
-              v-for="tab in tabs"
+              v-for="tab in visibleTabs"
               :key="tab.id"
               type="button"
               class="dash-tab"
@@ -528,7 +545,7 @@
               </p>
             </div>
             <div class="dash-toolbar-actions">
-              <button class="dash-btn-excel" type="button">
+              <button v-if="isAdminSession" class="dash-btn-excel" type="button">
                 <span>📥</span>
                 <span>Importar Excel</span>
               </button>
@@ -555,6 +572,18 @@
                 <p class="dash-hint">
                   Ingresa los detalles del comprobante para solicitar la devolución.
                 </p>
+                <div class="dash-alert dash-alert--warn">
+                  <p>
+                    <strong>Importante:</strong> una vez subida, la rendición
+                    <strong>no se puede editar ni eliminar</strong>. Revisá bien los datos antes de
+                    guardar.
+                  </p>
+                  <p>
+                    Si adjuntás una <strong>foto</strong> (no PDF), asegurate de que se vea
+                    claramente el <strong>cobro/total</strong>. En facturas, también debe verse el
+                    <strong>número de factura</strong>.
+                  </p>
+                </div>
               </div>
               <button
                 class="dash-modal-close"
@@ -722,7 +751,11 @@
           <div class="dash-panel-head dash-cajas-head">
             <div>
               <h3>Historial de Rendiciones</h3>
-              <p>Seguimiento de gastos declarados y su estado de reembolso al trabajador.</p>
+              <p>
+                Seguimiento de
+                {{ isAdminSession ? 'gastos declarados' : 'tus gastos declarados' }}
+                y su estado de reembolso.
+              </p>
             </div>
             <div class="dash-historial-filters">
               <div class="dash-historial-filter">
@@ -755,7 +788,7 @@
                   </option>
                 </select>
               </div>
-              <div class="dash-historial-search">
+              <div v-if="isAdminSession" class="dash-historial-search">
                 <label class="dash-sr-only" for="historial-buscar">Buscar trabajador</label>
                 <input
                   id="historial-buscar"
@@ -806,7 +839,9 @@
                 <th>Pago / Docto</th>
                 <th class="dash-table-right">Monto</th>
                 <th class="dash-table-center">Estado Devolución</th>
-                <th class="dash-table-center">Acciones (Admin)</th>
+                <th class="dash-table-center">
+                  {{ isAdminSession ? 'Acciones (Admin)' : 'Acciones' }}
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -844,37 +879,52 @@
                 </td>
                 <td class="dash-table-center">
                   <div class="dash-actions-cell">
-                    <button
-                      v-if="row.estado === 'Por Corregir' && !row.legacy"
-                      class="dash-btn-edit"
-                      type="button"
-                      @click="openModalCorregir(row)"
-                    >
-                      Corregir Rendición
-                    </button>
-                    <button
-                      v-else-if="row.estado !== 'Rechazado' && !row.legacy"
-                      class="dash-btn-edit"
-                      type="button"
-                      @click="openModalResponder(row)"
-                    >
-                      {{
-                        row.estado === 'Devuelto' || row.estado === 'Aprobado'
-                          ? 'Ver Detalle'
-                          : 'Responder'
-                      }}
-                    </button>
-                    <span v-else-if="row.legacy" class="dash-badge dash-badge--legacy">Solo lectura</span>
-                    <span v-else class="dash-muted">-</span>
-                    <button
-                      v-if="row.estado === 'Por Corregir' && !row.legacy"
-                      class="dash-btn-ghost-sm"
-                      type="button"
-                      title="Responder como administrador"
-                      @click="openModalResponder(row)"
-                    >
-                      Admin
-                    </button>
+                    <template v-if="isAdminSession">
+                      <button
+                        v-if="row.estado === 'Por Corregir' && !row.legacy"
+                        class="dash-btn-edit"
+                        type="button"
+                        @click="openModalCorregir(row)"
+                      >
+                        Corregir Rendición
+                      </button>
+                      <button
+                        v-else-if="row.estado !== 'Rechazado' && !row.legacy"
+                        class="dash-btn-edit"
+                        type="button"
+                        @click="openModalResponder(row)"
+                      >
+                        {{
+                          row.estado === 'Devuelto' || row.estado === 'Aprobado'
+                            ? 'Ver Detalle'
+                            : 'Responder'
+                        }}
+                      </button>
+                      <span v-else-if="row.legacy" class="dash-badge dash-badge--legacy"
+                        >Solo lectura</span
+                      >
+                      <span v-else class="dash-muted">-</span>
+                      <button
+                        v-if="row.estado === 'Por Corregir' && !row.legacy"
+                        class="dash-btn-ghost-sm"
+                        type="button"
+                        title="Responder como administrador"
+                        @click="openModalResponder(row)"
+                      >
+                        Admin
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button
+                        v-if="row.estado === 'Por Corregir' && !row.legacy"
+                        class="dash-btn-edit"
+                        type="button"
+                        @click="openModalCorregir(row)"
+                      >
+                        Corregir Rendición
+                      </button>
+                      <span v-else class="dash-muted">-</span>
+                    </template>
                   </div>
                 </td>
               </tr>
@@ -1187,7 +1237,7 @@
       </template>
 
       <!-- Asignación a Conductor -->
-      <div v-else-if="activeTab === 'asignacion'" class="dash-assign">
+      <div v-else-if="activeTab === 'asignacion' && isAdminSession" class="dash-assign">
         <div class="dash-rendicion-gestion">
           <div class="dash-cajas-toolbar">
             <div>
@@ -1407,7 +1457,7 @@
       </div>
 
       <!-- Informes y Cartola -->
-      <div v-else-if="activeTab === 'informes'" class="dash-informes">
+      <div v-else-if="activeTab === 'informes' && isAdminSession" class="dash-informes">
         <div class="dash-cajas-toolbar">
           <div>
             <h3 class="dash-cajas-toolbar-title">Centro de Informes y Cartolas</h3>
@@ -1617,7 +1667,7 @@
       </div>
 
       <!-- Cajas -->
-      <div v-else-if="activeTab === 'cajas'" class="dash-cajas-gestion">
+      <div v-else-if="activeTab === 'cajas' && isAdminSession" class="dash-cajas-gestion">
         <div class="dash-cajas-toolbar">
           <div>
             <h3 class="dash-cajas-toolbar-title">Cajas</h3>
@@ -1775,7 +1825,7 @@
       </div>
 
       <!-- Centro de cobro / empresa -->
-      <div v-else-if="activeTab === 'centros-costo'" class="dash-cajas-gestion">
+      <div v-else-if="activeTab === 'centros-costo' && isAdminSession" class="dash-cajas-gestion">
         <div class="dash-cajas-toolbar">
           <div>
             <h3 class="dash-cajas-toolbar-title">Centro de cobro / empresa</h3>
@@ -1888,7 +1938,7 @@
       </div>
         </template>
 
-        <div v-else class="dash-admin">
+        <div v-else-if="isAdminSession" class="dash-admin">
           <div class="dash-tabs-bar">
             <div class="dash-tabs">
               <button
@@ -2755,6 +2805,35 @@ watch([cajaActiva, mesActivo], () => {
   loadResumenCaja()
 })
 
+const cajaSeleccionada = computed(
+  () => cajas.value.find((c) => c.groupKey === cajaActiva.value) || null
+)
+
+const cajaSeleccionadaCc = computed(
+  () => cajaSeleccionada.value?.centroCobroNombre || ''
+)
+
+const cajaSeleccionadaExterior = computed(() => {
+  if (!cajaSeleccionada.value) return 'Selecciona una caja'
+  return cajaSeleccionada.value.displayName || '—'
+})
+
+/** Estado operativo de la caja (sin columna estado en BD: derivado). */
+const cajaSeleccionadaEstado = computed(() => {
+  if (!cajaSeleccionada.value) return '—'
+  return cajaSeleccionada.value.tieneDatos ? 'En uso' : 'Disponible'
+})
+
+const cajaSeleccionadaEstadoClass = computed(() => {
+  if (!cajaSeleccionada.value) return ''
+  return cajaSeleccionada.value.tieneDatos ? 'dash-chip--accent' : 'dash-chip--ok'
+})
+
+function labelMesCorto(value) {
+  const full = labelMes(value)
+  return full ? full.split(' ')[0] : 'Mes'
+}
+
 const mesesDisponibles = ref([
   { value: '2026-06', label: 'Junio 2026' },
   { value: '2026-07', label: 'Julio 2026' },
@@ -2809,7 +2888,7 @@ const activeTab = ref('rendicion')
 const sidebarOpen = ref(false)
 const activeModule = ref('caja')
 
-const tabs = [
+const ALL_CAJA_TABS = [
   { id: 'rendicion', label: 'Rendición de Gastos' },
   { id: 'asignacion', label: 'Asignación a Conductor' },
   { id: 'informes', label: 'Informes y Cartola' },
@@ -3031,8 +3110,41 @@ const sessionAdminNivel = computed(() => {
   const fromApi = API_ROL_TO_NIVEL[user.value?.rol]
   if (fromApi) return fromApi
   if (TEMP_AUTH_BYPASS) return ROLE_DEV
-  return ROLE_ADMIN_CAJA
+  return ''
 })
+
+/** Admin / Super Admin / Dev (no usuario rendidor) */
+const isAdminSession = computed(() => {
+  if (TEMP_AUTH_BYPASS) return true
+  const rol = user.value?.rol
+  return (
+    rol === 'SUPER_ADMIN_DEV' ||
+    rol === 'SUPER_ADMIN' ||
+    rol === 'ADMIN_CAJA' ||
+    user.value?.role === 'admin' ||
+    Boolean(sessionAdminNivel.value)
+  )
+})
+
+const isUsuarioNormal = computed(() => !isAdminSession.value)
+
+const visibleTabs = computed(() => {
+  if (!isAdminSession.value) {
+    return ALL_CAJA_TABS.filter((t) => t.id === 'rendicion')
+  }
+  return ALL_CAJA_TABS
+})
+
+watch(
+  isAdminSession,
+  (admin) => {
+    if (!admin) {
+      activeModule.value = 'caja'
+      activeTab.value = 'rendicion'
+    }
+  },
+  { immediate: true }
+)
 
 const canCreateAdmins = computed(() => {
   const nivel = sessionAdminNivel.value
@@ -3057,10 +3169,7 @@ const togglingEstadoId = ref(null)
 const togglingTarjetaId = ref(null)
 
 /** Admin / Super Admin / Dev pueden rendir a nombre de cualquier trabajador */
-const canIngresarPorOtros = computed(() => {
-  const nivel = sessionAdminNivel.value
-  return nivel === ROLE_DEV || nivel === ROLE_SUPER || nivel === ROLE_ADMIN_CAJA
-})
+const canIngresarPorOtros = computed(() => isAdminSession.value)
 
 function syncGastoLockedFields() {
   if (!canIngresarPorOtros.value || gasto.trabajadorId === 'me') {
@@ -3475,22 +3584,20 @@ function labelCajaGroup(groupKey) {
   return opt?.label || groupKey
 }
 
-/** Cajas disponibles al rendir: asignadas al trabajador; admin por otros ve todas las activas */
+/** Cajas disponibles al rendir: usuario normal = solo asignadas (API ya filtra);
+ *  admin por otros = asignadas del trabajador; admin por sí = todas */
 const cajasDisponiblesParaGasto = computed(() => {
   const all = cajasActivasOpciones.value
-  if (canIngresarPorOtros.value && gasto.trabajadorId !== 'me') {
+  if (!isAdminSession.value) {
+    return all
+  }
+  if (gasto.trabajadorId !== 'me') {
     const t = trabajadores.value.find((x) => String(x.id) === gasto.trabajadorId)
     const keys = t?.cajasAsignadas || []
     if (!keys.length) return []
     return all.filter((c) => keys.includes(c.groupKey))
   }
-  if (canIngresarPorOtros.value && gasto.trabajadorId === 'me') {
-    return all
-  }
-  const t = trabajadorParaGasto()
-  const keys = t?.cajasAsignadas || []
-  if (!keys.length) return all
-  return all.filter((c) => keys.includes(c.groupKey))
+  return all
 })
 
 const historialFiltroActivo = computed(
@@ -3699,6 +3806,7 @@ function labelAdjunto(nombre) {
 }
 
 function openModalResponder(row) {
+  if (!isAdminSession.value) return
   modalResponder.open = true
   modalResponder.rinde = row.rinde
   modalResponder.estado = 'aprobado'
@@ -3851,6 +3959,7 @@ function toggleSidebar() {
 }
 
 function selectModule(moduleName) {
+  if (!isAdminSession.value && moduleName === 'admin') return
   if (!sidebarOpen.value) openSidebar()
   activeModule.value = moduleName
 }
@@ -3869,13 +3978,18 @@ async function onSaveGasto() {
   }
 
   let trabajadorId = null
-  if (canIngresarPorOtros.value && gasto.trabajadorId !== 'me') {
+  if (!isAdminSession.value) {
+    // Usuario normal: siempre su propio trabajador (no se puede forzar otro)
+    trabajadorId = user.value?.trabajador_id || null
+  } else if (gasto.trabajadorId !== 'me') {
     trabajadorId = Number(gasto.trabajadorId)
   } else {
     trabajadorId = user.value?.trabajador_id || null
   }
   if (!trabajadorId) {
-    saveError.value = 'No hay trabajador asociado para registrar el gasto'
+    saveError.value = isAdminSession.value
+      ? 'No hay trabajador asociado para registrar el gasto'
+      : 'Tu usuario no tiene ficha de trabajador vinculada'
     return
   }
 

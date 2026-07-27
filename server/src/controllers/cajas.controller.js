@@ -1,6 +1,7 @@
 const { query } = require('../config/db')
 const { registrarAuditoria } = require('../utils/audit')
 const { ensureCajasSchema } = require('../utils/ensureCajasSchema')
+const { ROLES } = require('../middlewares/role.middleware')
 
 function normalizeNombreInterior(value) {
   return String(value || '')
@@ -66,8 +67,8 @@ function mapCcRow(row) {
 async function listCajas(req, res) {
   try {
     await ensureCajasSchema()
-    const rows = await query(
-      `SELECT c.id, c.clave_interna, c.nombre_exterior, c.centro_cobro_id,
+    let sql = `
+      SELECT c.id, c.clave_interna, c.nombre_exterior, c.centro_cobro_id,
               c.created_at, c.updated_at,
               cc.nombre AS centro_cobro_nombre,
               (
@@ -82,9 +83,22 @@ async function listCajas(req, res) {
               ) AS tiene_datos
        FROM cajas_chicas c
        LEFT JOIN centros_costo cc ON cc.id = c.centro_cobro_id AND cc.is_deleted = FALSE
-       WHERE c.is_deleted = FALSE
-       ORDER BY cc.nombre ASC, c.clave_interna ASC`
-    )
+       WHERE c.is_deleted = FALSE`
+    const params = []
+
+    // Usuario normal: solo cajas asignadas en Personal / Usuarios
+    if (req.user?.rol === ROLES.USER_RENDIDOR) {
+      if (!req.user.trabajador_id) {
+        return res.json([])
+      }
+      sql += ` AND c.clave_interna IN (
+        SELECT tc.clave_interna FROM trabajador_cajas tc WHERE tc.trabajador_id = ?
+      )`
+      params.push(req.user.trabajador_id)
+    }
+
+    sql += ' ORDER BY cc.nombre ASC, c.clave_interna ASC'
+    const rows = await query(sql, params)
     return res.json(rows.map(mapCajaRow))
   } catch (err) {
     console.error('[listCajas]', err)
@@ -124,6 +138,22 @@ async function resumenCaja(req, res) {
     }
 
     const caja = cajas[0]
+
+    if (req.user?.rol === ROLES.USER_RENDIDOR) {
+      if (!req.user.trabajador_id) {
+        return res.status(403).json({ error: 'Forbidden' })
+      }
+      const assigned = await query(
+        `SELECT 1 AS ok FROM trabajador_cajas
+         WHERE trabajador_id = ? AND clave_interna = ?
+         LIMIT 1`,
+        [req.user.trabajador_id, caja.clave_interna]
+      )
+      if (!assigned[0]) {
+        return res.status(403).json({ error: 'Caja no asignada a tu usuario' })
+      }
+    }
+
     const mesFilter = /^\d{4}-\d{2}$/.test(mes)
 
     let gastosSql = `

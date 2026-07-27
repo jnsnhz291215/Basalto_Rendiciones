@@ -855,6 +855,12 @@ a:hover {
   color: var(--accent);
 }
 
+.dash-metric-value--text {
+  white-space: normal;
+  line-height: 1.25;
+  font-size: 1rem;
+}
+
 .dash-chip {
   padding: 0.5rem;
   border-radius: 0.75rem;
@@ -1044,6 +1050,32 @@ a:hover {
   width: 100%;
 }
 
+.dash-alert {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.5rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.dash-alert p {
+  margin: 0;
+}
+
+.dash-alert p + p {
+  margin-top: 0.45rem;
+}
+
+.dash-alert--warn {
+  background: rgba(249, 115, 22, 0.12);
+  border: 1px solid rgba(249, 115, 22, 0.35);
+  color: #fdba74;
+}
+
+.dash-alert--warn strong {
+  color: #fb923c;
+}
+
 .dash-combobox {
   position: relative;
   width: 100%;
@@ -1190,7 +1222,7 @@ a:hover {
 
 @media (min-width: 768px) {
   .dash-metrics-inner {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem;
   }
 
@@ -1212,6 +1244,7 @@ a:hover {
 
 @media (min-width: 1024px) {
   .dash-metrics-inner {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 1rem;
   }
 

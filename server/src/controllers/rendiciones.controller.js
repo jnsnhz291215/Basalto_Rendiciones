@@ -1,8 +1,21 @@
 const { query } = require('../config/db')
 const { registrarAuditoria } = require('../utils/audit')
 const { calcularArrastreMes, nextCodigo, mesActualYYYYMM } = require('../utils/helpers')
-const { ROLES } = require('../middlewares/role.middleware')
+const { ROLES, ADMINS } = require('../middlewares/role.middleware')
 const { assertTarjetaPermitePago } = require('../utils/tarjetaPago')
+
+async function assertCajaAsignadaATrabajador(trabajadorId, cajaId) {
+  const rows = await query(
+    `SELECT 1 AS ok
+     FROM cajas_chicas c
+     INNER JOIN trabajador_cajas tc
+       ON tc.clave_interna = c.clave_interna AND tc.trabajador_id = ?
+     WHERE c.id = ? AND c.is_deleted = FALSE
+     LIMIT 1`,
+    [trabajadorId, cajaId]
+  )
+  return Boolean(rows[0])
+}
 
 async function listRendiciones(req, res) {
   try {
@@ -90,6 +103,13 @@ async function createRendicion(req, res) {
     )
     if (!cajas[0]) return res.status(404).json({ error: 'Caja no encontrada' })
 
+    if (req.user.rol === ROLES.USER_RENDIDOR) {
+      const ok = await assertCajaAsignadaATrabajador(trabajadorId, Number(caja_id))
+      if (!ok) {
+        return res.status(403).json({ error: 'Caja no asignada a tu usuario' })
+      }
+    }
+
     const tarjetaCheck = await assertTarjetaPermitePago({
       tarjetaId: tarjeta_id,
       origenPago: origen_pago,
@@ -156,10 +176,20 @@ async function updateRendicion(req, res) {
     )
     if (!existing[0]) return res.status(404).json({ error: 'Rendición no encontrada' })
 
-    if (
-      req.user.rol === ROLES.USER_RENDIDOR &&
-      existing[0].trabajador_id !== req.user.trabajador_id
-    ) {
+    const isUser = req.user.rol === ROLES.USER_RENDIDOR
+    const isAdmin = ADMINS.includes(req.user.rol)
+
+    if (isUser) {
+      if (existing[0].trabajador_id !== req.user.trabajador_id) {
+        return res.status(403).json({ error: 'Forbidden' })
+      }
+      // Solo puede responder/corregir si el admin pidió corrección
+      if (existing[0].estado !== 'Por Corregir') {
+        return res.status(403).json({
+          error: 'No se puede editar ni borrar una rendición ya enviada'
+        })
+      }
+    } else if (!isAdmin) {
       return res.status(403).json({ error: 'Forbidden' })
     }
 
@@ -174,6 +204,70 @@ async function updateRendicion(req, res) {
       descripcion,
       estado
     } = req.body || {}
+
+    // Usuario normal: solo campos de corrección; vuelve a "Sin Devolución"
+    if (isUser) {
+      const tipo = tipo_documento || existing[0].tipo_documento
+      const num =
+        tipo === 'Factura'
+          ? String(numero_documento ?? existing[0].numero_documento ?? '').trim()
+          : numero_documento !== undefined
+            ? numero_documento
+            : existing[0].numero_documento
+
+      if (tipo === 'Factura' && !num) {
+        return res.status(400).json({ error: 'numero_documento es obligatorio para Factura' })
+      }
+
+      const nextOrigen = origen_pago || existing[0].origen_pago
+      const nextTarjetaId =
+        tarjeta_id !== undefined ? tarjeta_id : existing[0].tarjeta_id
+      const tarjetaCheck = await assertTarjetaPermitePago({
+        tarjetaId: nextTarjetaId,
+        origenPago: nextOrigen,
+        fechaDocumento: existing[0].fecha_documento
+      })
+      if (tarjetaCheck) {
+        return res.status(tarjetaCheck.status).json({ error: tarjetaCheck.error })
+      }
+
+      await query(
+        `UPDATE rendiciones_gastos
+         SET tipo_documento = ?,
+             numero_documento = ?,
+             monto = ?,
+             origen_pago = ?,
+             tarjeta_id = ?,
+             comprobante_url = ?,
+             descripcion = ?,
+             estado = 'Sin Devolución'
+         WHERE id = ? AND is_deleted = FALSE`,
+        [
+          tipo,
+          num,
+          monto !== undefined ? Number(monto) : existing[0].monto,
+          nextOrigen,
+          nextTarjetaId,
+          comprobante_url !== undefined ? comprobante_url : existing[0].comprobante_url,
+          descripcion !== undefined ? descripcion : existing[0].descripcion,
+          id
+        ]
+      )
+
+      await registrarAuditoria(
+        req.user.id,
+        req.user.nombre,
+        'MODIFICAR',
+        'Gastos',
+        `Corrección de rendición ${existing[0].codigo_rinde} por usuario`
+      )
+
+      const updated = await query(
+        `SELECT * FROM rendiciones_gastos WHERE id = ? AND is_deleted = FALSE`,
+        [id]
+      )
+      return res.json(updated[0])
+    }
 
     let arrastre = existing[0].arrastre_mes
     const fecha = fecha_documento || existing[0].fecha_documento
@@ -254,19 +348,22 @@ async function updateRendicion(req, res) {
 
 async function softDeleteRendicion(req, res) {
   try {
+    // Usuario normal: nunca puede borrar (ni las propias)
+    if (req.user.rol === ROLES.USER_RENDIDOR) {
+      return res.status(403).json({
+        error: 'No se puede editar ni borrar una rendición ya enviada'
+      })
+    }
+    if (!ADMINS.includes(req.user.rol)) {
+      return res.status(403).json({ error: 'Forbidden' })
+    }
+
     const id = Number(req.params.id)
     const existing = await query(
       `SELECT * FROM rendiciones_gastos WHERE id = ? AND is_deleted = FALSE`,
       [id]
     )
     if (!existing[0]) return res.status(404).json({ error: 'Rendición no encontrada' })
-
-    if (
-      req.user.rol === ROLES.USER_RENDIDOR &&
-      existing[0].trabajador_id !== req.user.trabajador_id
-    ) {
-      return res.status(403).json({ error: 'Forbidden' })
-    }
 
     await query(
       `UPDATE rendiciones_gastos

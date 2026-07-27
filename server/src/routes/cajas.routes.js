@@ -18,7 +18,7 @@ const router = express.Router()
 router.use(authMiddleware)
 
 router.get('/resumen', resumenCaja)
-router.get('/centros-costo', listCentrosCosto)
+router.get('/centros-costo', checkRole(ADMINS), listCentrosCosto)
 router.post('/centros-costo', checkRole(ADMINS), createCentroCosto)
 router.put('/centros-costo/:id', checkRole(ADMINS), updateCentroCosto)
 router.delete('/centros-costo/:id', checkRole(ADMINS), softDeleteCentroCosto)
