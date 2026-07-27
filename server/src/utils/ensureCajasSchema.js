@@ -23,7 +23,8 @@ async function tryQuery(sql, params = []) {
 
 /**
  * centros_costo: id + nombre
- * cajas_chicas: nombre_exterior + clave_interna + centro_cobro_id
+ * cajas_chicas: nombre_exterior + centro_cobro_id (agrupador = CC)
+ * clave_interna: clave técnica auto (compat. selectores / trabajador_cajas)
  */
 async function ensureCajasSchema() {
   if (ready) return

@@ -162,19 +162,21 @@ Todas las tablas de negocio (salvo `audit_logs`) incluyen `is_deleted` + `delete
 
 ### 6.3 `cajas_chicas` — Cajas
 
-**Propósito:** Catálogo de cajas. Nombre exterior + nombre interior + vínculo a centro de cobro.
+**Propósito:** Catálogo de cajas. Solo **nombre exterior** + vínculo a **centro de cobro / empresa**.
+
+El agrupador (antes “nombre interior”) **es** el centro de cobro / empresa.
 
 | Campo | Notas |
 |-------|--------|
 | `id` | PK |
-| `clave_interna` | Nombre interior / agrupador (único) |
+| `clave_interna` | Clave técnica única (auto al crear; no la ingresa el usuario) |
 | `nombre_exterior` | Nombre visible |
-| `centro_cobro_id` | FK a `centros_costo.id` |
+| `centro_cobro_id` | FK a `centros_costo.id` (= agrupador) |
 | soft delete / timestamps | |
 
 **Regla:** si la caja ya tiene rendiciones o anticipos, **no** se puede editar ni eliminar.
 
-**Eliminado del modelo:** `mes_asignado`, `fondo_estimado_mes`, `centro_costo` (texto), `responsable_id`, `estado`.
+**Eliminado del modelo:** `mes_asignado`, `fondo_estimado_mes`, `centro_costo` (texto), `responsable_id`, `estado`; el usuario ya no carga “nombre interior”.
 
 ---
 

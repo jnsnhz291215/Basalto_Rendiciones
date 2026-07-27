@@ -192,27 +192,28 @@ async function createCaja(req, res) {
     await ensureCajasSchema()
     const body = req.body || {}
     const nombreExterior = String(body.nombre_exterior || '').trim()
-    const clave = normalizeNombreInterior(
-      body.nombre_interior || body.clave_interna || body.nombreInterior
-    )
     const centroCobroId = Number(body.centro_cobro_id)
 
-    if (!nombreExterior || !clave) {
-      return res.status(400).json({
-        error: 'nombre_exterior y nombre_interior son requeridos'
-      })
+    if (!nombreExterior) {
+      return res.status(400).json({ error: 'nombre_exterior es requerido' })
     }
     if (!Number.isFinite(centroCobroId) || centroCobroId <= 0) {
       return res.status(400).json({ error: 'centro_cobro_id es requerido' })
     }
 
     const cc = await query(
-      `SELECT id FROM centros_costo WHERE id = ? AND is_deleted = FALSE`,
+      `SELECT id, nombre FROM centros_costo WHERE id = ? AND is_deleted = FALSE`,
       [centroCobroId]
     )
     if (!cc[0]) {
       return res.status(400).json({ error: 'Centro de cobro / empresa no encontrado' })
     }
+
+    // El agrupador es el CC (antes "nombre interior"). clave_interna técnica única por caja.
+    const slugExterior = normalizeNombreInterior(nombreExterior) || 'CAJA'
+    const clave =
+      normalizeNombreInterior(`${cc[0].nombre}_${slugExterior}`) ||
+      `CC${centroCobroId}_${slugExterior}`
 
     try {
       const result = await query(
@@ -226,7 +227,7 @@ async function createCaja(req, res) {
         req.user.nombre,
         'CREAR',
         'Cajas',
-        `Caja ${clave} creada (${nombreExterior})`
+        `Caja ${clave} creada (${nombreExterior}) en CC id=${centroCobroId}`
       )
 
       const created = await query(
@@ -239,7 +240,9 @@ async function createCaja(req, res) {
       return res.status(201).json(mapCajaRow(created[0]))
     } catch (e) {
       if (e.code === 'ER_DUP_ENTRY') {
-        return res.status(409).json({ error: 'Ya existe una caja con ese nombre interior' })
+        return res.status(409).json({
+          error: 'Ya existe una caja con ese nombre en este centro de cobro / empresa'
+        })
       }
       throw e
     }
@@ -271,20 +274,8 @@ async function updateCaja(req, res) {
         ? String(body.nombre_exterior || '').trim() || existing[0].nombre_exterior
         : existing[0].nombre_exterior
 
-    let centroCobroId = existing[0].centro_cobro_id
-    if (body.centro_cobro_id !== undefined) {
-      centroCobroId = Number(body.centro_cobro_id)
-      if (!Number.isFinite(centroCobroId) || centroCobroId <= 0) {
-        return res.status(400).json({ error: 'centro_cobro_id inválido' })
-      }
-      const cc = await query(
-        `SELECT id FROM centros_costo WHERE id = ? AND is_deleted = FALSE`,
-        [centroCobroId]
-      )
-      if (!cc[0]) {
-        return res.status(400).json({ error: 'Centro de cobro / empresa no encontrado' })
-      }
-    }
+    // El CC es el agrupador (ex nombre interior): no se cambia al editar.
+    const centroCobroId = existing[0].centro_cobro_id
 
     await query(
       `UPDATE cajas_chicas

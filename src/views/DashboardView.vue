@@ -574,20 +574,44 @@
                 </div>
                 <div class="dash-field">
                   <label>Trabajador</label>
-                  <select
-                    v-if="canIngresarPorOtros"
-                    v-model="gasto.trabajadorId"
-                    @change="onGastoTrabajadorChange"
-                  >
-                    <option value="me">{{ nombreSesion }} (Yo)</option>
-                    <option
-                      v-for="t in trabajadores"
-                      :key="t.id"
-                      :value="String(t.id)"
+                  <div v-if="canIngresarPorOtros" class="dash-combobox">
+                    <input
+                      v-model="gastoTrabajadorQuery"
+                      type="text"
+                      class="dash-combobox-input"
+                      placeholder="Buscar por nombre…"
+                      autocomplete="off"
+                      @focus="onGastoTrabajadorFocus"
+                      @input="onGastoTrabajadorQueryInput"
+                      @keydown.down.prevent="highlightGastoTrabajador(1)"
+                      @keydown.up.prevent="highlightGastoTrabajador(-1)"
+                      @keydown.enter.prevent="confirmGastoTrabajadorHighlight"
+                      @keydown.escape="gastoTrabajadorOpen = false"
+                      @blur="onGastoTrabajadorBlur"
+                    />
+                    <ul
+                      v-if="gastoTrabajadorOpen && gastoTrabajadorOpciones.length"
+                      class="dash-combobox-list"
+                      role="listbox"
                     >
-                      {{ t.nombre }}
-                    </option>
-                  </select>
+                      <li
+                        v-for="(opt, idx) in gastoTrabajadorOpciones"
+                        :key="opt.id"
+                        class="dash-combobox-option"
+                        :class="{ 'dash-combobox-option--active': idx === gastoTrabajadorHighlight }"
+                        role="option"
+                        @mousedown.prevent="selectGastoTrabajador(opt)"
+                      >
+                        {{ opt.label }}
+                      </li>
+                    </ul>
+                    <p
+                      v-else-if="gastoTrabajadorOpen && gastoTrabajadorQuery.trim()"
+                      class="dash-field-hint"
+                    >
+                      Sin coincidencias.
+                    </p>
+                  </div>
                   <input
                     v-else
                     :value="gasto.trabajador"
@@ -1598,8 +1622,8 @@
           <div>
             <h3 class="dash-cajas-toolbar-title">Cajas</h3>
             <p class="dash-cajas-toolbar-hint">
-              Agrupadas por centro de cobro / empresa. Si ya tienen datos, no se pueden editar ni
-              eliminar.
+              El centro de cobro / empresa es el agrupador (antes nombre interior). Si ya tienen
+              datos, no se pueden editar ni eliminar.
             </p>
           </div>
           <button
@@ -1627,8 +1651,8 @@
                 {{ cajaForm.editId ? 'Editar Caja' : 'Nueva Caja' }}
               </h2>
               <p class="dash-hint">
-                Elige el nombre con cuidado: si la caja acumula datos, no se podrá editar ni
-                eliminar.
+                Centro de cobro / empresa + nombre visible. Si la caja acumula datos, no se podrá
+                editar ni eliminar.
               </p>
             </div>
             <button
@@ -1642,16 +1666,19 @@
           </div>
 
           <form class="dash-caja-form" @submit.prevent="onSaveCaja">
-            <div class="dash-field">
-              <label>Centro de cobro / empresa</label>
-              <select v-model="cajaForm.centroCobroId" required>
-                <option disabled value="">Seleccionar…</option>
-                <option v-for="cc in centrosCosto" :key="cc.id" :value="cc.id">
-                  {{ cc.nombre }}
-                </option>
-              </select>
-            </div>
             <div class="dash-caja-grid-2">
+              <div class="dash-field">
+                <label>Centro de cobro / empresa</label>
+                <select v-model="cajaForm.centroCobroId" required :disabled="Boolean(cajaForm.editId)">
+                  <option disabled value="">Seleccionar…</option>
+                  <option v-for="cc in centrosCosto" :key="cc.id" :value="cc.id">
+                    {{ cc.nombre }}
+                  </option>
+                </select>
+                <span v-if="cajaForm.editId" class="dash-field-hint">
+                  El centro de cobro / empresa no se puede cambiar.
+                </span>
+              </div>
               <div class="dash-field">
                 <label>Nombre Exterior</label>
                 <input
@@ -1660,21 +1687,6 @@
                   placeholder="Ej: Caja Faena Norte"
                   required
                 />
-              </div>
-              <div class="dash-field">
-                <label>Nombre Interior</label>
-                <input
-                  v-model="cajaForm.nombreInterior"
-                  type="text"
-                  placeholder="Ej: FAENA_NORTE"
-                  class="dash-mono"
-                  required
-                  :disabled="Boolean(cajaForm.editId)"
-                  @input="cajaForm.nombreInterior = normalizarGroupKey(cajaForm.nombreInterior)"
-                />
-                <span v-if="cajaForm.editId" class="dash-field-hint">
-                  El nombre interior no se puede cambiar.
-                </span>
               </div>
             </div>
 
@@ -1721,14 +1733,12 @@
                     <thead>
                       <tr>
                         <th>Nombre Exterior</th>
-                        <th>Nombre Interior</th>
                         <th class="dash-table-center">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr v-for="caja in grupo.cajas" :key="caja.id || caja.groupKey">
                         <td class="dash-table-strong">{{ caja.displayName }}</td>
-                        <td class="dash-mono dash-rinde">{{ caja.groupKey }}</td>
                         <td class="dash-table-center dash-table-actions">
                           <template v-if="caja.tieneDatos">
                             <span class="dash-field-hint" title="Ya tiene datos asociados">
@@ -2840,6 +2850,10 @@ const gasto = reactive({
   descripcion: ''
 })
 
+const gastoTrabajadorQuery = ref('')
+const gastoTrabajadorOpen = ref(false)
+const gastoTrabajadorHighlight = ref(0)
+
 const historialBusqueda = ref('')
 const historialFiltroCaja = ref('')
 const historialFiltroMes = ref('')
@@ -2970,7 +2984,6 @@ const formCajaEl = ref(null)
 
 const cajaForm = reactive({
   displayName: '',
-  nombreInterior: '',
   centroCobroId: '',
   editIndex: null,
   editId: null,
@@ -3053,6 +3066,105 @@ function syncGastoLockedFields() {
   if (!canIngresarPorOtros.value || gasto.trabajadorId === 'me') {
     gasto.trabajador = nombreSesion.value
   }
+  syncGastoTrabajadorQueryFromSelection()
+}
+
+function syncGastoTrabajadorQueryFromSelection() {
+  if (!canIngresarPorOtros.value) {
+    gastoTrabajadorQuery.value = gasto.trabajador || ''
+    return
+  }
+  if (gasto.trabajadorId === 'me') {
+    gastoTrabajadorQuery.value = `${nombreSesion.value} (Yo)`
+    return
+  }
+  const t = trabajadores.value.find((x) => String(x.id) === String(gasto.trabajadorId))
+  gastoTrabajadorQuery.value = t?.nombre || gasto.trabajador || ''
+}
+
+const gastoTrabajadorOpciones = computed(() => {
+  const q = gastoTrabajadorQuery.value.trim().toLowerCase()
+  const opts = [
+    {
+      id: 'me',
+      label: `${nombreSesion.value} (Yo)`,
+      nombre: nombreSesion.value
+    }
+  ]
+  const seen = new Set()
+  for (const t of trabajadores.value) {
+    const id = String(t.id)
+    if (seen.has(id)) continue
+    seen.add(id)
+    opts.push({ id, label: t.nombre, nombre: t.nombre })
+  }
+  if (!q) return opts
+  return opts.filter(
+    (o) =>
+      o.label.toLowerCase().includes(q) ||
+      o.nombre.toLowerCase().includes(q) ||
+      (o.id === 'me' && 'yo'.includes(q))
+  )
+})
+
+function onGastoTrabajadorFocus(e) {
+  gastoTrabajadorOpen.value = true
+  gastoTrabajadorHighlight.value = 0
+  e?.target?.select?.()
+}
+
+function onGastoTrabajadorQueryInput() {
+  gastoTrabajadorOpen.value = true
+  gastoTrabajadorHighlight.value = 0
+}
+
+function highlightGastoTrabajador(delta) {
+  const n = gastoTrabajadorOpciones.value.length
+  if (!n) return
+  gastoTrabajadorOpen.value = true
+  gastoTrabajadorHighlight.value = (gastoTrabajadorHighlight.value + delta + n) % n
+}
+
+function confirmGastoTrabajadorHighlight() {
+  const opt = gastoTrabajadorOpciones.value[gastoTrabajadorHighlight.value]
+  if (opt) selectGastoTrabajador(opt)
+}
+
+function selectGastoTrabajador(opt) {
+  if (!opt) return
+  gasto.trabajadorId = opt.id
+  gasto.trabajador = opt.nombre
+  gastoTrabajadorQuery.value = opt.label
+  gastoTrabajadorOpen.value = false
+  gastoTrabajadorHighlight.value = 0
+  syncGastoCajaDisponible()
+}
+
+function onGastoTrabajadorBlur() {
+  setTimeout(() => {
+    gastoTrabajadorOpen.value = false
+    // Si el texto no coincide con la selección, restaurar etiqueta de la selección actual
+    const selectedLabel =
+      gasto.trabajadorId === 'me'
+        ? `${nombreSesion.value} (Yo)`
+        : trabajadores.value.find((x) => String(x.id) === String(gasto.trabajadorId))?.nombre
+    if (
+      selectedLabel &&
+      gastoTrabajadorQuery.value.trim().toLowerCase() !== selectedLabel.toLowerCase() &&
+      !(gasto.trabajadorId === 'me' && gastoTrabajadorQuery.value.includes('(Yo)'))
+    ) {
+      // Si hay coincidencia exacta por nombre, adoptar esa opción
+      const q = gastoTrabajadorQuery.value.trim().toLowerCase()
+      const match = gastoTrabajadorOpciones.value.find(
+        (o) => o.nombre.toLowerCase() === q || o.label.toLowerCase() === q
+      )
+      if (match) {
+        selectGastoTrabajador(match)
+      } else {
+        syncGastoTrabajadorQueryFromSelection()
+      }
+    }
+  }, 120)
 }
 
 function onGastoTipoChange() {
@@ -3068,6 +3180,7 @@ function onGastoTrabajadorChange() {
     const t = trabajadores.value.find((x) => String(x.id) === gasto.trabajadorId)
     gasto.trabajador = t?.nombre || nombreSesion.value
   }
+  syncGastoTrabajadorQueryFromSelection()
   syncGastoCajaDisponible()
 }
 
@@ -3793,6 +3906,9 @@ function resetGastoFormFields() {
   gasto.metodoPago = 'efectivo'
   gasto.descripcion = ''
   gasto.comprobanteNombre = ''
+  gasto.trabajadorId = 'me'
+  gastoTrabajadorOpen.value = false
+  gastoTrabajadorHighlight.value = 0
   syncGastoLockedFields()
   syncGastoCajaDisponible()
 }
@@ -3932,7 +4048,6 @@ function formatMonto(value) {
 
 function resetCajaForm() {
   cajaForm.displayName = ''
-  cajaForm.nombreInterior = ''
   cajaForm.centroCobroId = ''
   cajaForm.editIndex = null
   cajaForm.editId = null
@@ -3966,7 +4081,6 @@ function onEditCaja(caja) {
   if (realIndex < 0) return
 
   cajaForm.displayName = caja.displayName
-  cajaForm.nombreInterior = caja.groupKey
   cajaForm.centroCobroId = caja.centroCobroId || ''
   cajaForm.editIndex = realIndex
   cajaForm.editId = caja.id
@@ -3976,11 +4090,8 @@ function onEditCaja(caja) {
 
 async function onSaveCaja() {
   const displayName = cajaForm.displayName.trim()
-  const nombreInterior = normalizarGroupKey(
-    cajaForm.editId ? cajaForm.groupKeyOriginal || cajaForm.nombreInterior : cajaForm.nombreInterior
-  )
   const centroCobroId = Number(cajaForm.centroCobroId)
-  if (!displayName || !nombreInterior) return
+  if (!displayName) return
   if (!Number.isFinite(centroCobroId) || centroCobroId <= 0) {
     saveError.value = 'Debes seleccionar un centro de cobro / empresa'
     return
@@ -3990,18 +4101,16 @@ async function onSaveCaja() {
     saveError.value = ''
     if (cajaForm.editId) {
       await api.updateCaja(cajaForm.editId, {
-        nombre_exterior: displayName,
-        centro_cobro_id: centroCobroId
+        nombre_exterior: displayName
       })
     } else {
-      await api.createCaja({
+      const created = await api.createCaja({
         nombre_exterior: displayName,
-        nombre_interior: nombreInterior,
-        clave_interna: nombreInterior,
         centro_cobro_id: centroCobroId
       })
+      const key = created?.clave_interna || created?.nombre_interior
+      if (key && !cajaActiva.value) cajaActiva.value = key
     }
-    if (!cajaActiva.value) cajaActiva.value = nombreInterior
     await loadDashboardData()
     closeFormCaja()
   } catch (err) {
