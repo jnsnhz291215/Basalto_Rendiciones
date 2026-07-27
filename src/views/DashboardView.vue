@@ -575,11 +575,11 @@
                 <div class="dash-alert dash-alert--warn">
                   <p>
                     <strong>Importante:</strong> una vez subida, la rendición
-                    <strong>no se puede editar ni eliminar</strong>. Revisá bien los datos antes de
+                    <strong>no se puede editar ni eliminar</strong>. Revise bien los datos antes de
                     guardar.
                   </p>
                   <p>
-                    Si adjuntás una <strong>foto</strong> (no PDF), asegurate de que se vea
+                    Si adjunta una <strong>foto</strong> (no PDF), asegúrese de que se vea
                     claramente el <strong>cobro/total</strong>. En facturas, también debe verse el
                     <strong>número de factura</strong>.
                   </p>
@@ -687,10 +687,10 @@
                     </option>
                   </select>
                   <p
-                    v-if="!cajasDisponiblesParaGasto.length"
+                    v-if="!cajasDisponiblesParaGasto.length && hintCajasGasto"
                     class="dash-hint dash-hint--inline"
                   >
-                    Sin cajas asignadas. Un administrador debe asignarlas en Personal / Usuarios.
+                    {{ hintCajasGasto }}
                   </p>
                 </div>
 
@@ -704,13 +704,18 @@
                 </div>
 
                 <div class="dash-field dash-gasto-span-2">
-                  <label>Adjuntar Comprobante (PDF / PNG / JPG)</label>
+                  <label>Adjuntar Comprobante (PDF / PNG / JPG) *</label>
                   <input
+                    ref="gastoFileInputEl"
                     type="file"
                     accept=".pdf,image/png,image/jpeg"
                     class="dash-file"
+                    required
                     @change="onGastoFile"
                   />
+                  <span v-if="gasto.comprobanteNombre" class="dash-field-hint">
+                    Archivo: {{ gasto.comprobanteNombre }}
+                  </span>
                 </div>
               </div>
 
@@ -930,6 +935,83 @@
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <!-- Modal verificación IA del comprobante -->
+        <div
+          v-if="modalVerificar.open"
+          class="dash-modal-backdrop"
+          @click.self="onCloseModalVerificar"
+        >
+          <div
+            class="dash-modal dash-modal--verify"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-verificar-title"
+          >
+            <div class="dash-modal-head">
+              <div>
+                <h3 id="modal-verificar-title">Confirmando carga de documento</h3>
+                <p class="dash-hint">
+                  La IA revisa que el monto
+                  <template v-if="gasto.tipo === 'Factura'"> y el N° de factura</template>
+                  sean legibles y coincidan.
+                </p>
+              </div>
+              <button
+                v-if="modalVerificar.phase !== 'loading'"
+                class="dash-modal-close"
+                type="button"
+                @click="onCloseModalVerificar"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div v-if="modalVerificar.phase === 'loading'" class="dash-verify-body">
+              <div class="dash-verify-spinner" aria-hidden="true"></div>
+              <p class="dash-verify-status">Analizando comprobante…</p>
+              <p class="dash-field-hint">Esto puede tomar unos segundos.</p>
+            </div>
+
+            <div v-else-if="modalVerificar.phase === 'error'" class="dash-verify-body">
+              <p class="dash-verify-error" role="alert">
+                {{ modalVerificar.error }}
+              </p>
+              <ul v-if="modalVerificar.errores.length > 1" class="dash-verify-errores">
+                <li v-for="(e, i) in modalVerificar.errores" :key="i">{{ e }}</li>
+              </ul>
+              <div class="dash-field">
+                <label>Reemplazar documento (foto/PDF más claro)</label>
+                <input
+                  type="file"
+                  accept=".pdf,image/png,image/jpeg"
+                  class="dash-file"
+                  @change="onVerificarReplaceFile"
+                />
+                <span v-if="gasto.comprobanteNombre" class="dash-field-hint">
+                  Actual: {{ gasto.comprobanteNombre }}
+                </span>
+              </div>
+              <div class="dash-modal-actions">
+                <button class="dash-btn-secondary" type="button" @click="onCloseModalVerificar">
+                  Cancelar
+                </button>
+                <button
+                  class="dash-btn-primary"
+                  type="button"
+                  :disabled="!gastoComprobanteFile"
+                  @click="retryVerificarYGuardar"
+                >
+                  Reintentar verificación
+                </button>
+              </div>
+            </div>
+
+            <div v-else-if="modalVerificar.phase === 'ok'" class="dash-verify-body">
+              <p class="dash-verify-ok">Documento validado. Guardando rendición…</p>
+            </div>
+          </div>
         </div>
 
         <!-- Modal Responder Admin -->
@@ -2088,6 +2170,19 @@
               </p>
             </div>
 
+            <div class="dash-admin-filters">
+              <div class="dash-historial-search">
+                <label class="dash-sr-only" for="admin-buscar">Buscar administrador</label>
+                <input
+                  id="admin-buscar"
+                  v-model="adminBusqueda"
+                  type="search"
+                  placeholder="Buscar por nombre o RUT…"
+                  class="dash-search-input"
+                />
+              </div>
+            </div>
+
             <div class="dash-table-wrap">
               <table class="dash-table">
                 <thead>
@@ -2101,7 +2196,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="admin in admins" :key="admin.id || admin.rut">
+                  <tr v-for="admin in adminsFiltrados" :key="admin.id || admin.rut">
                     <td class="dash-table-strong dash-mono">{{ admin.rut || '-' }}</td>
                     <td>{{ admin.nombre || '-' }}</td>
                     <td>{{ admin.correo || '-' }}</td>
@@ -2145,6 +2240,17 @@
                         ✎
                       </button>
                       <button
+                        v-if="canResetPassword"
+                        class="dash-btn-icon"
+                        type="button"
+                        title="Reiniciar contraseña"
+                        :disabled="admin.id === user?.id"
+                        @click="onResetPasswordAdmin(admin)"
+                      >
+                        🔑
+                      </button>
+                      <button
+                        v-if="canHardDelete"
                         class="dash-btn-icon dash-btn-icon--danger"
                         type="button"
                         title="Eliminar"
@@ -2180,6 +2286,19 @@
               </button>
             </div>
 
+            <div class="dash-admin-filters">
+              <div class="dash-historial-search">
+                <label class="dash-sr-only" for="personal-buscar">Buscar personal</label>
+                <input
+                  id="personal-buscar"
+                  v-model="personalBusqueda"
+                  type="search"
+                  placeholder="Buscar por nombre o RUT…"
+                  class="dash-search-input"
+                />
+              </div>
+            </div>
+
             <div class="dash-table-wrap">
               <table class="dash-table">
                 <thead>
@@ -2193,7 +2312,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="p in personal" :key="p.id">
+                  <tr v-for="p in personalFiltrado" :key="p.id">
                     <td class="dash-table-strong dash-mono">{{ formatRut(p.rut) || '-' }}</td>
                     <td>{{ p.nombre || '-' }}</td>
                     <td>{{ p.cargo || '-' }}</td>
@@ -2267,7 +2386,16 @@
                         ▦
                       </button>
                       <button
-                        v-if="canEditPersonal"
+                        v-if="canResetPassword && p.usuarioId"
+                        class="dash-btn-icon"
+                        type="button"
+                        title="Reiniciar contraseña"
+                        @click="onResetPasswordPersonal(p)"
+                      >
+                        🔑
+                      </button>
+                      <button
+                        v-if="canHardDelete"
                         class="dash-btn-icon dash-btn-icon--danger"
                         type="button"
                         title="Eliminar ficha"
@@ -2484,6 +2612,7 @@
                         ✎
                       </button>
                       <button
+                        v-if="canHardDelete"
                         class="dash-btn-icon dash-btn-icon--danger"
                         type="button"
                         title="Eliminar"
@@ -2929,6 +3058,16 @@ const gasto = reactive({
   descripcion: ''
 })
 
+const gastoComprobanteFile = ref(null)
+const gastoFileInputEl = ref(null)
+const modalVerificar = reactive({
+  open: false,
+  phase: 'loading', // loading | error | ok
+  error: '',
+  errores: []
+})
+let pendingGastoSave = null
+
 const gastoTrabajadorQuery = ref('')
 const gastoTrabajadorOpen = ref(false)
 const gastoTrabajadorHighlight = ref(0)
@@ -3165,6 +3304,10 @@ const canToggleUsuarioEstado = canCreateUsuarios
 const canEditPersonal = canCreateUsuarios
 const canTogglePersonalAcceso = canCreateUsuarios
 const canEditTrabajadores = canEditPersonal
+/** Soft/hard delete (papelera): solo Super Admin / Super Admin Dev */
+const canHardDelete = canCreateAdmins
+/** Reiniciar contraseña de usuarios: solo Super Admin / Super Admin Dev */
+const canResetPassword = canCreateAdmins
 const togglingEstadoId = ref(null)
 const togglingTarjetaId = ref(null)
 
@@ -3359,6 +3502,32 @@ const adminCreateHint = computed(() => {
 })
 
 const admins = ref([])
+const adminBusqueda = ref('')
+const personalBusqueda = ref('')
+
+function coincideNombreORut(row, query) {
+  const q = String(query || '')
+    .trim()
+    .toLowerCase()
+  if (!q) return true
+  const nombre = String(row.nombre || '').toLowerCase()
+  const rutDisplay = String(row.rut || '').toLowerCase()
+  const rutClean = cleanRut(row.rut || '').toLowerCase()
+  const qClean = cleanRut(q).toLowerCase() || q.replace(/[^0-9k]/gi, '').toLowerCase()
+  return (
+    nombre.includes(q) ||
+    rutDisplay.includes(q) ||
+    (qClean && rutClean.includes(qClean))
+  )
+}
+
+const adminsFiltrados = computed(() =>
+  admins.value.filter((a) => coincideNombreORut(a, adminBusqueda.value))
+)
+
+const personalFiltrado = computed(() =>
+  personal.value.filter((p) => coincideNombreORut(p, personalBusqueda.value))
+)
 
 watch(
   creatableAdminRoles,
@@ -3600,6 +3769,21 @@ const cajasDisponiblesParaGasto = computed(() => {
   return all
 })
 
+/** Aviso bajo el selector: el de Personal/Usuarios solo aplica a usuario normal */
+const hintCajasGasto = computed(() => {
+  if (cajasDisponiblesParaGasto.value.length) return ''
+  if (!isAdminSession.value) {
+    return 'Sin cajas asignadas. Un administrador debe asignarlas en Personal / Usuarios.'
+  }
+  if (gasto.trabajadorId !== 'me') {
+    return 'Este trabajador no tiene cajas asignadas. Asígnelas en Personal / Usuarios.'
+  }
+  if (!cajas.value.length) {
+    return 'No hay cajas creadas. Créelas en la pestaña Cajas.'
+  }
+  return ''
+})
+
 const historialFiltroActivo = computed(
   () =>
     historialFiltroCaja.value !== '' ||
@@ -3787,8 +3971,85 @@ function peekNextRinde() {
 }
 
 function onGastoFile(event) {
-  const file = event.target.files?.[0]
+  const file = event.target.files?.[0] || null
+  gastoComprobanteFile.value = file
   gasto.comprobanteNombre = file ? file.name : ''
+}
+
+function onVerificarReplaceFile(event) {
+  const file = event.target.files?.[0] || null
+  gastoComprobanteFile.value = file
+  gasto.comprobanteNombre = file ? file.name : ''
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function onCloseModalVerificar() {
+  if (modalVerificar.phase === 'loading') return
+  modalVerificar.open = false
+  modalVerificar.phase = 'loading'
+  modalVerificar.error = ''
+  modalVerificar.errores = []
+  pendingGastoSave = null
+}
+
+async function verificarComprobanteConIa() {
+  if (!gastoComprobanteFile.value) {
+    throw Object.assign(new Error('Debes adjuntar un comprobante (PDF, PNG o JPG).'), {
+      errores: ['Debes adjuntar un comprobante (PDF, PNG o JPG).']
+    })
+  }
+  const fd = new FormData()
+  fd.append('comprobante', gastoComprobanteFile.value)
+  fd.append('monto', String(parseMontoInput(gasto.monto) || gasto.monto || ''))
+  fd.append('tipo_documento', gasto.tipo)
+  if (gasto.tipo === 'Factura') {
+    fd.append('numero_documento', gasto.numero.trim())
+  }
+  return api.verificarComprobante(fd)
+}
+
+async function ejecutarVerificacionYGuardado() {
+  modalVerificar.open = true
+  modalVerificar.phase = 'loading'
+  modalVerificar.error = ''
+  modalVerificar.errores = []
+
+  try {
+    const [verifyResult] = await Promise.all([
+      verificarComprobanteConIa(),
+      sleep(5000)
+    ])
+
+    if (!verifyResult?.ok || !verifyResult?.comprobante_url) {
+      throw Object.assign(new Error('No se pudo validar el comprobante'), {
+        errores: ['No se pudo validar el comprobante']
+      })
+    }
+
+    modalVerificar.phase = 'ok'
+    const payload = {
+      ...pendingGastoSave,
+      comprobante_url: verifyResult.comprobante_url
+    }
+    await api.createRendicion(payload)
+    await loadDashboardData()
+    modalVerificar.open = false
+    pendingGastoSave = null
+    closeFormGasto()
+  } catch (err) {
+    modalVerificar.phase = 'error'
+    modalVerificar.error =
+      err?.message || 'No se pudo verificar el comprobante. Sube un documento más claro.'
+    modalVerificar.errores = Array.isArray(err?.errores) ? err.errores : [modalVerificar.error]
+  }
+}
+
+async function retryVerificarYGuardar() {
+  if (!gastoComprobanteFile.value || !pendingGastoSave) return
+  await ejecutarVerificacionYGuardado()
 }
 
 function onAsignacionFile(event) {
@@ -3968,6 +4229,15 @@ async function onSaveGasto() {
   if (palabrasDescripcion.value > 500) return
   if (gasto.tipo === 'Factura' && !gasto.numero.trim()) return
   if (!gasto.cajaGroupKey) return
+  if (!gastoComprobanteFile.value) {
+    saveError.value = 'El comprobante es obligatorio. Adjunta PDF, PNG o JPG.'
+    return
+  }
+  const montoNum = parseMontoInput(gasto.monto)
+  if (!Number.isFinite(montoNum) || montoNum <= 0) {
+    saveError.value = 'Ingresa un monto total válido.'
+    return
+  }
 
   onGastoTrabajadorChange()
 
@@ -3979,7 +4249,6 @@ async function onSaveGasto() {
 
   let trabajadorId = null
   if (!isAdminSession.value) {
-    // Usuario normal: siempre su propio trabajador (no se puede forzar otro)
     trabajadorId = user.value?.trabajador_id || null
   } else if (gasto.trabajadorId !== 'me') {
     trabajadorId = Number(gasto.trabajadorId)
@@ -3993,24 +4262,18 @@ async function onSaveGasto() {
     return
   }
 
-  try {
-    saveError.value = ''
-    await api.createRendicion({
-      caja_id: cajaId,
-      trabajador_id: trabajadorId,
-      fecha_documento: gasto.fecha,
-      tipo_documento: gasto.tipo,
-      numero_documento: gasto.tipo === 'Factura' ? gasto.numero.trim() : null,
-      monto: parseMontoInput(gasto.monto),
-      origen_pago: origenFromMetodo(gasto.metodoPago),
-      comprobante_url: gasto.comprobanteNombre || null,
-      descripcion: gasto.descripcion || null
-    })
-    await loadDashboardData()
-    closeFormGasto()
-  } catch (err) {
-    saveError.value = err?.message || 'No se pudo guardar el gasto'
+  saveError.value = ''
+  pendingGastoSave = {
+    caja_id: cajaId,
+    trabajador_id: trabajadorId,
+    fecha_documento: gasto.fecha,
+    tipo_documento: gasto.tipo,
+    numero_documento: gasto.tipo === 'Factura' ? gasto.numero.trim() : null,
+    monto: montoNum,
+    origen_pago: origenFromMetodo(gasto.metodoPago),
+    descripcion: gasto.descripcion || null
   }
+  await ejecutarVerificacionYGuardado()
 }
 
 function resetGastoFormFields() {
@@ -4020,6 +4283,8 @@ function resetGastoFormFields() {
   gasto.metodoPago = 'efectivo'
   gasto.descripcion = ''
   gasto.comprobanteNombre = ''
+  gastoComprobanteFile.value = null
+  if (gastoFileInputEl.value) gastoFileInputEl.value.value = ''
   gasto.trabajadorId = 'me'
   gastoTrabajadorOpen.value = false
   gastoTrabajadorHighlight.value = 0
@@ -4593,7 +4858,7 @@ function onToggleEstadoPersonal(p) {
 }
 
 async function onDeletePersonal(p) {
-  if (!canEditPersonal.value || !p?.id) return
+  if (!canHardDelete.value || !p?.id) return
   const msg = p.tieneUsuario
     ? `¿Eliminar la ficha de "${p.nombre}" (${formatRut(p.rut)})? También se desactivará el acceso de usuario (soft delete).`
     : `¿Eliminar la ficha de "${p.nombre}" (${formatRut(p.rut)})? (soft delete)`
@@ -4610,8 +4875,32 @@ async function onDeletePersonal(p) {
   }
 }
 
+async function onResetPasswordPersonal(p) {
+  if (!canResetPassword.value || !p?.usuarioId) return
+  if (
+    !confirm(
+      `¿Reiniciar la contraseña de "${p.nombre}" (${formatRut(p.rut)})?\nSe generará una clave temporal basada en el RUT.`
+    )
+  ) {
+    return
+  }
+  try {
+    saveError.value = ''
+    const result = await api.resetPasswordUsuario(p.usuarioId, { mode: 'rut' })
+    openModalCredenciales({
+      nombre: result.nombre || p.nombre,
+      rut: result.rut || p.rut,
+      correo: result.correo || p.correo,
+      password: result.password,
+      rol: result.rol || p.usuarioRol || 'USER_RENDIDOR'
+    })
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo reiniciar la contraseña'
+  }
+}
+
 async function onDeleteAdmin(admin) {
-  if (!canCreateAdmins.value || !admin?.id) return
+  if (!canHardDelete.value || !admin?.id) return
   if (admin.id === user.value?.id) {
     saveError.value = 'No puedes eliminarte a ti mismo'
     return
@@ -4623,6 +4912,34 @@ async function onDeleteAdmin(admin) {
     await loadDashboardData()
   } catch (err) {
     saveError.value = err?.message || 'No se pudo eliminar el administrador'
+  }
+}
+
+async function onResetPasswordAdmin(admin) {
+  if (!canResetPassword.value || !admin?.id) return
+  if (admin.id === user.value?.id) {
+    saveError.value = 'No puedes reiniciar tu propia contraseña desde aquí; usa Mi Perfil.'
+    return
+  }
+  if (
+    !confirm(
+      `¿Reiniciar la contraseña de "${admin.nombre || admin.correo || admin.rut}"?\nSe generará una clave temporal basada en el RUT.`
+    )
+  ) {
+    return
+  }
+  try {
+    saveError.value = ''
+    const result = await api.resetPasswordUsuario(admin.id, { mode: 'rut' })
+    openModalCredenciales({
+      nombre: result.nombre || admin.nombre,
+      rut: result.rut || admin.rut,
+      correo: result.correo || admin.correo,
+      password: result.password,
+      rol: result.rol || admin.rol
+    })
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo reiniciar la contraseña'
   }
 }
 
@@ -4660,7 +4977,7 @@ function onEditTarjeta(t) {
 }
 
 async function onDeleteTarjeta(t) {
-  if (!t?.id) return
+  if (!canHardDelete.value || !t?.id) return
   if (!confirm(`¿Eliminar la tarjeta "${t.alias}"? (soft delete)`)) return
   try {
     saveError.value = ''

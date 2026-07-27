@@ -3,6 +3,7 @@ const { registrarAuditoria } = require('../utils/audit')
 const { calcularArrastreMes, nextCodigo, mesActualYYYYMM } = require('../utils/helpers')
 const { ROLES, ADMINS } = require('../middlewares/role.middleware')
 const { assertTarjetaPermitePago } = require('../utils/tarjetaPago')
+const { guardarYVerificarComprobante } = require('../utils/verificarComprobante')
 
 async function assertCajaAsignadaATrabajador(trabajadorId, cajaId) {
   const rows = await query(
@@ -15,6 +16,39 @@ async function assertCajaAsignadaATrabajador(trabajadorId, cajaId) {
     [trabajadorId, cajaId]
   )
   return Boolean(rows[0])
+}
+
+async function verificarComprobanteHandler(req, res) {
+  try {
+    const body = req.body || {}
+    const result = await guardarYVerificarComprobante({
+      file: req.file,
+      montoEsperado: body.monto,
+      tipoDocumento: body.tipo_documento,
+      numeroDocumento: body.numero_documento
+    })
+
+    if (!result.ok) {
+      return res.status(400).json({
+        ok: false,
+        error: result.errores[0] || 'Comprobante inválido',
+        errores: result.errores,
+        detalle: result.detalle || {}
+      })
+    }
+
+    return res.json({
+      ok: true,
+      comprobante_url: result.comprobante_url,
+      detalle: result.detalle || {}
+    })
+  } catch (err) {
+    console.error('[verificarComprobante]', err)
+    return res.status(500).json({
+      ok: false,
+      error: err?.message || 'Error al verificar el comprobante'
+    })
+  }
 }
 
 async function listRendiciones(req, res) {
@@ -83,6 +117,12 @@ async function createRendicion(req, res) {
 
     if (!caja_id || !fecha_documento || !tipo_documento || monto === undefined || !origen_pago) {
       return res.status(400).json({ error: 'Faltan campos obligatorios' })
+    }
+
+    if (!String(comprobante_url || '').trim()) {
+      return res.status(400).json({
+        error: 'El comprobante es obligatorio. Ningún cobro puede guardarse sin documento.'
+      })
     }
 
     if (tipo_documento === 'Factura' && !String(numero_documento || '').trim()) {
@@ -390,5 +430,6 @@ module.exports = {
   listRendiciones,
   createRendicion,
   updateRendicion,
-  softDeleteRendicion
+  softDeleteRendicion,
+  verificarComprobanteHandler
 }

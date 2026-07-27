@@ -107,6 +107,10 @@ Si solo cambió una capa, reinicia solo ese proceso PM2.
   - Override en `server/.env`: `STORAGE_PATH=/home/basalto/apps/Basalto_rendiciones/Rendiciones_Storage`
   - Subcarpetas: `comprobantes/`, `anticipos/`, `exports/`, `tmp/`
   - Lectura vía `GET /api/files/...`
+- **IA (Gemini) — verificación de comprobantes:**
+  - En `server/.env`: `GEMINI_API_KEY`, `GEMINI_ENABLED=1`, opcional `GEMINI_MODEL` / `GEMINI_MODEL_FALLBACKS`
+  - Endpoint: `POST /api/rendiciones/verificar-comprobante` (multipart). Exige monto legible; en Factura también N° de documento.
+  - Plantilla: `server/.env.example`
 - **Sync Turnos ↔ Rendiciones:**
   - Env Turnos: `TURNOS_DB_HOST`, `TURNOS_DB_PORT`, `TURNOS_DB_USER`, `TURNOS_DB_PASS`, `TURNOS_DB_NAME` (default `basalto`)
   - API: `POST /api/admin/sync-bidireccional` (Super Admin), body opcional `{ "dryRun": true }`

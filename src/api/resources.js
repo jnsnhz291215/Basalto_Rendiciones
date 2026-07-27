@@ -1,4 +1,4 @@
-import { apiFetch } from './client'
+import { apiFetch, apiUrl, getToken } from './client'
 
 function unwrapList(data) {
   return Array.isArray(data) ? data : []
@@ -79,6 +79,37 @@ export async function createRendicion(payload) {
     method: 'POST',
     body: JSON.stringify(payload)
   })
+}
+
+/** Verifica comprobante con IA (FormData: comprobante, monto, tipo_documento, numero_documento?) */
+export async function verificarComprobante(formData) {
+  const headers = {}
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  const res = await fetch(apiUrl('/api/rendiciones/verificar-comprobante'), {
+    method: 'POST',
+    headers,
+    body: formData,
+    credentials: 'omit'
+  })
+
+  let data = null
+  try {
+    data = await res.json()
+  } catch {
+    data = null
+  }
+
+  if (!res.ok) {
+    const err = new Error(
+      data?.error || data?.errores?.[0] || data?.message || `Error ${res.status}`
+    )
+    err.errores = data?.errores || [err.message]
+    err.detalle = data?.detalle || null
+    throw err
+  }
+  return data
 }
 
 export async function updateRendicion(id, payload) {
@@ -211,6 +242,13 @@ export async function deleteTarjeta(id) {
 
 export async function deleteUsuario(id) {
   return jsonOrThrow(`/api/admin/usuarios/${id}`, { method: 'DELETE' })
+}
+
+export async function resetPasswordUsuario(id, payload = {}) {
+  return jsonOrThrow(`/api/admin/usuarios/${id}/reset-password`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
 }
 
 export async function listTarjetas() {

@@ -203,6 +203,12 @@ async function updateTrabajador(req, res) {
 
 async function softDeleteTrabajador(req, res) {
   try {
+    if (!SUPER_ADMINS.includes(req.user.rol)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Solo Super Admin puede eliminar fichas'
+      })
+    }
     const id = Number(req.params.id)
     const result = await query(
       `UPDATE trabajadores SET is_deleted = TRUE, deleted_at = NOW()
@@ -522,6 +528,12 @@ async function updateUsuario(req, res) {
 
 async function softDeleteUsuario(req, res) {
   try {
+    if (!SUPER_ADMINS.includes(req.user.rol)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Solo Super Admin puede eliminar usuarios'
+      })
+    }
     const id = Number(req.params.id)
     if (id === req.user.id) {
       return res.status(400).json({ error: 'No puedes eliminarte a ti mismo' })
@@ -544,6 +556,74 @@ async function softDeleteUsuario(req, res) {
     return res.json({ ok: true })
   } catch (err) {
     console.error('[softDeleteUsuario]', err)
+    return res.status(500).json({ error: 'Internal Server Error' })
+  }
+}
+
+/**
+ * Reinicia contraseña (solo Super Admin / Super Admin Dev).
+ * Body opcional: { password?, mode?: 'rut'|'manual' }
+ */
+async function resetPasswordUsuario(req, res) {
+  try {
+    if (!SUPER_ADMINS.includes(req.user.rol)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Solo Super Admin puede reiniciar contraseñas'
+      })
+    }
+    const id = Number(req.params.id)
+    if (id === req.user.id) {
+      return res.status(400).json({
+        error: 'No puedes reiniciar tu propia contraseña desde este endpoint'
+      })
+    }
+
+    const rows = await query(
+      `SELECT u.id, u.rut, u.correo, u.rol, u.password_hash,
+              t.nombre_completo AS trabajador_nombre
+       FROM usuarios u
+       LEFT JOIN trabajadores t ON t.id = u.trabajador_id AND t.is_deleted = FALSE
+       WHERE u.id = ? AND u.is_deleted = FALSE`,
+      [id]
+    )
+    if (!rows[0]) return res.status(404).json({ error: 'Usuario no encontrado' })
+
+    const body = req.body || {}
+    let passwordPlain = String(body.password || '').trim()
+    if (!passwordPlain) {
+      // Por defecto: clave temporal = RUT limpio
+      passwordPlain = cleanRutValue(rows[0].rut)
+    }
+    if (!passwordPlain || passwordPlain.length < 4) {
+      return res.status(400).json({ error: 'No se pudo generar una contraseña válida' })
+    }
+
+    const hash = await bcrypt.hash(passwordPlain, 10)
+    await query(
+      `UPDATE usuarios SET password_hash = ? WHERE id = ? AND is_deleted = FALSE`,
+      [hash, id]
+    )
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      'MODIFICAR',
+      'Usuarios',
+      `Reinicio de contraseña usuario id=${id}`
+    )
+
+    return res.json({
+      ok: true,
+      id: rows[0].id,
+      rut: rows[0].rut,
+      correo: rows[0].correo,
+      rol: rows[0].rol,
+      nombre: rows[0].trabajador_nombre || rows[0].correo,
+      password: passwordPlain
+    })
+  } catch (err) {
+    console.error('[resetPasswordUsuario]', err)
     return res.status(500).json({ error: 'Internal Server Error' })
   }
 }
@@ -964,6 +1044,12 @@ async function updateTarjeta(req, res) {
 
 async function softDeleteTarjeta(req, res) {
   try {
+    if (!SUPER_ADMINS.includes(req.user.rol)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Solo Super Admin puede eliminar tarjetas'
+      })
+    }
     const id = Number(req.params.id)
     const result = await query(
       `UPDATE tarjetas_empresa SET is_deleted = TRUE, deleted_at = NOW()
@@ -1051,6 +1137,7 @@ module.exports = {
   createUsuario,
   updateUsuario,
   softDeleteUsuario,
+  resetPasswordUsuario,
   listPersonal,
   createPersonal,
   updatePersonal,

@@ -9,6 +9,7 @@ const {
   createUsuario,
   updateUsuario,
   softDeleteUsuario,
+  resetPasswordUsuario,
   listPersonal,
   createPersonal,
   updatePersonal,
@@ -36,20 +37,21 @@ router.put('/personal/:idOrRut', updatePersonal)
 router.get('/trabajadores', listTrabajadores)
 router.post('/trabajadores', createTrabajador)
 router.put('/trabajadores/:id', updateTrabajador)
-router.delete('/trabajadores/:id', softDeleteTrabajador)
+router.delete('/trabajadores/:id', checkRole(SUPER_ADMINS), softDeleteTrabajador)
 router.put('/trabajadores/:id/cajas', setTrabajadorCajas)
 
 /* Usuarios (legacy / Admins) */
 router.get('/usuarios', listUsuarios)
 router.post('/usuarios', createUsuario)
 router.put('/usuarios/:id', updateUsuario)
-router.delete('/usuarios/:id', softDeleteUsuario)
+router.post('/usuarios/:id/reset-password', checkRole(SUPER_ADMINS), resetPasswordUsuario)
+router.delete('/usuarios/:id', checkRole(SUPER_ADMINS), softDeleteUsuario)
 
 /* Tarjetas */
 router.get('/tarjetas', listTarjetas)
 router.post('/tarjetas', createTarjeta)
 router.put('/tarjetas/:id', updateTarjeta)
-router.delete('/tarjetas/:id', softDeleteTarjeta)
+router.delete('/tarjetas/:id', checkRole(SUPER_ADMINS), softDeleteTarjeta)
 
 /* Audit logs - solo Super Admins */
 router.get('/audit-logs', checkRole(SUPER_ADMINS), listAuditLogs)
