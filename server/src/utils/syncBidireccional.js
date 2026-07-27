@@ -208,22 +208,110 @@ async function loadRendicionTrabajadores() {
 }
 
 async function ensureTrabajadorRendicion({ rutClean, nombreCompleto, cargo }, stats) {
+  const nombre = String(nombreCompleto || '').trim() || 'Sin nombre'
   const existing = await query(
-    `SELECT id FROM trabajadores
+    `SELECT id, nombre_completo FROM trabajadores
      WHERE REPLACE(REPLACE(UPPER(rut), '.', ''), '-', '') = ?
        AND is_deleted = FALSE
      LIMIT 1`,
     [rutClean]
   )
-  if (existing[0]) return existing[0].id
+  if (existing[0]) {
+    const actual = String(existing[0].nombre_completo || '').trim()
+    if (
+      nombre &&
+      nombre !== 'Sin nombre' &&
+      (!actual || actual === 'Sin nombre')
+    ) {
+      try {
+        await query(
+          `UPDATE trabajadores SET nombre_completo = ?
+           WHERE id = ? AND is_deleted = FALSE`,
+          [nombre, existing[0].id]
+        )
+        stats.trabajadores.actualizados_en_rendiciones += 1
+      } catch (err) {
+        stats.errores.push(`fill nombre trab ${rutClean}: ${err.message}`)
+      }
+    }
+    return existing[0].id
+  }
 
   const result = await query(
     `INSERT INTO trabajadores (rut, nombre_completo, cargo)
      VALUES (?, ?, ?)`,
-    [rutClean, nombreCompleto || 'Sin nombre', cargo || null]
+    [rutClean, nombre, cargo || null]
   )
   stats.trabajadores.creados_en_rendiciones += 1
   return result.insertId
+}
+
+/**
+ * Vincula usuarios.trabajador_id con un trabajador que tenga el nombre de Turnos.
+ * No toca estado. Sirve para altas y repair de admins/users ya syncados sin nombre.
+ */
+async function linkOrRepairTrabajadorUsuario(rendRow, turnosPerson, stats) {
+  if (!rendRow?._norm || !turnosPerson) return
+
+  const nombre =
+    joinNombre(
+      turnosPerson.nombres,
+      turnosPerson.apellido_paterno,
+      turnosPerson.apellido_materno
+    ) || 'Sin nombre'
+
+  try {
+    if (!rendRow.trabajador_id) {
+      const trabajadorId = await ensureTrabajadorRendicion(
+        { rutClean: rendRow._norm, nombreCompleto: nombre },
+        stats
+      )
+      await query(
+        `UPDATE usuarios SET trabajador_id = ?
+         WHERE id = ? AND is_deleted = FALSE`,
+        [trabajadorId, rendRow.id]
+      )
+      rendRow.trabajador_id = trabajadorId
+      stats.usuarios.actualizados_en_rendiciones += 1
+      return
+    }
+
+    const trab = await query(
+      `SELECT id, nombre_completo FROM trabajadores
+       WHERE id = ? AND is_deleted = FALSE LIMIT 1`,
+      [rendRow.trabajador_id]
+    )
+    if (!trab[0]) {
+      const trabajadorId = await ensureTrabajadorRendicion(
+        { rutClean: rendRow._norm, nombreCompleto: nombre },
+        stats
+      )
+      await query(
+        `UPDATE usuarios SET trabajador_id = ?
+         WHERE id = ? AND is_deleted = FALSE`,
+        [trabajadorId, rendRow.id]
+      )
+      rendRow.trabajador_id = trabajadorId
+      stats.usuarios.actualizados_en_rendiciones += 1
+      return
+    }
+
+    const actual = String(trab[0].nombre_completo || '').trim()
+    if (
+      nombre &&
+      nombre !== 'Sin nombre' &&
+      (!actual || actual === 'Sin nombre')
+    ) {
+      await query(
+        `UPDATE trabajadores SET nombre_completo = ?
+         WHERE id = ? AND is_deleted = FALSE`,
+        [nombre, trab[0].id]
+      )
+      stats.trabajadores.actualizados_en_rendiciones += 1
+    }
+  } catch (err) {
+    stats.errores.push(`link/repair trabajador ${rendRow._norm}: ${err.message}`)
+  }
 }
 
 /**
@@ -441,16 +529,21 @@ async function syncUsuarios(stats) {
   for (const admin of admins) {
     if (!admin._norm) continue
     const dest = rendByNorm.get(admin._norm)
+    const nombre = joinNombre(admin.nombres, admin.apellido_paterno, admin.apellido_materno)
 
     if (!dest) {
       try {
         const correo = (admin.email || `${admin._norm}@basalto.local`).trim()
         const hash = admin.password || (await fallbackHash(admin._norm))
         const rol = mapTurnosAdminToRol(admin.es_super_admin)
+        const trabajadorId = await ensureTrabajadorRendicion(
+          { rutClean: admin._norm, nombreCompleto: nombre },
+          stats
+        )
         await query(
           `INSERT INTO usuarios (trabajador_id, rut, correo, password_hash, rol, estado)
-           VALUES (NULL, ?, ?, ?, ?, 'inactivo')`,
-          [admin._norm, correo, hash, rol]
+           VALUES (?, ?, ?, ?, ?, 'inactivo')`,
+          [trabajadorId, admin._norm, correo, hash, rol]
         )
         stats.usuarios.creados_en_rendiciones += 1
       } catch (err) {
@@ -459,6 +552,7 @@ async function syncUsuarios(stats) {
       continue
     }
 
+    await linkOrRepairTrabajadorUsuario(dest, admin, stats)
     await syncPairedUsuario({ turnosRow: admin, rendRow: dest, turnosKind: 'admin' }, stats)
   }
 
@@ -491,6 +585,7 @@ async function syncUsuarios(stats) {
       continue
     }
 
+    await linkOrRepairTrabajadorUsuario(dest, u, stats)
     await syncPairedUsuario({ turnosRow: u, rendRow: dest, turnosKind: 'user' }, stats)
   }
 
@@ -538,10 +633,19 @@ async function ensureUsuarioRendicionDesdeTurnos(
       const correo = (turnosAdmin.email || `${rutNorm}@basalto.local`).trim()
       const hash = turnosAdmin.password || (await fallbackHash(rutNorm))
       const rol = mapTurnosAdminToRol(turnosAdmin.es_super_admin)
+      const nombre = joinNombre(
+        turnosAdmin.nombres,
+        turnosAdmin.apellido_paterno,
+        turnosAdmin.apellido_materno
+      )
+      const trabajadorId = await ensureTrabajadorRendicion(
+        { rutClean: rutNorm, nombreCompleto: nombre },
+        stats
+      )
       await query(
         `INSERT INTO usuarios (trabajador_id, rut, correo, password_hash, rol, estado)
-         VALUES (NULL, ?, ?, ?, ?, 'inactivo')`,
-        [rutNorm, correo, hash, rol]
+         VALUES (?, ?, ?, ?, ?, 'inactivo')`,
+        [trabajadorId, rutNorm, correo, hash, rol]
       )
       stats.usuarios.creados_en_rendiciones += 1
     } catch (err) {

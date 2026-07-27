@@ -209,12 +209,35 @@ async function createUsuario(req, res) {
       return res.status(403).json({ error: 'Solo Super Admin - Dev puede crear ese rol' })
     }
 
+    let trabajadorId = trabajador_id || null
+    const nombre = adminFormNombre(req.body)
+    // Nombre en UI vive en trabajadores; si crean admin con nombre y sin ficha, asegurarla
+    if (!trabajadorId && nombre && rut?.trim()) {
+      const rutClean = String(rut).replace(/[^0-9kK]/g, '').toUpperCase()
+      const existingTrab = await query(
+        `SELECT id FROM trabajadores
+         WHERE REPLACE(REPLACE(UPPER(rut), '.', ''), '-', '') = ?
+           AND is_deleted = FALSE
+         LIMIT 1`,
+        [rutClean]
+      )
+      if (existingTrab[0]) {
+        trabajadorId = existingTrab[0].id
+      } else {
+        const trabResult = await query(
+          `INSERT INTO trabajadores (rut, nombre_completo, cargo) VALUES (?, ?, ?)`,
+          [rutClean || rut.trim(), nombre, null]
+        )
+        trabajadorId = trabResult.insertId
+      }
+    }
+
     const hash = await bcrypt.hash(password, 10)
     const result = await query(
       `INSERT INTO usuarios (trabajador_id, rut, correo, password_hash, rol, estado)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [
-        trabajador_id || null,
+        trabajadorId,
         rut.trim(),
         correo.trim(),
         hash,
@@ -243,7 +266,7 @@ async function createUsuario(req, res) {
     // password solo en esta respuesta inicial (nunca se vuelve a exponer)
     return res.status(201).json({
       ...row,
-      nombre: row.trabajador_nombre || adminFormNombre(req.body) || row.correo,
+      nombre: row.trabajador_nombre || nombre || row.correo,
       password
     })
   } catch (err) {

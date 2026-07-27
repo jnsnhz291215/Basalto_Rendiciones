@@ -152,10 +152,14 @@ export function mapUsuario(row) {
 }
 
 export function mapAdminFromUsuario(row) {
+  const nombreTrab =
+    row.trabajador_nombre && row.trabajador_nombre !== '—'
+      ? row.trabajador_nombre
+      : null
   return {
     id: row.id,
     rut: row.rut,
-    nombre: row.trabajador_nombre || row.correo,
+    nombre: nombreTrab || row.correo || '',
     correo: row.correo,
     rol: rolUiFromApi(row.rol),
     estado: row.estado === 'activo' ? 'Activo' : 'Inactivo'

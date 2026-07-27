@@ -1724,10 +1724,11 @@
                     <th>RUT / Usuario</th>
                     <th>Rol</th>
                     <th class="dash-table-center">Estado</th>
+                    <th v-if="canCreateAdmins" class="dash-table-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="admin in admins" :key="admin.rut">
+                  <tr v-for="admin in admins" :key="admin.id || admin.rut">
                     <td class="dash-table-strong">
                       {{ admin.rut }}
                       <span class="dash-subline">{{ admin.nombre }}</span>
@@ -1736,7 +1737,23 @@
                       <span class="dash-badge dash-badge--accent">{{ admin.rol }}</span>
                     </td>
                     <td class="dash-table-center">
-                      <span class="dash-status dash-status--ok">{{ admin.estado }}</span>
+                      <span
+                        class="dash-status"
+                        :class="admin.estado === 'Activo' ? 'dash-status--ok' : 'dash-status--warn'"
+                      >
+                        {{ admin.estado }}
+                      </span>
+                    </td>
+                    <td v-if="canCreateAdmins" class="dash-table-center dash-table-actions">
+                      <button
+                        class="dash-btn-icon dash-btn-icon--danger"
+                        type="button"
+                        title="Eliminar"
+                        :disabled="admin.id === user?.id"
+                        @click="onDeleteAdmin(admin)"
+                      >
+                        🗑
+                      </button>
                     </td>
                   </tr>
                 </tbody>
@@ -1896,13 +1913,24 @@
                     <th>Correo / Login</th>
                     <th>Trabajador Vinculado</th>
                     <th>Cargo</th>
+                    <th v-if="canCreateUsuarios" class="dash-table-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="u in usuarios" :key="u.correo">
+                  <tr v-for="u in usuarios" :key="u.id || u.correo">
                     <td class="dash-table-strong">{{ u.correo }}</td>
                     <td>{{ u.trabajador }}</td>
                     <td class="dash-muted">{{ u.cargo }}</td>
+                    <td v-if="canCreateUsuarios" class="dash-table-center dash-table-actions">
+                      <button
+                        class="dash-btn-icon dash-btn-icon--danger"
+                        type="button"
+                        title="Eliminar"
+                        @click="onDeleteUsuario(u)"
+                      >
+                        🗑
+                      </button>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -1924,7 +1952,13 @@
                 @click="toggleFormTrabajador"
               >
                 <span>{{ trabajadorFormOpen ? '▲' : '＋' }}</span>
-                <span>{{ trabajadorFormOpen ? 'Ocultar Formulario' : 'Nueva Ficha Trabajador' }}</span>
+                <span>
+                  {{
+                    trabajadorFormOpen
+                      ? 'Ocultar Formulario'
+                      : 'Nueva Ficha Trabajador'
+                  }}
+                </span>
               </button>
             </div>
 
@@ -1937,7 +1971,7 @@
               <div class="dash-caja-form-head">
                 <div>
                   <h2 class="dash-assign-title dash-assign-title--flush">
-                    Nueva Ficha de Trabajador
+                    {{ trabajadorForm.editId ? 'Editar Ficha de Trabajador' : 'Nueva Ficha de Trabajador' }}
                   </h2>
                   <p class="dash-hint">
                     Para personal que rinde o recibe anticipos sin requerir usuario.
@@ -1986,7 +2020,7 @@
                     Cancelar
                   </button>
                   <button class="dash-btn-primary" type="submit">
-                    <span>Guardar Trabajador</span>
+                    <span>{{ trabajadorForm.editId ? 'Actualizar Trabajador' : 'Guardar Trabajador' }}</span>
                   </button>
                 </div>
               </form>
@@ -2031,13 +2065,29 @@
                         {{ t.tieneUsuario ? 'Sí' : 'No' }}
                       </span>
                     </td>
-                    <td class="dash-table-center">
+                    <td class="dash-table-center dash-table-actions">
                       <button
                         class="dash-btn-edit"
                         type="button"
                         @click="openModalAsignarCajas(t)"
                       >
                         Asignar cajas
+                      </button>
+                      <button
+                        class="dash-btn-icon"
+                        type="button"
+                        title="Editar"
+                        @click="onEditTrabajador(t)"
+                      >
+                        ✎
+                      </button>
+                      <button
+                        class="dash-btn-icon dash-btn-icon--danger"
+                        type="button"
+                        title="Eliminar"
+                        @click="onDeleteTrabajador(t)"
+                      >
+                        🗑
                       </button>
                     </td>
                   </tr>
@@ -2905,6 +2955,7 @@ const rutTrabajadorSeleccionado = computed(() => {
 const usuarios = ref([])
 
 const trabajadorForm = reactive({
+  editId: null,
   rut: '',
   nombre: '',
   cargo: ''
@@ -3863,6 +3914,7 @@ function toggleFormTrabajador() {
     closeFormTrabajador()
     return
   }
+  trabajadorForm.editId = null
   trabajadorForm.rut = ''
   trabajadorForm.nombre = ''
   trabajadorForm.cargo = ''
@@ -3871,9 +3923,59 @@ function toggleFormTrabajador() {
 
 function closeFormTrabajador() {
   trabajadorFormOpen.value = false
+  trabajadorForm.editId = null
   trabajadorForm.rut = ''
   trabajadorForm.nombre = ''
   trabajadorForm.cargo = ''
+}
+
+function onEditTrabajador(t) {
+  if (!t?.id) return
+  trabajadorForm.editId = t.id
+  trabajadorForm.rut = t.rut || ''
+  trabajadorForm.nombre = t.nombre || ''
+  trabajadorForm.cargo = t.cargo === '—' ? '' : t.cargo || ''
+  trabajadorFormOpen.value = true
+}
+
+async function onDeleteTrabajador(t) {
+  if (!t?.id) return
+  if (!confirm(`¿Eliminar al trabajador "${t.nombre}" (${t.rut})? (soft delete)`)) return
+  try {
+    saveError.value = ''
+    await api.deleteTrabajador(t.id)
+    await loadDashboardData()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo eliminar el trabajador'
+  }
+}
+
+async function onDeleteAdmin(admin) {
+  if (!canCreateAdmins.value || !admin?.id) return
+  if (admin.id === user.value?.id) {
+    saveError.value = 'No puedes eliminarte a ti mismo'
+    return
+  }
+  if (!confirm(`¿Eliminar al administrador "${admin.nombre || admin.rut}"? (soft delete)`)) return
+  try {
+    saveError.value = ''
+    await api.deleteUsuario(admin.id)
+    await loadDashboardData()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo eliminar el administrador'
+  }
+}
+
+async function onDeleteUsuario(u) {
+  if (!canCreateUsuarios.value || !u?.id) return
+  if (!confirm(`¿Eliminar al usuario "${u.correo}"? (soft delete)`)) return
+  try {
+    saveError.value = ''
+    await api.deleteUsuario(u.id)
+    await loadDashboardData()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo eliminar el usuario'
+  }
 }
 
 function toggleFormTarjeta() {
@@ -3949,7 +4051,7 @@ async function onSaveAdmin() {
       rut: adminForm.rut.trim(),
       correo: adminForm.correo.trim(),
       password: passwordTemporal,
-      rol: rolApiFromUi(adminForm.rol),
+      rol: rolApiFromUi(shortAdminRol(adminForm.rol)),
       estado: 'activo',
       nombre: adminForm.nombre.trim()
     })
@@ -4042,15 +4144,20 @@ async function onSaveTrabajador() {
   if (!trabajadorForm.rut.trim() || !trabajadorForm.nombre.trim()) return
   try {
     saveError.value = ''
-    await api.createTrabajador({
+    const payload = {
       rut: trabajadorForm.rut.trim(),
       nombre_completo: trabajadorForm.nombre.trim(),
       cargo: trabajadorForm.cargo.trim() || null
-    })
+    }
+    if (trabajadorForm.editId) {
+      await api.updateTrabajador(trabajadorForm.editId, payload)
+    } else {
+      await api.createTrabajador(payload)
+    }
     await loadDashboardData()
     closeFormTrabajador()
   } catch (err) {
-    saveError.value = err?.message || 'No se pudo crear el trabajador'
+    saveError.value = err?.message || 'No se pudo guardar el trabajador'
   }
 }
 
