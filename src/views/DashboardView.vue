@@ -103,6 +103,187 @@
       </div>
     </div>
 
+    <!-- Modal editar trabajador -->
+    <div
+      v-if="modalEditTrabajador.open"
+      class="dash-modal-backdrop"
+      @click.self="closeModalEditTrabajador"
+    >
+      <div class="dash-modal" role="dialog" aria-modal="true">
+        <div class="dash-modal-head">
+          <h3>Editar Trabajador</h3>
+          <button
+            class="dash-modal-close"
+            type="button"
+            aria-label="Cerrar"
+            @click="closeModalEditTrabajador"
+          >
+            ×
+          </button>
+        </div>
+        <form class="dash-admin-form" @submit.prevent="onSaveEditTrabajador">
+          <div class="dash-field">
+            <label>RUT</label>
+            <input v-model="modalEditTrabajador.rut" type="text" placeholder="12.345.678-9" />
+          </div>
+          <div class="dash-field">
+            <label>Nombres y Apellidos</label>
+            <input
+              v-model="modalEditTrabajador.nombre"
+              type="text"
+              required
+              placeholder="Mario Silva"
+            />
+          </div>
+          <div class="dash-field">
+            <label>Cargo / Rol en Faena</label>
+            <input
+              v-model="modalEditTrabajador.cargo"
+              type="text"
+              placeholder="Conductor Camión Riego"
+            />
+          </div>
+          <p v-if="modalEditTrabajador.error" class="error" role="alert">
+            {{ modalEditTrabajador.error }}
+          </p>
+          <div class="dash-modal-actions">
+            <button class="dash-btn-secondary" type="button" @click="closeModalEditTrabajador">
+              Cancelar
+            </button>
+            <button class="dash-btn-primary" type="submit">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal editar admin -->
+    <div
+      v-if="modalEditAdmin.open"
+      class="dash-modal-backdrop"
+      @click.self="closeModalEditAdmin"
+    >
+      <div class="dash-modal" role="dialog" aria-modal="true">
+        <div class="dash-modal-head">
+          <h3>Editar Administrador</h3>
+          <button
+            class="dash-modal-close"
+            type="button"
+            aria-label="Cerrar"
+            @click="closeModalEditAdmin"
+          >
+            ×
+          </button>
+        </div>
+        <form class="dash-admin-form" @submit.prevent="onSaveEditAdmin">
+          <div class="dash-field">
+            <label>RUT</label>
+            <input :value="modalEditAdmin.rut" type="text" disabled class="dash-mono" />
+          </div>
+          <div class="dash-field">
+            <label>Nombre Completo</label>
+            <input
+              v-model="modalEditAdmin.nombre"
+              type="text"
+              required
+              placeholder="Juan Sanhueza"
+            />
+          </div>
+          <div class="dash-field">
+            <label>Correo Electrónico</label>
+            <input
+              v-model="modalEditAdmin.correo"
+              type="email"
+              required
+              placeholder="jsanhueza@basaltodrilling.cl"
+            />
+          </div>
+          <div class="dash-field">
+            <label>Rol</label>
+            <select v-model="modalEditAdmin.rol" :disabled="!editableAdminRoles.length">
+              <option v-for="rol in editableAdminRoles" :key="rol" :value="rol">
+                {{ rol }}
+              </option>
+            </select>
+          </div>
+          <div class="dash-field">
+            <label>Estado</label>
+            <select v-model="modalEditAdmin.estado">
+              <option value="activo">Activo</option>
+              <option value="inactivo">Inactivo</option>
+            </select>
+          </div>
+          <p v-if="modalEditAdmin.error" class="error" role="alert">{{ modalEditAdmin.error }}</p>
+          <div class="dash-modal-actions">
+            <button class="dash-btn-secondary" type="button" @click="closeModalEditAdmin">
+              Cancelar
+            </button>
+            <button class="dash-btn-primary" type="submit">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal editar usuario -->
+    <div
+      v-if="modalEditUsuario.open"
+      class="dash-modal-backdrop"
+      @click.self="closeModalEditUsuario"
+    >
+      <div class="dash-modal" role="dialog" aria-modal="true">
+        <div class="dash-modal-head">
+          <h3>Editar Usuario</h3>
+          <button
+            class="dash-modal-close"
+            type="button"
+            aria-label="Cerrar"
+            @click="closeModalEditUsuario"
+          >
+            ×
+          </button>
+        </div>
+        <form class="dash-admin-form" @submit.prevent="onSaveEditUsuario">
+          <div class="dash-field">
+            <label>RUT</label>
+            <input :value="modalEditUsuario.rut" type="text" disabled class="dash-mono" />
+          </div>
+          <div class="dash-field">
+            <label>Nombre Completo</label>
+            <input
+              v-model="modalEditUsuario.nombre"
+              type="text"
+              required
+              placeholder="Nombre del trabajador"
+            />
+          </div>
+          <div class="dash-field">
+            <label>Correo de Acceso</label>
+            <input
+              v-model="modalEditUsuario.correo"
+              type="email"
+              required
+              placeholder="usuario@basaltodrilling.cl"
+            />
+          </div>
+          <div class="dash-field">
+            <label>Estado</label>
+            <select v-model="modalEditUsuario.estado">
+              <option value="activo">Activo</option>
+              <option value="inactivo">Inactivo</option>
+            </select>
+          </div>
+          <p v-if="modalEditUsuario.error" class="error" role="alert">
+            {{ modalEditUsuario.error }}
+          </p>
+          <div class="dash-modal-actions">
+            <button class="dash-btn-secondary" type="button" @click="closeModalEditUsuario">
+              Cancelar
+            </button>
+            <button class="dash-btn-primary" type="submit">Guardar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <div class="dash-body">
       <div
         v-if="sidebarOpen"
@@ -1721,7 +1902,9 @@
               <table class="dash-table">
                 <thead>
                   <tr>
-                    <th>RUT / Usuario</th>
+                    <th>RUT</th>
+                    <th>Nombre</th>
+                    <th>Correo</th>
                     <th>Rol</th>
                     <th class="dash-table-center">Estado</th>
                     <th v-if="canCreateAdmins" class="dash-table-center">Acciones</th>
@@ -1729,10 +1912,9 @@
                 </thead>
                 <tbody>
                   <tr v-for="admin in admins" :key="admin.id || admin.rut">
-                    <td class="dash-table-strong">
-                      {{ admin.rut }}
-                      <span class="dash-subline">{{ admin.nombre }}</span>
-                    </td>
+                    <td class="dash-table-strong dash-mono">{{ admin.rut || '—' }}</td>
+                    <td>{{ admin.nombre || '—' }}</td>
+                    <td>{{ admin.correo || '—' }}</td>
                     <td>
                       <span class="dash-badge dash-badge--accent">{{ admin.rol }}</span>
                     </td>
@@ -1745,6 +1927,15 @@
                       </span>
                     </td>
                     <td v-if="canCreateAdmins" class="dash-table-center dash-table-actions">
+                      <button
+                        v-if="canEditAdmins"
+                        class="dash-btn-icon"
+                        type="button"
+                        title="Editar"
+                        @click="onEditAdmin(admin)"
+                      >
+                        ✎
+                      </button>
                       <button
                         class="dash-btn-icon dash-btn-icon--danger"
                         type="button"
@@ -1910,18 +2101,40 @@
               <table class="dash-table">
                 <thead>
                   <tr>
-                    <th>Correo / Login</th>
-                    <th>Trabajador Vinculado</th>
-                    <th>Cargo</th>
+                    <th>RUT</th>
+                    <th>Nombre</th>
+                    <th>Correo</th>
+                    <th>Rol</th>
+                    <th class="dash-table-center">Estado</th>
                     <th v-if="canCreateUsuarios" class="dash-table-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="u in usuarios" :key="u.id || u.correo">
-                    <td class="dash-table-strong">{{ u.correo }}</td>
-                    <td>{{ u.trabajador }}</td>
-                    <td class="dash-muted">{{ u.cargo }}</td>
+                    <td class="dash-table-strong dash-mono">{{ u.rut || '—' }}</td>
+                    <td>{{ u.nombre || '—' }}</td>
+                    <td>{{ u.correo || '—' }}</td>
+                    <td>
+                      <span class="dash-badge dash-badge--accent">{{ u.rolLabel || u.rol || 'Usuario' }}</span>
+                    </td>
+                    <td class="dash-table-center">
+                      <span
+                        class="dash-status"
+                        :class="u.estado === 'Activo' ? 'dash-status--ok' : 'dash-status--warn'"
+                      >
+                        {{ u.estado || '—' }}
+                      </span>
+                    </td>
                     <td v-if="canCreateUsuarios" class="dash-table-center dash-table-actions">
+                      <button
+                        v-if="canEditUsuarios"
+                        class="dash-btn-icon"
+                        type="button"
+                        title="Editar"
+                        @click="onEditUsuario(u)"
+                      >
+                        ✎
+                      </button>
                       <button
                         class="dash-btn-icon dash-btn-icon--danger"
                         type="button"
@@ -1971,7 +2184,7 @@
               <div class="dash-caja-form-head">
                 <div>
                   <h2 class="dash-assign-title dash-assign-title--flush">
-                    {{ trabajadorForm.editId ? 'Editar Ficha de Trabajador' : 'Nueva Ficha de Trabajador' }}
+                    Nueva Ficha de Trabajador
                   </h2>
                   <p class="dash-hint">
                     Para personal que rinde o recibe anticipos sin requerir usuario.
@@ -2020,7 +2233,7 @@
                     Cancelar
                   </button>
                   <button class="dash-btn-primary" type="submit">
-                    <span>{{ trabajadorForm.editId ? 'Actualizar Trabajador' : 'Guardar Trabajador' }}</span>
+                    <span>Guardar Trabajador</span>
                   </button>
                 </div>
               </form>
@@ -2074,6 +2287,7 @@
                         Asignar cajas
                       </button>
                       <button
+                        v-if="canEditTrabajadores"
                         class="dash-btn-icon"
                         type="button"
                         title="Editar"
@@ -2432,6 +2646,36 @@ const modalPerfil = reactive({
   passwordNueva: '',
   error: '',
   ok: ''
+})
+
+const modalEditTrabajador = reactive({
+  open: false,
+  id: null,
+  rut: '',
+  nombre: '',
+  cargo: '',
+  error: ''
+})
+
+const modalEditAdmin = reactive({
+  open: false,
+  id: null,
+  rut: '',
+  nombre: '',
+  correo: '',
+  rol: '',
+  estado: 'activo',
+  error: ''
+})
+
+const modalEditUsuario = reactive({
+  open: false,
+  id: null,
+  rut: '',
+  nombre: '',
+  correo: '',
+  estado: 'activo',
+  error: ''
 })
 
 function onDocClick(event) {
@@ -2843,6 +3087,13 @@ const canCreateUsuarios = computed(() => {
   return nivel === ROLE_DEV || nivel === ROLE_SUPER || nivel === ROLE_ADMIN_CAJA
 })
 
+const canEditAdmins = canCreateAdmins
+const canEditUsuarios = canCreateUsuarios
+const canEditTrabajadores = computed(() => {
+  const nivel = sessionAdminNivel.value
+  return nivel === ROLE_DEV || nivel === ROLE_SUPER || nivel === ROLE_ADMIN_CAJA
+})
+
 /** Admin / Super Admin / Dev pueden rendir a nombre de cualquier trabajador */
 const canIngresarPorOtros = computed(() => {
   const nivel = sessionAdminNivel.value
@@ -2909,6 +3160,23 @@ const creatableAdminRoles = computed(() => {
   return []
 })
 
+/** Roles disponibles al editar: creatables + el rol actual del admin (para no forzar cambio) */
+const editableAdminRoles = computed(() => {
+  const base = [...creatableAdminRoles.value]
+  const current = modalEditAdmin.rol
+  if (current && !base.includes(current)) {
+    // Mapear labels cortos de la tabla a opciones del select
+    if (current === 'Super Admin - Dev' || current.includes('Dev')) {
+      const full = 'Super Admin - Dev (Acceso Total + Eliminación)'
+      if (sessionAdminNivel.value === ROLE_DEV && !base.includes(full)) base.unshift(full)
+      else if (!base.includes(current)) base.unshift(current)
+    } else if (!base.includes(current)) {
+      base.unshift(current)
+    }
+  }
+  return base
+})
+
 const adminCreateHint = computed(() => {
   if (sessionAdminNivel.value === ROLE_DEV) {
     return 'Como Super Admin - Dev puedes crear Super Admins y Administradores de Caja.'
@@ -2955,7 +3223,6 @@ const rutTrabajadorSeleccionado = computed(() => {
 const usuarios = ref([])
 
 const trabajadorForm = reactive({
-  editId: null,
   rut: '',
   nombre: '',
   cargo: ''
@@ -3098,8 +3365,9 @@ async function loadDashboardData() {
           rut: u.rut,
           correo: u.correo,
           rol: u.rol,
-          estado: u.estado,
-          trabajador_nombre: u.trabajador
+          estado: u.estadoApi,
+          trabajador_nombre: u.nombre || null,
+          trabajador_id: u.trabajadorId
         })
       )
 
@@ -3108,9 +3376,15 @@ async function loadDashboardData() {
       .map((u) => ({
         id: u.id,
         correo: u.correo,
+        nombre: u.nombre || '',
         trabajador: u.trabajador,
         cargo: u.cargo,
-        trabajadorId: u.trabajadorId
+        trabajadorId: u.trabajadorId,
+        rut: u.rut,
+        rol: u.rol,
+        rolLabel: u.rolLabel || 'Usuario',
+        estado: u.estado,
+        estadoApi: u.estadoApi
       }))
 
     const tarjetasRaw = await safeList(api.listTarjetas)
@@ -3914,7 +4188,6 @@ function toggleFormTrabajador() {
     closeFormTrabajador()
     return
   }
-  trabajadorForm.editId = null
   trabajadorForm.rut = ''
   trabajadorForm.nombre = ''
   trabajadorForm.cargo = ''
@@ -3923,19 +4196,141 @@ function toggleFormTrabajador() {
 
 function closeFormTrabajador() {
   trabajadorFormOpen.value = false
-  trabajadorForm.editId = null
   trabajadorForm.rut = ''
   trabajadorForm.nombre = ''
   trabajadorForm.cargo = ''
 }
 
 function onEditTrabajador(t) {
-  if (!t?.id) return
-  trabajadorForm.editId = t.id
-  trabajadorForm.rut = t.rut || ''
-  trabajadorForm.nombre = t.nombre || ''
-  trabajadorForm.cargo = t.cargo === '—' ? '' : t.cargo || ''
-  trabajadorFormOpen.value = true
+  if (!canEditTrabajadores.value || !t?.id) return
+  modalEditTrabajador.open = true
+  modalEditTrabajador.id = t.id
+  modalEditTrabajador.rut = t.rut || ''
+  modalEditTrabajador.nombre = t.nombre || ''
+  modalEditTrabajador.cargo = t.cargo === '—' ? '' : t.cargo || ''
+  modalEditTrabajador.error = ''
+}
+
+function closeModalEditTrabajador() {
+  modalEditTrabajador.open = false
+  modalEditTrabajador.id = null
+  modalEditTrabajador.rut = ''
+  modalEditTrabajador.nombre = ''
+  modalEditTrabajador.cargo = ''
+  modalEditTrabajador.error = ''
+}
+
+async function onSaveEditTrabajador() {
+  if (!canEditTrabajadores.value || !modalEditTrabajador.id) return
+  if (!modalEditTrabajador.rut.trim() || !modalEditTrabajador.nombre.trim()) return
+  try {
+    modalEditTrabajador.error = ''
+    saveError.value = ''
+    await api.updateTrabajador(modalEditTrabajador.id, {
+      rut: modalEditTrabajador.rut.trim(),
+      nombre_completo: modalEditTrabajador.nombre.trim(),
+      cargo: modalEditTrabajador.cargo.trim() || null
+    })
+    await loadDashboardData()
+    closeModalEditTrabajador()
+  } catch (err) {
+    modalEditTrabajador.error = err?.message || 'No se pudo actualizar el trabajador'
+  }
+}
+
+function adminRolLabelForEdit(admin) {
+  const rol = admin?.rol || ''
+  if (rol.includes('Dev') || admin?.rolApi === 'SUPER_ADMIN_DEV') {
+    return sessionAdminNivel.value === ROLE_DEV
+      ? 'Super Admin - Dev (Acceso Total + Eliminación)'
+      : 'Super Admin - Dev'
+  }
+  if (rol.includes('Caja') || admin?.rolApi === 'ADMIN_CAJA') {
+    return ROLE_ADMIN_CAJA
+  }
+  return ROLE_SUPER
+}
+
+function onEditAdmin(admin) {
+  if (!canEditAdmins.value || !admin?.id) return
+  modalEditAdmin.open = true
+  modalEditAdmin.id = admin.id
+  modalEditAdmin.rut = admin.rut || ''
+  modalEditAdmin.nombre = admin.nombre || ''
+  modalEditAdmin.correo = admin.correo || ''
+  modalEditAdmin.rol = adminRolLabelForEdit(admin)
+  modalEditAdmin.estado = admin.estadoApi || (admin.estado === 'Inactivo' ? 'inactivo' : 'activo')
+  modalEditAdmin.error = ''
+}
+
+function closeModalEditAdmin() {
+  modalEditAdmin.open = false
+  modalEditAdmin.id = null
+  modalEditAdmin.rut = ''
+  modalEditAdmin.nombre = ''
+  modalEditAdmin.correo = ''
+  modalEditAdmin.rol = ''
+  modalEditAdmin.estado = 'activo'
+  modalEditAdmin.error = ''
+}
+
+async function onSaveEditAdmin() {
+  if (!canEditAdmins.value || !modalEditAdmin.id) return
+  if (!modalEditAdmin.nombre.trim() || !modalEditAdmin.correo.trim()) return
+  try {
+    modalEditAdmin.error = ''
+    saveError.value = ''
+    await api.updateUsuario(modalEditAdmin.id, {
+      correo: modalEditAdmin.correo.trim(),
+      rol: rolApiFromUi(shortAdminRol(modalEditAdmin.rol)),
+      estado: modalEditAdmin.estado,
+      nombre: modalEditAdmin.nombre.trim()
+    })
+    await loadDashboardData()
+    closeModalEditAdmin()
+  } catch (err) {
+    modalEditAdmin.error = err?.message || 'No se pudo actualizar el administrador'
+  }
+}
+
+function onEditUsuario(u) {
+  if (!canEditUsuarios.value || !u?.id) return
+  modalEditUsuario.open = true
+  modalEditUsuario.id = u.id
+  modalEditUsuario.rut = u.rut || ''
+  modalEditUsuario.nombre = u.nombre || (u.trabajador === '—' ? '' : u.trabajador) || ''
+  modalEditUsuario.correo = u.correo || ''
+  modalEditUsuario.estado = u.estadoApi || (u.estado === 'Inactivo' ? 'inactivo' : 'activo')
+  modalEditUsuario.error = ''
+}
+
+function closeModalEditUsuario() {
+  modalEditUsuario.open = false
+  modalEditUsuario.id = null
+  modalEditUsuario.rut = ''
+  modalEditUsuario.nombre = ''
+  modalEditUsuario.correo = ''
+  modalEditUsuario.estado = 'activo'
+  modalEditUsuario.error = ''
+}
+
+async function onSaveEditUsuario() {
+  if (!canEditUsuarios.value || !modalEditUsuario.id) return
+  if (!modalEditUsuario.nombre.trim() || !modalEditUsuario.correo.trim()) return
+  try {
+    modalEditUsuario.error = ''
+    saveError.value = ''
+    await api.updateUsuario(modalEditUsuario.id, {
+      correo: modalEditUsuario.correo.trim(),
+      estado: modalEditUsuario.estado,
+      nombre: modalEditUsuario.nombre.trim(),
+      rol: 'USER_RENDIDOR'
+    })
+    await loadDashboardData()
+    closeModalEditUsuario()
+  } catch (err) {
+    modalEditUsuario.error = err?.message || 'No se pudo actualizar el usuario'
+  }
 }
 
 async function onDeleteTrabajador(t) {
@@ -3956,7 +4351,7 @@ async function onDeleteAdmin(admin) {
     saveError.value = 'No puedes eliminarte a ti mismo'
     return
   }
-  if (!confirm(`¿Eliminar al administrador "${admin.nombre || admin.rut}"? (soft delete)`)) return
+  if (!confirm(`¿Eliminar al administrador "${admin.nombre || admin.correo || admin.rut}"? (soft delete)`)) return
   try {
     saveError.value = ''
     await api.deleteUsuario(admin.id)
@@ -4144,16 +4539,11 @@ async function onSaveTrabajador() {
   if (!trabajadorForm.rut.trim() || !trabajadorForm.nombre.trim()) return
   try {
     saveError.value = ''
-    const payload = {
+    await api.createTrabajador({
       rut: trabajadorForm.rut.trim(),
       nombre_completo: trabajadorForm.nombre.trim(),
       cargo: trabajadorForm.cargo.trim() || null
-    }
-    if (trabajadorForm.editId) {
-      await api.updateTrabajador(trabajadorForm.editId, payload)
-    } else {
-      await api.createTrabajador(payload)
-    }
+    })
     await loadDashboardData()
     closeFormTrabajador()
   } catch (err) {

@@ -282,6 +282,139 @@ function adminFormNombre(body) {
   return body?.nombre?.trim() || body?.nombre_completo?.trim() || null
 }
 
+async function updateUsuario(req, res) {
+  try {
+    const id = Number(req.params.id)
+    const { correo, rol, estado, password } = req.body || {}
+    const nombre = adminFormNombre(req.body)
+
+    const existing = await query(
+      `SELECT u.*, t.nombre_completo AS trabajador_nombre
+       FROM usuarios u
+       LEFT JOIN trabajadores t ON t.id = u.trabajador_id
+       WHERE u.id = ? AND u.is_deleted = FALSE`,
+      [id]
+    )
+    if (!existing[0]) return res.status(404).json({ error: 'Usuario no encontrado' })
+
+    const row = existing[0]
+    const nextRol = rol || row.rol
+    const isTargetAdmin = [
+      ROLES.SUPER_ADMIN_DEV,
+      ROLES.SUPER_ADMIN,
+      ROLES.ADMIN_CAJA
+    ].includes(row.rol)
+
+    // Solo Super Admins pueden editar cuentas de administradores
+    if (isTargetAdmin && !SUPER_ADMINS.includes(req.user.rol)) {
+      return res.status(403).json({ error: 'No puedes modificar administradores' })
+    }
+
+    // Mismas restricciones de creación al asignar roles admin
+    if (nextRol !== row.rol) {
+      if (
+        (nextRol === ROLES.SUPER_ADMIN_DEV || nextRol === ROLES.SUPER_ADMIN) &&
+        !SUPER_ADMINS.includes(req.user.rol)
+      ) {
+        return res.status(403).json({ error: 'No puedes asignar ese rol' })
+      }
+      if (nextRol === ROLES.SUPER_ADMIN_DEV && req.user.rol !== ROLES.SUPER_ADMIN_DEV) {
+        return res.status(403).json({ error: 'Solo Super Admin - Dev puede asignar ese rol' })
+      }
+      if (
+        [ROLES.SUPER_ADMIN_DEV, ROLES.SUPER_ADMIN, ROLES.ADMIN_CAJA].includes(nextRol) &&
+        !SUPER_ADMINS.includes(req.user.rol)
+      ) {
+        return res.status(403).json({ error: 'No puedes cambiar roles de administrador' })
+      }
+    }
+
+    let trabajadorId = row.trabajador_id
+    if (nombre) {
+      if (trabajadorId) {
+        await query(
+          `UPDATE trabajadores SET nombre_completo = ? WHERE id = ? AND is_deleted = FALSE`,
+          [nombre, trabajadorId]
+        )
+      } else if (row.rut) {
+        const rutClean = String(row.rut).replace(/[^0-9kK]/g, '').toUpperCase()
+        const existingTrab = await query(
+          `SELECT id FROM trabajadores
+           WHERE REPLACE(REPLACE(UPPER(rut), '.', ''), '-', '') = ?
+             AND is_deleted = FALSE
+           LIMIT 1`,
+          [rutClean]
+        )
+        if (existingTrab[0]) {
+          trabajadorId = existingTrab[0].id
+          await query(
+            `UPDATE trabajadores SET nombre_completo = ? WHERE id = ? AND is_deleted = FALSE`,
+            [nombre, trabajadorId]
+          )
+        } else {
+          const trabResult = await query(
+            `INSERT INTO trabajadores (rut, nombre_completo, cargo) VALUES (?, ?, ?)`,
+            [rutClean || row.rut, nombre, null]
+          )
+          trabajadorId = trabResult.insertId
+        }
+      }
+    }
+
+    let passwordHash = row.password_hash
+    if (password && String(password).trim()) {
+      passwordHash = await bcrypt.hash(String(password).trim(), 10)
+    }
+
+    const nextEstado =
+      estado === 'inactivo' || estado === 'activo'
+        ? estado
+        : row.estado
+
+    await query(
+      `UPDATE usuarios
+       SET correo = ?, rol = ?, estado = ?, password_hash = ?, trabajador_id = ?
+       WHERE id = ? AND is_deleted = FALSE`,
+      [
+        correo?.trim() || row.correo,
+        nextRol,
+        nextEstado,
+        passwordHash,
+        trabajadorId,
+        id
+      ]
+    )
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      'MODIFICAR',
+      'Admin Users',
+      `Usuario id=${id} actualizado`
+    )
+
+    const updated = await query(
+      `SELECT u.id, u.trabajador_id, u.rut, u.correo, u.rol, u.estado, u.created_at,
+              t.nombre_completo AS trabajador_nombre, t.cargo
+       FROM usuarios u
+       LEFT JOIN trabajadores t ON t.id = u.trabajador_id
+       WHERE u.id = ? AND u.is_deleted = FALSE`,
+      [id]
+    )
+    const out = updated[0] || {}
+    return res.json({
+      ...out,
+      nombre: out.trabajador_nombre || nombre || out.correo
+    })
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Correo ya registrado' })
+    }
+    console.error('[updateUsuario]', err)
+    return res.status(500).json({ error: 'Internal Server Error' })
+  }
+}
+
 async function softDeleteUsuario(req, res) {
   try {
     const id = Number(req.params.id)
@@ -502,6 +635,7 @@ module.exports = {
   setTrabajadorCajas,
   listUsuarios,
   createUsuario,
+  updateUsuario,
   softDeleteUsuario,
   listTarjetas,
   createTarjeta,

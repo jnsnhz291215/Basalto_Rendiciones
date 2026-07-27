@@ -137,6 +137,13 @@ export async function createUsuario(payload) {
   })
 }
 
+export async function updateUsuario(id, payload) {
+  return jsonOrThrow(`/api/admin/usuarios/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
 export async function updateMe(payload) {
   return jsonOrThrow('/api/auth/me', {
     method: 'PUT',

@@ -139,30 +139,41 @@ export function mapTrabajador(row) {
 }
 
 export function mapUsuario(row) {
+  const nombreTrab = normalizeTrabajadorNombre(row.trabajador_nombre)
   return {
     id: row.id,
     correo: row.correo,
-    trabajador: row.trabajador_nombre || '—',
+    nombre: nombreTrab,
+    trabajador: nombreTrab || '—',
     cargo: row.cargo || '—',
     trabajadorId: row.trabajador_id,
     rut: row.rut,
     rol: row.rol,
-    estado: row.estado
+    rolLabel: rolUiFromApi(row.rol),
+    estado: row.estado === 'inactivo' ? 'Inactivo' : 'Activo',
+    estadoApi: row.estado === 'inactivo' ? 'inactivo' : 'activo'
   }
 }
 
+/** Nombre de ficha trabajador; nunca usar correo como fallback de nombre. */
+function normalizeTrabajadorNombre(value) {
+  const raw = value == null ? '' : String(value).trim()
+  if (!raw || raw === '—') return ''
+  return raw
+}
+
 export function mapAdminFromUsuario(row) {
-  const nombreTrab =
-    row.trabajador_nombre && row.trabajador_nombre !== '—'
-      ? row.trabajador_nombre
-      : null
+  const nombreTrab = normalizeTrabajadorNombre(row.trabajador_nombre)
   return {
     id: row.id,
     rut: row.rut,
-    nombre: nombreTrab || row.correo || '',
+    nombre: nombreTrab,
     correo: row.correo,
     rol: rolUiFromApi(row.rol),
-    estado: row.estado === 'activo' ? 'Activo' : 'Inactivo'
+    rolApi: row.rol,
+    estado: row.estado === 'activo' ? 'Activo' : 'Inactivo',
+    estadoApi: row.estado === 'inactivo' ? 'inactivo' : 'activo',
+    trabajadorId: row.trabajador_id ?? null
   }
 }
 

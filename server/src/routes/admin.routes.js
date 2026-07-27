@@ -7,6 +7,7 @@ const {
   setTrabajadorCajas,
   listUsuarios,
   createUsuario,
+  updateUsuario,
   softDeleteUsuario,
   listTarjetas,
   createTarjeta,
@@ -33,6 +34,7 @@ router.put('/trabajadores/:id/cajas', setTrabajadorCajas)
 /* Usuarios */
 router.get('/usuarios', listUsuarios)
 router.post('/usuarios', createUsuario)
+router.put('/usuarios/:id', updateUsuario)
 router.delete('/usuarios/:id', softDeleteUsuario)
 
 /* Tarjetas */
