@@ -118,7 +118,18 @@ export function mapCaja(row) {
     id: row.id,
     groupKey: interior,
     displayName: row.nombre_exterior,
-    nombreInterior: interior
+    nombreInterior: interior,
+    centroCobroId: row.centro_cobro_id ?? null,
+    centroCobroNombre: row.centro_cobro_nombre || null,
+    tieneDatos: Boolean(row.tiene_datos)
+  }
+}
+
+export function mapCentroCobro(row) {
+  return {
+    id: row.id,
+    nombre: row.nombre || '',
+    tieneDatos: Boolean(row.tiene_datos)
   }
 }
 

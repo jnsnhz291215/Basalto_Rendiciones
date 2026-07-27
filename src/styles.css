@@ -1609,6 +1609,71 @@ a:hover {
   flex-direction: column;
 }
 
+.dash-cajas-empty {
+  padding: 1rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
+}
+
+.dash-cc-accordion {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.dash-cc-accordion-item {
+  border: 1px solid #1e293b;
+  border-radius: 8px;
+  background: #0f172a;
+  overflow: hidden;
+}
+
+.dash-cc-accordion-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 1rem;
+  background: #111827;
+  border: none;
+  color: #e2e8f0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.dash-cc-accordion-head:hover {
+  background: #1e293b;
+}
+
+.dash-cc-accordion-chevron {
+  color: #f97316;
+  font-size: 0.7rem;
+  width: 1rem;
+  flex-shrink: 0;
+}
+
+.dash-cc-accordion-title {
+  font-weight: 600;
+  flex: 1;
+}
+
+.dash-cc-accordion-count {
+  color: #94a3b8;
+  font-size: 0.75rem;
+}
+
+.dash-cc-accordion-body {
+  padding: 0 0.5rem 0.5rem;
+}
+
+.dash-cc-accordion-empty {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
 .dash-cajas-gestion {
   display: flex;
   flex-direction: column;

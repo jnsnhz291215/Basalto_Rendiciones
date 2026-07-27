@@ -7,7 +7,6 @@ async function tryQuery(sql, params = []) {
     await query(sql, params)
     return true
   } catch (err) {
-    // 1091 ER_CANT_DROP_FIELD_OR_KEY, 1060 dup column, 1061 dup key, 1025/1826 FK issues
     if (
       err.errno === 1091 ||
       err.errno === 1060 ||
@@ -23,8 +22,8 @@ async function tryQuery(sql, params = []) {
 }
 
 /**
- * - cajas_chicas: solo id + nombre_exterior + clave_interna (nombre interior) + soft delete
- * - centros_costo: catálogo con id propio
+ * centros_costo: id + nombre
+ * cajas_chicas: nombre_exterior + clave_interna + centro_cobro_id
  */
 async function ensureCajasSchema() {
   if (ready) return
@@ -32,17 +31,28 @@ async function ensureCajasSchema() {
   await query(`
     CREATE TABLE IF NOT EXISTS centros_costo (
       id INT AUTO_INCREMENT PRIMARY KEY,
-      codigo VARCHAR(50) NOT NULL,
-      nombre VARCHAR(150) NULL,
+      nombre VARCHAR(150) NOT NULL,
       is_deleted BOOLEAN DEFAULT FALSE,
       deleted_at DATETIME NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      UNIQUE KEY uk_centros_costo_codigo (codigo)
+      UNIQUE KEY uk_centros_costo_nombre (nombre)
     ) ENGINE=InnoDB
   `)
 
-  // Consolidar duplicados (clave + mes) → una fila por clave_interna
+  // Migración desde versión con columna codigo
+  await tryQuery(`ALTER TABLE centros_costo DROP INDEX uk_centros_costo_codigo`)
+  await tryQuery(`ALTER TABLE centros_costo DROP COLUMN codigo`)
+  // Si la tabla vieja tenía nombre NULL, rellenar y forzar NOT NULL
+  try {
+    await query(`UPDATE centros_costo SET nombre = CONCAT('CC-', id) WHERE nombre IS NULL OR TRIM(nombre) = ''`)
+  } catch (_) {
+    /* ignore */
+  }
+  await tryQuery(`ALTER TABLE centros_costo MODIFY nombre VARCHAR(150) NOT NULL`)
+  await tryQuery(`ALTER TABLE centros_costo ADD UNIQUE KEY uk_centros_costo_nombre (nombre)`)
+
+  // Consolidar duplicados de cajas por clave_interna
   try {
     await query(`
       UPDATE cajas_chicas c
@@ -57,11 +67,9 @@ async function ensureCajasSchema() {
       WHERE c.is_deleted = FALSE
     `)
   } catch (err) {
-    // Tabla vacía o sin columna aún
     console.warn('[ensureCajasSchema] consolidate:', err.message)
   }
 
-  // Quitar FK responsable si existe
   const fks = await query(
     `SELECT CONSTRAINT_NAME AS name
      FROM information_schema.KEY_COLUMN_USAGE
@@ -76,16 +84,35 @@ async function ensureCajasSchema() {
 
   await tryQuery(`ALTER TABLE cajas_chicas DROP INDEX uk_caja_clave_mes`)
   await tryQuery(`ALTER TABLE cajas_chicas DROP INDEX idx_cajas_clave_mes`)
-
   await tryQuery(`ALTER TABLE cajas_chicas DROP COLUMN responsable_id`)
   await tryQuery(`ALTER TABLE cajas_chicas DROP COLUMN centro_costo`)
   await tryQuery(`ALTER TABLE cajas_chicas DROP COLUMN mes_asignado`)
   await tryQuery(`ALTER TABLE cajas_chicas DROP COLUMN fondo_estimado_mes`)
   await tryQuery(`ALTER TABLE cajas_chicas DROP COLUMN estado`)
-
   await tryQuery(
     `ALTER TABLE cajas_chicas ADD UNIQUE KEY uk_caja_nombre_interior (clave_interna)`
   )
+
+  await tryQuery(
+    `ALTER TABLE cajas_chicas ADD COLUMN centro_cobro_id INT NULL AFTER nombre_exterior`
+  )
+
+  // FK a centros_costo (si aún no existe)
+  const fkCc = await query(
+    `SELECT CONSTRAINT_NAME AS name
+     FROM information_schema.KEY_COLUMN_USAGE
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'cajas_chicas'
+       AND COLUMN_NAME = 'centro_cobro_id'
+       AND REFERENCED_TABLE_NAME = 'centros_costo'`
+  )
+  if (!fkCc.length) {
+    await tryQuery(`
+      ALTER TABLE cajas_chicas
+      ADD CONSTRAINT fk_caja_centro_cobro
+        FOREIGN KEY (centro_cobro_id) REFERENCES centros_costo(id) ON DELETE RESTRICT
+    `)
+  }
 
   ready = true
 }

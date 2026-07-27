@@ -1598,7 +1598,8 @@
           <div>
             <h3 class="dash-cajas-toolbar-title">Cajas</h3>
             <p class="dash-cajas-toolbar-hint">
-              Nombre exterior (visible) y nombre interior (agrupador).
+              Agrupadas por centro de cobro / empresa. Si ya tienen datos, no se pueden editar ni
+              eliminar.
             </p>
           </div>
           <button
@@ -1623,10 +1624,11 @@
           <div class="dash-caja-form-head">
             <div>
               <h2 class="dash-assign-title dash-assign-title--flush">
-                {{ cajaForm.editId ? 'Editar Caja' : 'Configuración de Caja' }}
+                {{ cajaForm.editId ? 'Editar Caja' : 'Nueva Caja' }}
               </h2>
               <p class="dash-hint">
-                Solo nombre exterior e interior.
+                Elige el nombre con cuidado: si la caja acumula datos, no se podrá editar ni
+                eliminar.
               </p>
             </div>
             <button
@@ -1640,6 +1642,15 @@
           </div>
 
           <form class="dash-caja-form" @submit.prevent="onSaveCaja">
+            <div class="dash-field">
+              <label>Centro de cobro / empresa</label>
+              <select v-model="cajaForm.centroCobroId" required>
+                <option disabled value="">Seleccionar…</option>
+                <option v-for="cc in centrosCosto" :key="cc.id" :value="cc.id">
+                  {{ cc.nombre }}
+                </option>
+              </select>
+            </div>
             <div class="dash-caja-grid-2">
               <div class="dash-field">
                 <label>Nombre Exterior</label>
@@ -1662,7 +1673,7 @@
                   @input="cajaForm.nombreInterior = normalizarGroupKey(cajaForm.nombreInterior)"
                 />
                 <span v-if="cajaForm.editId" class="dash-field-hint">
-                  El nombre interior no se puede cambiar al editar.
+                  El nombre interior no se puede cambiar.
                 </span>
               </div>
             </div>
@@ -1680,40 +1691,86 @@
           </div>
         </div>
 
-        <div class="dash-table-wrap dash-cajas-list">
-          <table class="dash-table">
-            <thead>
-              <tr>
-                <th>Nombre Exterior</th>
-                <th>Nombre Interior</th>
-                <th class="dash-table-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="(caja, index) in cajasOrdenadas"
-                :key="caja.id || caja.groupKey"
-              >
-                <td class="dash-table-strong">{{ caja.displayName }}</td>
-                <td class="dash-mono dash-rinde">{{ caja.groupKey }}</td>
-                <td class="dash-table-center">
-                  <button class="dash-btn-edit" type="button" @click="onEditCaja(index)">
-                    Editar
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div v-if="!cajasPorCentro.length" class="dash-cajas-empty">
+          No hay cajas ni centros de cobro / empresa.
+        </div>
+        <div v-else class="dash-cc-accordion">
+          <div
+            v-for="grupo in cajasPorCentro"
+            :key="grupo.key"
+            class="dash-cc-accordion-item"
+          >
+            <button
+              class="dash-cc-accordion-head"
+              type="button"
+              @click="toggleCcAccordion(grupo.key)"
+            >
+              <span class="dash-cc-accordion-chevron">
+                {{ ccAccordionOpen[grupo.key] ? '▼' : '▶' }}
+              </span>
+              <span class="dash-cc-accordion-title">{{ grupo.titulo }}</span>
+              <span class="dash-cc-accordion-count">{{ grupo.cajas.length }} caja(s)</span>
+            </button>
+            <div
+              class="dash-collapse"
+              :class="{ 'dash-collapse--open': ccAccordionOpen[grupo.key] }"
+            >
+              <div class="dash-collapse-inner">
+                <div class="dash-table-wrap dash-cajas-list dash-cc-accordion-body">
+                  <table v-if="grupo.cajas.length" class="dash-table">
+                    <thead>
+                      <tr>
+                        <th>Nombre Exterior</th>
+                        <th>Nombre Interior</th>
+                        <th class="dash-table-center">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="caja in grupo.cajas" :key="caja.id || caja.groupKey">
+                        <td class="dash-table-strong">{{ caja.displayName }}</td>
+                        <td class="dash-mono dash-rinde">{{ caja.groupKey }}</td>
+                        <td class="dash-table-center dash-table-actions">
+                          <template v-if="caja.tieneDatos">
+                            <span class="dash-field-hint" title="Ya tiene datos asociados">
+                              Bloqueada
+                            </span>
+                          </template>
+                          <template v-else>
+                            <button
+                              class="dash-btn-edit"
+                              type="button"
+                              @click="onEditCaja(caja)"
+                            >
+                              Editar
+                            </button>
+                            <button
+                              class="dash-btn-icon dash-btn-icon--danger"
+                              type="button"
+                              title="Eliminar"
+                              @click="onDeleteCaja(caja)"
+                            >
+                              🗑
+                            </button>
+                          </template>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <p v-else class="dash-cc-accordion-empty">Sin cajas en este centro.</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Centro de Costos -->
+      <!-- Centro de cobro / empresa -->
       <div v-else-if="activeTab === 'centros-costo'" class="dash-cajas-gestion">
         <div class="dash-cajas-toolbar">
           <div>
-            <h3 class="dash-cajas-toolbar-title">Centro de Costos</h3>
+            <h3 class="dash-cajas-toolbar-title">Centro de cobro / empresa</h3>
             <p class="dash-cajas-toolbar-hint">
-              Catálogo de centros de costo con ID propio.
+              ID automático y nombre. Si ya tiene cajas o datos, no se puede editar ni eliminar.
             </p>
           </div>
           <button
@@ -1722,7 +1779,7 @@
             @click="toggleFormCc"
           >
             <span>{{ ccFormOpen ? '▲' : '＋' }}</span>
-            <span>{{ ccFormOpen ? 'Ocultar Formulario' : 'Nuevo Centro de Costo' }}</span>
+            <span>{{ ccFormOpen ? 'Ocultar Formulario' : 'Nuevo centro' }}</span>
           </button>
         </div>
 
@@ -1732,9 +1789,16 @@
               <div class="dash-caja-form-head">
                 <div>
                   <h2 class="dash-assign-title dash-assign-title--flush">
-                    {{ ccForm.editId ? 'Editar Centro de Costo' : 'Nuevo Centro de Costo' }}
+                    {{
+                      ccForm.editId
+                        ? 'Editar centro de cobro / empresa'
+                        : 'Nuevo centro de cobro / empresa'
+                    }}
                   </h2>
-                  <p class="dash-hint">Código único y nombre descriptivo.</p>
+                  <p class="dash-hint">
+                    Solo el nombre. El ID se asigna solo. Elige bien el nombre: si luego tiene
+                    cajas o datos, no se podrá cambiar ni borrar.
+                  </p>
                 </div>
                 <button
                   class="dash-modal-close"
@@ -1747,32 +1811,21 @@
               </div>
 
               <form class="dash-caja-form" @submit.prevent="onSaveCentroCosto">
-                <div class="dash-caja-grid-2">
-                  <div class="dash-field">
-                    <label>Código</label>
-                    <input
-                      v-model="ccForm.codigo"
-                      type="text"
-                      class="dash-mono"
-                      placeholder="Ej: CC-101"
-                      required
-                    />
-                  </div>
-                  <div class="dash-field">
-                    <label>Nombre</label>
-                    <input
-                      v-model="ccForm.nombre"
-                      type="text"
-                      placeholder="Ej: Basalto Norte"
-                    />
-                  </div>
+                <div class="dash-field">
+                  <label>Nombre</label>
+                  <input
+                    v-model="ccForm.nombre"
+                    type="text"
+                    placeholder="Ej: Basalto Norte"
+                    required
+                  />
                 </div>
                 <div class="dash-caja-form-actions">
                   <button class="dash-btn-secondary" type="button" @click="closeFormCc">
                     Cancelar
                   </button>
                   <button class="dash-btn-primary" type="submit">
-                    {{ ccForm.editId ? 'Guardar Cambios' : 'Guardar Centro de Costo' }}
+                    {{ ccForm.editId ? 'Guardar Cambios' : 'Guardar' }}
                   </button>
                 </div>
               </form>
@@ -1785,7 +1838,6 @@
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Código</th>
                 <th>Nombre</th>
                 <th class="dash-table-center">Acciones</th>
               </tr>
@@ -1793,25 +1845,31 @@
             <tbody>
               <tr v-for="cc in centrosCosto" :key="cc.id">
                 <td class="dash-mono">{{ cc.id }}</td>
-                <td class="dash-mono dash-rinde">{{ cc.codigo }}</td>
                 <td>{{ cc.nombre || '-' }}</td>
                 <td class="dash-table-center dash-table-actions">
-                  <button
-                    class="dash-btn-icon"
-                    type="button"
-                    title="Editar"
-                    @click="onEditCentroCosto(cc)"
-                  >
-                    ✎
-                  </button>
-                  <button
-                    class="dash-btn-icon dash-btn-icon--danger"
-                    type="button"
-                    title="Eliminar"
-                    @click="onDeleteCentroCosto(cc)"
-                  >
-                    🗑
-                  </button>
+                  <template v-if="cc.tieneDatos">
+                    <span class="dash-field-hint" title="Ya tiene cajas o datos asociados">
+                      Bloqueada
+                    </span>
+                  </template>
+                  <template v-else>
+                    <button
+                      class="dash-btn-icon"
+                      type="button"
+                      title="Editar"
+                      @click="onEditCentroCosto(cc)"
+                    >
+                      ✎
+                    </button>
+                    <button
+                      class="dash-btn-icon dash-btn-icon--danger"
+                      type="button"
+                      title="Eliminar"
+                      @click="onDeleteCentroCosto(cc)"
+                    >
+                      🗑
+                    </button>
+                  </template>
                 </td>
               </tr>
             </tbody>
@@ -2499,6 +2557,7 @@ import {
   mapAnticipo,
   mapAuditLog,
   mapCaja,
+  mapCentroCobro,
   mapLegacy,
   mapPersonal,
   mapRendicion,
@@ -2745,7 +2804,7 @@ const tabs = [
   { id: 'asignacion', label: 'Asignación a Conductor' },
   { id: 'informes', label: 'Informes y Cartola' },
   { id: 'cajas', label: 'Cajas' },
-  { id: 'centros-costo', label: 'Centro de Costos' }
+  { id: 'centros-costo', label: 'Centro de cobro / empresa' }
 ]
 
 const adminTabs = [
@@ -2912,16 +2971,17 @@ const formCajaEl = ref(null)
 const cajaForm = reactive({
   displayName: '',
   nombreInterior: '',
+  centroCobroId: '',
   editIndex: null,
   editId: null,
   groupKeyOriginal: null
 })
 
 const ccFormOpen = ref(false)
+const ccAccordionOpen = reactive({})
 
 const ccForm = reactive({
   editId: null,
-  codigo: '',
   nombre: ''
 })
 
@@ -3182,11 +3242,11 @@ async function loadDashboardData() {
     ])
 
     cajas.value = cajasRaw.map(mapCaja)
-    centrosCosto.value = ccRaw.map((row) => ({
-      id: row.id,
-      codigo: row.codigo,
-      nombre: row.nombre || ''
-    }))
+    centrosCosto.value = ccRaw.map(mapCentroCobro)
+    for (const cc of centrosCosto.value) {
+      const key = `cc-${cc.id}`
+      if (ccAccordionOpen[key] === undefined) ccAccordionOpen[key] = true
+    }
     trabajadores.value = trabRaw.map(mapTrabajador)
     personal.value = personalRaw.map(mapPersonal)
     applyTieneUsuario(
@@ -3252,6 +3312,33 @@ function findCajaIdForGasto(groupKey) {
 const cajasOrdenadas = computed(() =>
   [...cajas.value].sort((a, b) => a.groupKey.localeCompare(b.groupKey))
 )
+
+const cajasPorCentro = computed(() => {
+  const groups = centrosCosto.value.map((cc) => ({
+    key: `cc-${cc.id}`,
+    titulo: cc.nombre,
+    ccId: cc.id,
+    cajas: cajas.value
+      .filter((c) => Number(c.centroCobroId) === Number(cc.id))
+      .sort((a, b) => a.groupKey.localeCompare(b.groupKey))
+  }))
+  const sinCc = cajas.value
+    .filter((c) => c.centroCobroId == null)
+    .sort((a, b) => a.groupKey.localeCompare(b.groupKey))
+  if (sinCc.length) {
+    groups.push({
+      key: 'cc-none',
+      titulo: 'Sin centro de cobro / empresa',
+      ccId: null,
+      cajas: sinCc
+    })
+  }
+  return groups
+})
+
+function toggleCcAccordion(key) {
+  ccAccordionOpen[key] = !ccAccordionOpen[key]
+}
 
 const cajasActivasOpciones = computed(() => {
   const map = new Map()
@@ -3846,6 +3933,7 @@ function formatMonto(value) {
 function resetCajaForm() {
   cajaForm.displayName = ''
   cajaForm.nombreInterior = ''
+  cajaForm.centroCobroId = ''
   cajaForm.editIndex = null
   cajaForm.editId = null
   cajaForm.groupKeyOriginal = null
@@ -3872,14 +3960,14 @@ function openFormCajaForEdit() {
   })
 }
 
-function onEditCaja(sortedIndex) {
-  const caja = cajasOrdenadas.value[sortedIndex]
-  if (!caja) return
+function onEditCaja(caja) {
+  if (!caja || caja.tieneDatos) return
   const realIndex = cajas.value.findIndex((c) => c.id === caja.id)
   if (realIndex < 0) return
 
   cajaForm.displayName = caja.displayName
   cajaForm.nombreInterior = caja.groupKey
+  cajaForm.centroCobroId = caja.centroCobroId || ''
   cajaForm.editIndex = realIndex
   cajaForm.editId = caja.id
   cajaForm.groupKeyOriginal = caja.groupKey
@@ -3891,19 +3979,26 @@ async function onSaveCaja() {
   const nombreInterior = normalizarGroupKey(
     cajaForm.editId ? cajaForm.groupKeyOriginal || cajaForm.nombreInterior : cajaForm.nombreInterior
   )
+  const centroCobroId = Number(cajaForm.centroCobroId)
   if (!displayName || !nombreInterior) return
+  if (!Number.isFinite(centroCobroId) || centroCobroId <= 0) {
+    saveError.value = 'Debes seleccionar un centro de cobro / empresa'
+    return
+  }
 
   try {
     saveError.value = ''
     if (cajaForm.editId) {
       await api.updateCaja(cajaForm.editId, {
-        nombre_exterior: displayName
+        nombre_exterior: displayName,
+        centro_cobro_id: centroCobroId
       })
     } else {
       await api.createCaja({
         nombre_exterior: displayName,
         nombre_interior: nombreInterior,
-        clave_interna: nombreInterior
+        clave_interna: nombreInterior,
+        centro_cobro_id: centroCobroId
       })
     }
     if (!cajaActiva.value) cajaActiva.value = nombreInterior
@@ -3914,9 +4009,20 @@ async function onSaveCaja() {
   }
 }
 
+async function onDeleteCaja(caja) {
+  if (!caja?.id || caja.tieneDatos) return
+  if (!confirm(`¿Eliminar la caja "${caja.displayName}"?`)) return
+  try {
+    saveError.value = ''
+    await api.deleteCaja(caja.id)
+    await loadDashboardData()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo eliminar la caja'
+  }
+}
+
 function resetCcForm() {
   ccForm.editId = null
-  ccForm.codigo = ''
   ccForm.nombre = ''
 }
 
@@ -3935,23 +4041,18 @@ function toggleFormCc() {
 }
 
 function onEditCentroCosto(cc) {
+  if (!cc || cc.tieneDatos) return
   ccForm.editId = cc.id
-  ccForm.codigo = cc.codigo || ''
   ccForm.nombre = cc.nombre || ''
   ccFormOpen.value = true
 }
 
 async function onSaveCentroCosto() {
-  const codigo = String(ccForm.codigo || '')
-    .trim()
-    .toUpperCase()
-  if (!codigo) return
+  const nombre = String(ccForm.nombre || '').trim()
+  if (!nombre) return
   try {
     saveError.value = ''
-    const payload = {
-      codigo,
-      nombre: ccForm.nombre.trim() || null
-    }
+    const payload = { nombre }
     if (ccForm.editId) {
       await api.updateCentroCosto(ccForm.editId, payload)
     } else {
@@ -3960,19 +4061,19 @@ async function onSaveCentroCosto() {
     await loadDashboardData()
     closeFormCc()
   } catch (err) {
-    saveError.value = err?.message || 'No se pudo guardar el centro de costo'
+    saveError.value = err?.message || 'No se pudo guardar el centro de cobro / empresa'
   }
 }
 
 async function onDeleteCentroCosto(cc) {
-  if (!cc?.id) return
-  if (!confirm(`¿Eliminar el centro de costo "${cc.codigo}"?`)) return
+  if (!cc?.id || cc.tieneDatos) return
+  if (!confirm(`¿Eliminar el centro de cobro / empresa "${cc.nombre}"?`)) return
   try {
     saveError.value = ''
     await api.deleteCentroCosto(cc.id)
     await loadDashboardData()
   } catch (err) {
-    saveError.value = err?.message || 'No se pudo eliminar el centro de costo'
+    saveError.value = err?.message || 'No se pudo eliminar el centro de cobro / empresa'
   }
 }
 

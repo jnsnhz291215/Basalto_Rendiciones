@@ -162,27 +162,31 @@ Todas las tablas de negocio (salvo `audit_logs`) incluyen `is_deleted` + `delete
 
 ### 6.3 `cajas_chicas` — Cajas
 
-**Propósito:** Catálogo de cajas. Solo **nombre exterior** + **nombre interior**.
+**Propósito:** Catálogo de cajas. Nombre exterior + nombre interior + vínculo a centro de cobro.
 
 | Campo | Notas |
 |-------|--------|
 | `id` | PK |
 | `clave_interna` | Nombre interior / agrupador (único) |
 | `nombre_exterior` | Nombre visible |
+| `centro_cobro_id` | FK a `centros_costo.id` |
 | soft delete / timestamps | |
 
-**Eliminado del modelo:** `mes_asignado`, `fondo_estimado_mes`, `centro_costo`, `responsable_id`, `estado`.
+**Regla:** si la caja ya tiene rendiciones o anticipos, **no** se puede editar ni eliminar.
+
+**Eliminado del modelo:** `mes_asignado`, `fondo_estimado_mes`, `centro_costo` (texto), `responsable_id`, `estado`.
 
 ---
 
-### 6.3b `centros_costo` — Centros de costo
+### 6.3b `centros_costo` — Centro de cobro / empresa
 
 | Campo | Notas |
 |-------|--------|
-| `id` | PK propio |
-| `codigo` | Único (ej. `CC-101`) |
-| `nombre` | Opcional |
+| `id` | PK autoincremental (único) |
+| `nombre` | Único; único campo que ingresa el usuario al crear |
 | soft delete / timestamps | |
+
+**Regla:** si el CC ya tiene cajas asociadas (o esas cajas tienen datos), **no** se puede editar ni eliminar.
 
 API: `GET/POST /api/cajas/centros-costo`, `PUT/DELETE /api/cajas/centros-costo/:id`.
 
@@ -347,30 +351,32 @@ CREATE TABLE usuarios (
     CONSTRAINT fk_usuarios_trabajador FOREIGN KEY (trabajador_id) REFERENCES trabajadores(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
--- 4. CAJAS CHICAS
+-- 4. CENTRO DE COBRO / EMPRESA
+CREATE TABLE centros_costo (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(150) NOT NULL,
+    is_deleted BOOLEAN DEFAULT FALSE,
+    deleted_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_centros_costo_nombre (nombre)
+) ENGINE=InnoDB;
+
+-- 5. CAJAS CHICAS
 CREATE TABLE cajas_chicas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     clave_interna VARCHAR(50) NOT NULL,
     nombre_exterior VARCHAR(150) NOT NULL,
+    centro_cobro_id INT NULL,
     is_deleted BOOLEAN DEFAULT FALSE,
     deleted_at DATETIME NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_caja_nombre_interior (clave_interna)
+    UNIQUE KEY uk_caja_nombre_interior (clave_interna),
+    CONSTRAINT fk_caja_centro_cobro FOREIGN KEY (centro_cobro_id) REFERENCES centros_costo(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
-CREATE TABLE centros_costo (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    codigo VARCHAR(50) NOT NULL,
-    nombre VARCHAR(150) NULL,
-    is_deleted BOOLEAN DEFAULT FALSE,
-    deleted_at DATETIME NULL,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_centros_costo_codigo (codigo)
-) ENGINE=InnoDB;
-
--- 5. TARJETAS CORPORATIVAS
+-- 6. TARJETAS CORPORATIVAS
 CREATE TABLE tarjetas_empresa (
     id INT AUTO_INCREMENT PRIMARY KEY,
     alias VARCHAR(100) NOT NULL,
@@ -386,7 +392,7 @@ CREATE TABLE tarjetas_empresa (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- 6. RENDICIONES DE GASTOS
+-- 7. RENDICIONES DE GASTOS
 CREATE TABLE rendiciones_gastos (
     id INT AUTO_INCREMENT PRIMARY KEY,
     codigo_rinde VARCHAR(20) UNIQUE NOT NULL,
