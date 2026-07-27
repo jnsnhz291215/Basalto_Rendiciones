@@ -190,7 +190,8 @@ Todas las tablas de negocio (salvo `audit_logs`) incluyen `is_deleted` + `delete
 | Campo | Notas |
 |-------|--------|
 | `alias`, `tipo`, `ultimos_digitos`, `banco`, `titular_nombre` | |
-| `estado` | Activa / … |
+| `estado` | `activa` / `inactiva` |
+| `fecha_desactivacion` | DATE; se setea al pasar a `inactiva`; NULL si está activa. Pagos con `fecha_documento >= fecha_desactivacion` se rechazan. |
 
 **Validación:** Tabla OK para el módulo Admin → Tarjetas.
 
@@ -368,6 +369,7 @@ CREATE TABLE tarjetas_empresa (
     banco VARCHAR(100),
     titular_nombre VARCHAR(150),
     estado ENUM('activa', 'inactiva') DEFAULT 'activa',
+    fecha_desactivacion DATE NULL,
     is_deleted BOOLEAN DEFAULT FALSE,
     deleted_at DATETIME NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

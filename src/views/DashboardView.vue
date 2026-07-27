@@ -103,56 +103,157 @@
       </div>
     </div>
 
-    <!-- Modal editar trabajador -->
+    <!-- Modal Personal / Usuarios (crear o editar) -->
     <div
-      v-if="modalEditTrabajador.open"
+      v-if="modalPersonal.open"
       class="dash-modal-backdrop"
-      @click.self="closeModalEditTrabajador"
+      @click.self="closeModalPersonal"
     >
-      <div class="dash-modal" role="dialog" aria-modal="true">
+      <div class="dash-modal dash-modal--wide" role="dialog" aria-modal="true">
         <div class="dash-modal-head">
-          <h3>Editar Trabajador</h3>
+          <h3>{{ modalPersonal.id ? 'Editar Personal' : 'Nuevo Personal' }}</h3>
           <button
             class="dash-modal-close"
             type="button"
             aria-label="Cerrar"
-            @click="closeModalEditTrabajador"
+            @click="closeModalPersonal"
           >
             ×
           </button>
         </div>
-        <form class="dash-admin-form" @submit.prevent="onSaveEditTrabajador">
-          <div class="dash-field">
-            <label>RUT</label>
-            <input
-              :value="modalEditTrabajador.rut"
-              type="text"
-              placeholder="12.345.678-9"
-              @input="modalEditTrabajador.rut = fromRutInput($event.target.value).display"
-            />
+        <form class="dash-admin-form" @submit.prevent="onSavePersonal">
+          <h4 class="dash-modal-section-title">Ficha</h4>
+          <div class="dash-caja-grid-3">
+            <div class="dash-field">
+              <div class="dash-desc-head">
+                <label>RUT</label>
+                <span
+                  class="dash-rut-status"
+                  :class="`dash-rut-status--${personalModalRutStatus.state}`"
+                >
+                  {{ personalModalRutStatus.text }}
+                </span>
+              </div>
+              <input
+                :value="modalPersonal.rut"
+                type="text"
+                placeholder="12.345.678-9"
+                required
+                @input="modalPersonal.rut = fromRutInput($event.target.value).display"
+              />
+            </div>
+            <div class="dash-field">
+              <label>Nombre</label>
+              <input
+                v-model="modalPersonal.nombre"
+                type="text"
+                required
+                placeholder="Mario Silva"
+              />
+            </div>
+            <div class="dash-field">
+              <label>Cargo</label>
+              <input
+                v-model="modalPersonal.cargo"
+                type="text"
+                placeholder="Conductor Camión Riego"
+              />
+            </div>
           </div>
-          <div class="dash-field">
-            <label>Nombres y Apellidos</label>
-            <input
-              v-model="modalEditTrabajador.nombre"
-              type="text"
-              required
-              placeholder="Mario Silva"
-            />
+
+          <div class="dash-field dash-admin-form-section">
+            <label>Cajas asignadas</label>
+            <p class="dash-hint">Al rendir por su cuenta, solo verá estas cajas.</p>
+            <div class="dash-checkbox-list">
+              <label
+                v-for="c in cajasActivasOpciones"
+                :key="c.groupKey"
+                class="dash-check"
+              >
+                <input
+                  v-model="modalPersonal.cajas"
+                  type="checkbox"
+                  :value="c.groupKey"
+                />
+                <span>{{ c.label }}</span>
+              </label>
+            </div>
           </div>
-          <div class="dash-field">
-            <label>Cargo / Rol en Faena</label>
-            <input
-              v-model="modalEditTrabajador.cargo"
-              type="text"
-              placeholder="Conductor Camión Riego"
-            />
+
+          <div class="dash-personal-access-toggle dash-admin-form-section">
+            <label class="dash-switch">
+              <input v-model="modalPersonal.crearUsuario" type="checkbox" />
+              <span class="dash-switch-ui" aria-hidden="true"></span>
+              <span class="dash-switch-label">
+                {{
+                  modalPersonal.usuarioId
+                    ? 'Gestionar acceso al sistema'
+                    : 'Habilitar acceso al sistema (crear usuario)'
+                }}
+              </span>
+            </label>
           </div>
-          <p v-if="modalEditTrabajador.error" class="error" role="alert">
-            {{ modalEditTrabajador.error }}
+
+          <template v-if="modalPersonal.crearUsuario">
+            <h4 class="dash-modal-section-title">Acceso de usuario</h4>
+            <div class="dash-caja-grid-2">
+              <div class="dash-field">
+                <label>Correo</label>
+                <input
+                  v-model="modalPersonal.correo"
+                  type="email"
+                  :required="modalPersonal.crearUsuario"
+                  placeholder="usuario@basaltodrilling.cl"
+                />
+              </div>
+              <div class="dash-field">
+                <label>Rol</label>
+                <select v-model="modalPersonal.rol">
+                  <option value="USER_RENDIDOR">Usuario Rendidor</option>
+                </select>
+              </div>
+            </div>
+            <div class="dash-field" v-if="modalPersonal.usuarioId">
+              <label>Estado</label>
+              <select v-model="modalPersonal.estado">
+                <option value="activo">Activo</option>
+                <option value="inactivo">Inactivo</option>
+              </select>
+            </div>
+            <div class="dash-admin-form-section">
+              <label class="dash-field-label">
+                {{ modalPersonal.usuarioId ? 'Nueva contraseña (opcional)' : 'Contraseña temporal' }}
+              </label>
+              <div class="dash-radio-row">
+                <label class="dash-radio">
+                  <input v-model="modalPersonal.passType" type="radio" value="rut" />
+                  <span>Basada en RUT</span>
+                </label>
+                <label class="dash-radio">
+                  <input v-model="modalPersonal.passType" type="radio" value="manual" />
+                  <span>Manual</span>
+                </label>
+                <label v-if="modalPersonal.usuarioId" class="dash-radio">
+                  <input v-model="modalPersonal.passType" type="radio" value="keep" />
+                  <span>Sin cambiar</span>
+                </label>
+              </div>
+              <input
+                v-if="modalPersonal.passType === 'manual'"
+                v-model="modalPersonal.password"
+                type="password"
+                class="dash-input-dark"
+                placeholder="••••••••"
+                autocomplete="new-password"
+              />
+            </div>
+          </template>
+
+          <p v-if="modalPersonal.error" class="error" role="alert">
+            {{ modalPersonal.error }}
           </p>
           <div class="dash-modal-actions">
-            <button class="dash-btn-secondary" type="button" @click="closeModalEditTrabajador">
+            <button class="dash-btn-secondary" type="button" @click="closeModalPersonal">
               Cancelar
             </button>
             <button class="dash-btn-primary" type="submit">Guardar</button>
@@ -220,67 +321,6 @@
           <p v-if="modalEditAdmin.error" class="error" role="alert">{{ modalEditAdmin.error }}</p>
           <div class="dash-modal-actions">
             <button class="dash-btn-secondary" type="button" @click="closeModalEditAdmin">
-              Cancelar
-            </button>
-            <button class="dash-btn-primary" type="submit">Guardar</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <!-- Modal editar usuario -->
-    <div
-      v-if="modalEditUsuario.open"
-      class="dash-modal-backdrop"
-      @click.self="closeModalEditUsuario"
-    >
-      <div class="dash-modal" role="dialog" aria-modal="true">
-        <div class="dash-modal-head">
-          <h3>Editar Usuario</h3>
-          <button
-            class="dash-modal-close"
-            type="button"
-            aria-label="Cerrar"
-            @click="closeModalEditUsuario"
-          >
-            ×
-          </button>
-        </div>
-        <form class="dash-admin-form" @submit.prevent="onSaveEditUsuario">
-          <div class="dash-field">
-            <label>RUT</label>
-            <input :value="formatRut(modalEditUsuario.rut)" type="text" disabled class="dash-mono" />
-          </div>
-          <div class="dash-field">
-            <label>Nombre Completo</label>
-            <input
-              v-model="modalEditUsuario.nombre"
-              type="text"
-              required
-              placeholder="Nombre del trabajador"
-            />
-          </div>
-          <div class="dash-field">
-            <label>Correo de Acceso</label>
-            <input
-              v-model="modalEditUsuario.correo"
-              type="email"
-              required
-              placeholder="usuario@basaltodrilling.cl"
-            />
-          </div>
-          <div class="dash-field">
-            <label>Estado</label>
-            <select v-model="modalEditUsuario.estado">
-              <option value="activo">Activo</option>
-              <option value="inactivo">Inactivo</option>
-            </select>
-          </div>
-          <p v-if="modalEditUsuario.error" class="error" role="alert">
-            {{ modalEditUsuario.error }}
-          </p>
-          <div class="dash-modal-actions">
-            <button class="dash-btn-secondary" type="button" @click="closeModalEditUsuario">
               Cancelar
             </button>
             <button class="dash-btn-primary" type="submit">Guardar</button>
@@ -597,7 +637,7 @@
                     v-if="!cajasDisponiblesParaGasto.length"
                     class="dash-hint dash-hint--inline"
                   >
-                    Sin cajas asignadas. Un administrador debe asignarlas en Trabajadores.
+                    Sin cajas asignadas. Un administrador debe asignarlas en Personal / Usuarios.
                   </p>
                 </div>
 
@@ -1976,313 +2016,24 @@
             </div>
           </div>
 
-          <!-- Usuarios -->
-          <div v-else-if="activeAdminTab === 'usuarios'" class="dash-admin-tab">
+          <!-- Personal / Usuarios -->
+          <div v-else-if="activeAdminTab === 'personal'" class="dash-admin-tab">
             <div class="dash-cajas-toolbar">
               <div>
-                <h3 class="dash-cajas-toolbar-title">Usuarios de Rendición</h3>
+                <h3 class="dash-cajas-toolbar-title">Gestión de Personal</h3>
                 <p class="dash-cajas-toolbar-hint">
-                  Usuarios asociados a una ficha de trabajador para rendir gastos.
+                  Fichas de trabajadores y acceso opcional al sistema de rendiciones.
                 </p>
               </div>
               <button
-                v-if="canCreateUsuarios"
+                v-if="canEditPersonal"
                 class="dash-btn-primary dash-btn-toggle-caja"
                 type="button"
-                @click="toggleFormUsuario"
+                @click="openModalPersonalCreate"
               >
-                <span>{{ usuarioFormOpen ? '▲' : '＋' }}</span>
-                <span>{{ usuarioFormOpen ? 'Ocultar Formulario' : 'Crear Usuario' }}</span>
+                <span>＋</span>
+                <span>Nuevo Personal</span>
               </button>
-            </div>
-
-            <div
-              v-if="canCreateUsuarios"
-              class="dash-collapse"
-              :class="{ 'dash-collapse--open': usuarioFormOpen }"
-            >
-              <div class="dash-collapse-inner">
-                <div class="dash-panel dash-gasto-form-panel dash-collapse-panel">
-              <div class="dash-caja-form-head">
-                <div>
-                  <h2 class="dash-assign-title dash-assign-title--flush">
-                    Crear Usuario Rendidor
-                  </h2>
-                  <p class="dash-hint">
-                    Todo usuario debe estar asociado a una ficha de trabajador.
-                  </p>
-                </div>
-                <button
-                  class="dash-modal-close"
-                  type="button"
-                  aria-label="Cerrar"
-                  @click="closeFormUsuario"
-                >
-                  ×
-                </button>
-              </div>
-
-              <form class="dash-admin-form" @submit.prevent="onSaveUsuario">
-                <div class="dash-caja-grid-2">
-                  <div class="dash-field">
-                    <label>Trabajador Asociado</label>
-                    <select v-model="usuarioForm.trabajadorId">
-                      <option value="">-- Seleccionar Trabajador Existente --</option>
-                      <option value="nuevo">+ CREAR NUEVO TRABAJADOR SIMULTÁNEAMENTE</option>
-                      <option
-                        v-for="t in trabajadores"
-                        :key="t.id"
-                        :value="String(t.id)"
-                      >
-                        {{ t.nombre }} ({{ t.rut }}) - {{ t.cargo }}
-                      </option>
-                    </select>
-                  </div>
-                  <div class="dash-field">
-                    <label>Correo de Acceso</label>
-                    <input
-                      v-model="usuarioForm.correo"
-                      type="email"
-                      placeholder="usuario@basaltodrilling.cl"
-                    />
-                  </div>
-                </div>
-
-                <div
-                  v-if="usuarioForm.trabajadorId === 'nuevo'"
-                  class="dash-nested-box dash-caja-grid-3"
-                >
-                  <div class="dash-field">
-                    <div class="dash-desc-head">
-                      <label>RUT</label>
-                      <span
-                        class="dash-rut-status"
-                        :class="`dash-rut-status--${usuarioNuevoRutStatus.state}`"
-                      >
-                        {{ usuarioNuevoRutStatus.text }}
-                      </span>
-                    </div>
-                    <input
-                      :value="usuarioForm.nuevoRut"
-                      type="text"
-                      placeholder="12.345.678-9"
-                      @input="usuarioForm.nuevoRut = fromRutInput($event.target.value).display"
-                    />
-                  </div>
-                  <div class="dash-field">
-                    <label>Nombre Completo</label>
-                    <input
-                      v-model="usuarioForm.nuevoNombre"
-                      type="text"
-                      placeholder="Nombre Completo"
-                    />
-                  </div>
-                  <div class="dash-field">
-                    <label>Cargo / Faena</label>
-                    <input
-                      v-model="usuarioForm.nuevoCargo"
-                      type="text"
-                      placeholder="Cargo / Faena"
-                    />
-                  </div>
-                </div>
-
-                <div class="dash-admin-form-section">
-                  <label class="dash-field-label">Contraseña Temporal</label>
-                  <div class="dash-radio-row">
-                    <label class="dash-radio">
-                      <input v-model="usuarioForm.passType" type="radio" value="rut" />
-                      <span>Basada en RUT</span>
-                    </label>
-                    <label class="dash-radio">
-                      <input v-model="usuarioForm.passType" type="radio" value="manual" />
-                      <span>Manual</span>
-                    </label>
-                  </div>
-                  <input
-                    v-if="usuarioForm.passType === 'manual'"
-                    v-model="usuarioForm.password"
-                    type="password"
-                    class="dash-input-dark"
-                    placeholder="•••••••• (Temporal)"
-                    autocomplete="new-password"
-                  />
-                </div>
-
-                <div class="dash-caja-form-actions">
-                  <button class="dash-btn-secondary" type="button" @click="closeFormUsuario">
-                    Cancelar
-                  </button>
-                  <button class="dash-btn-primary" type="submit">
-                    <span>Guardar Usuario</span>
-                  </button>
-                </div>
-              </form>
-                </div>
-              </div>
-            </div>
-
-            <div class="dash-table-wrap">
-              <table class="dash-table">
-                <thead>
-                  <tr>
-                    <th>RUT</th>
-                    <th>Nombre</th>
-                    <th>Correo</th>
-                    <th>Rol</th>
-                    <th class="dash-table-center">Estado</th>
-                    <th v-if="canCreateUsuarios" class="dash-table-center">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="u in usuarios" :key="u.id || u.correo">
-                    <td class="dash-table-strong dash-mono">{{ u.rut || '-' }}</td>
-                    <td>{{ u.nombre || '-' }}</td>
-                    <td>{{ u.correo || '-' }}</td>
-                    <td>
-                      <span class="dash-badge dash-badge--accent">{{ u.rolLabel || u.rol || 'Usuario' }}</span>
-                    </td>
-                    <td class="dash-table-center">
-                      <button
-                        v-if="canToggleUsuarioEstado && u.id"
-                        type="button"
-                        class="dash-status dash-status--toggle"
-                        :class="u.estado === 'Activo' ? 'dash-status--ok' : 'dash-status--warn'"
-                        :title="
-                          u.id === user?.id
-                            ? 'No puedes cambiar tu propio estado'
-                            : u.estado === 'Activo'
-                              ? 'Click para desactivar'
-                              : 'Click para activar'
-                        "
-                        :disabled="u.id === user?.id || togglingEstadoId === u.id"
-                        @click="onToggleEstadoUsuario(u)"
-                      >
-                        {{ u.estado || '-' }}
-                      </button>
-                      <span
-                        v-else
-                        class="dash-status"
-                        :class="u.estado === 'Activo' ? 'dash-status--ok' : 'dash-status--warn'"
-                      >
-                        {{ u.estado || '-' }}
-                      </span>
-                    </td>
-                    <td v-if="canCreateUsuarios" class="dash-table-center dash-table-actions">
-                      <button
-                        v-if="canEditUsuarios"
-                        class="dash-btn-icon"
-                        type="button"
-                        title="Editar"
-                        @click="onEditUsuario(u)"
-                      >
-                        ✎
-                      </button>
-                      <button
-                        class="dash-btn-icon dash-btn-icon--danger"
-                        type="button"
-                        title="Eliminar"
-                        @click="onDeleteUsuario(u)"
-                      >
-                        🗑
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <!-- Trabajadores -->
-          <div v-else-if="activeAdminTab === 'trabajadores'" class="dash-admin-tab">
-            <div class="dash-cajas-toolbar">
-              <div>
-                <h3 class="dash-cajas-toolbar-title">Nómina de Trabajadores</h3>
-                <p class="dash-cajas-toolbar-hint">
-                  Personal habilitado para rendir gastos o recibir anticipos.
-                </p>
-              </div>
-              <button
-                class="dash-btn-primary dash-btn-toggle-caja"
-                type="button"
-                @click="toggleFormTrabajador"
-              >
-                <span>{{ trabajadorFormOpen ? '▲' : '＋' }}</span>
-                <span>
-                  {{
-                    trabajadorFormOpen
-                      ? 'Ocultar Formulario'
-                      : 'Nueva Ficha Trabajador'
-                  }}
-                </span>
-              </button>
-            </div>
-
-            <div
-              class="dash-collapse"
-              :class="{ 'dash-collapse--open': trabajadorFormOpen }"
-            >
-              <div class="dash-collapse-inner">
-                <div class="dash-panel dash-gasto-form-panel dash-collapse-panel">
-              <div class="dash-caja-form-head">
-                <div>
-                  <h2 class="dash-assign-title dash-assign-title--flush">
-                    Nueva Ficha de Trabajador
-                  </h2>
-                  <p class="dash-hint">
-                    Para personal que rinde o recibe anticipos sin requerir usuario.
-                  </p>
-                </div>
-                <button
-                  class="dash-modal-close"
-                  type="button"
-                  aria-label="Cerrar"
-                  @click="closeFormTrabajador"
-                >
-                  ×
-                </button>
-              </div>
-
-              <form class="dash-admin-form" @submit.prevent="onSaveTrabajador">
-                <div class="dash-caja-grid-3">
-                  <div class="dash-field">
-                    <label>RUT</label>
-                    <input
-                      :value="trabajadorForm.rut"
-                      type="text"
-                      placeholder="12.345.678-9"
-                      @input="trabajadorForm.rut = fromRutInput($event.target.value).display"
-                    />
-                  </div>
-                  <div class="dash-field">
-                    <label>Nombres y Apellidos</label>
-                    <input
-                      v-model="trabajadorForm.nombre"
-                      type="text"
-                      placeholder="Mario Silva"
-                    />
-                  </div>
-                  <div class="dash-field">
-                    <label>Cargo / Rol en Faena</label>
-                    <input
-                      v-model="trabajadorForm.cargo"
-                      type="text"
-                      placeholder="Conductor Camión Riego"
-                    />
-                  </div>
-                </div>
-
-                <div class="dash-caja-form-actions">
-                  <button class="dash-btn-secondary" type="button" @click="closeFormTrabajador">
-                    Cancelar
-                  </button>
-                  <button class="dash-btn-primary" type="submit">
-                    <span>Guardar Trabajador</span>
-                  </button>
-                </div>
-              </form>
-                </div>
-              </div>
             </div>
 
             <div class="dash-table-wrap">
@@ -2292,58 +2043,90 @@
                     <th>RUT</th>
                     <th>Nombre</th>
                     <th>Cargo</th>
-                    <th>Cajas asignadas</th>
-                    <th class="dash-table-center">Tiene Usuario</th>
+                    <th>Correo</th>
+                    <th class="dash-table-center">Acceso Sistema</th>
                     <th class="dash-table-center">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="t in trabajadores" :key="t.id">
-                    <td class="dash-mono">{{ t.rut }}</td>
-                    <td class="dash-table-strong">{{ t.nombre }}</td>
-                    <td>{{ t.cargo }}</td>
-                    <td>
-                      <div v-if="t.cajasAsignadas?.length" class="dash-cajas-tags">
-                        <span
-                          v-for="gk in t.cajasAsignadas"
-                          :key="gk"
-                          class="dash-badge dash-badge--neutral"
-                        >
-                          {{ labelCajaGroup(gk) }}
-                        </span>
-                      </div>
-                      <span v-else class="dash-muted">Sin cajas</span>
-                    </td>
+                  <tr v-for="p in personal" :key="p.id">
+                    <td class="dash-table-strong dash-mono">{{ formatRut(p.rut) || '-' }}</td>
+                    <td>{{ p.nombre || '-' }}</td>
+                    <td>{{ p.cargo || '-' }}</td>
+                    <td>{{ p.correo || '-' }}</td>
                     <td class="dash-table-center">
-                      <span
-                        class="dash-badge"
-                        :class="t.tieneUsuario ? 'dash-badge--ok' : 'dash-badge--neutral'"
+                      <button
+                        v-if="p.accesoKind !== 'none' && canTogglePersonalAcceso && p.usuarioId"
+                        type="button"
+                        class="dash-status dash-status--toggle"
+                        :class="
+                          p.accesoKind === 'activo' ? 'dash-status--ok' : 'dash-status--danger'
+                        "
+                        :title="
+                          p.usuarioId === user?.id
+                            ? 'No puedes cambiar tu propio estado'
+                            : p.accesoKind === 'activo'
+                              ? 'Click para desactivar'
+                              : 'Click para activar'
+                        "
+                        :disabled="p.usuarioId === user?.id || togglingEstadoId === p.usuarioId"
+                        @click="onToggleEstadoPersonal(p)"
                       >
-                        {{ t.tieneUsuario ? 'Sí' : 'No' }}
+                        {{ p.accesoLabel }}
+                      </button>
+                      <button
+                        v-else-if="p.accesoKind === 'none' && canEditPersonal"
+                        type="button"
+                        class="dash-status dash-status--off dash-status--toggle"
+                        title="Crear acceso de usuario"
+                        @click="openModalPersonalCrearUsuario(p)"
+                      >
+                        Solo Ficha
+                      </button>
+                      <span
+                        v-else
+                        class="dash-status"
+                        :class="{
+                          'dash-status--ok': p.accesoKind === 'activo',
+                          'dash-status--danger': p.accesoKind === 'inactivo',
+                          'dash-status--off': p.accesoKind === 'none'
+                        }"
+                      >
+                        {{ p.accesoLabel }}
                       </span>
                     </td>
                     <td class="dash-table-center dash-table-actions">
                       <button
-                        class="dash-btn-edit"
-                        type="button"
-                        @click="openModalAsignarCajas(t)"
-                      >
-                        Asignar cajas
-                      </button>
-                      <button
-                        v-if="canEditTrabajadores"
+                        v-if="canEditPersonal"
                         class="dash-btn-icon"
                         type="button"
                         title="Editar"
-                        @click="onEditTrabajador(t)"
+                        @click="openModalPersonalEdit(p)"
                       >
                         ✎
                       </button>
                       <button
+                        v-if="canEditPersonal && !p.tieneUsuario"
+                        class="dash-btn-edit"
+                        type="button"
+                        title="Crear usuario"
+                        @click="openModalPersonalCrearUsuario(p)"
+                      >
+                        Crear Usuario
+                      </button>
+                      <button
+                        class="dash-btn-edit"
+                        type="button"
+                        @click="openModalAsignarCajas(p)"
+                      >
+                        Asignar cajas
+                      </button>
+                      <button
+                        v-if="canEditPersonal"
                         class="dash-btn-icon dash-btn-icon--danger"
                         type="button"
-                        title="Eliminar"
-                        @click="onDeleteTrabajador(t)"
+                        title="Eliminar ficha"
+                        @click="onDeletePersonal(p)"
                       >
                         🗑
                       </button>
@@ -2510,7 +2293,8 @@
                 <thead>
                   <tr>
                     <th>Tarjeta / Alias</th>
-                    <th>Tipo / N°</th>
+                    <th>Tipo</th>
+                    <th>N°</th>
                     <th>Banco</th>
                     <th>Titular / Asignado</th>
                     <th class="dash-table-center">Estado</th>
@@ -2519,12 +2303,36 @@
                 </thead>
                 <tbody>
                   <tr v-for="t in tarjetasEmpresa" :key="t.id || t.ultimos4 + t.alias">
-                    <td class="dash-table-strong">💳 {{ t.alias }}</td>
-                    <td class="dash-mono dash-rinde">{{ t.tipo }} (•••• {{ t.ultimos4 }})</td>
+                    <td class="dash-table-strong">{{ t.alias }}</td>
+                    <td>{{ t.tipo }}</td>
+                    <td class="dash-mono dash-rinde">•••• {{ t.ultimos4 }}</td>
                     <td>{{ t.banco }}</td>
                     <td>{{ t.titular }}</td>
                     <td class="dash-table-center">
-                      <span class="dash-status dash-status--ok">{{ t.estado }}</span>
+                      <button
+                        v-if="t.id"
+                        type="button"
+                        class="dash-status dash-status--toggle"
+                        :class="t.estadoApi === 'activa' ? 'dash-status--ok' : 'dash-status--danger'"
+                        :title="
+                          t.estadoApi === 'activa'
+                            ? 'Click para desactivar'
+                            : t.fechaDesactivacion
+                              ? `Inactiva desde ${t.fechaDesactivacion} — click para activar`
+                              : 'Click para activar'
+                        "
+                        :disabled="togglingTarjetaId === t.id"
+                        @click="onToggleEstadoTarjeta(t)"
+                      >
+                        {{ t.estado }}
+                      </button>
+                      <span
+                        v-else
+                        class="dash-status"
+                        :class="t.estadoApi === 'activa' ? 'dash-status--ok' : 'dash-status--danger'"
+                      >
+                        {{ t.estado }}
+                      </span>
                     </td>
                     <td class="dash-table-center dash-table-actions">
                       <button class="dash-btn-icon" type="button" title="Editar" @click="onEditTarjeta(t)">
@@ -2665,6 +2473,7 @@ import {
   mapAuditLog,
   mapCaja,
   mapLegacy,
+  mapPersonal,
   mapRendicion,
   mapTarjeta,
   mapTrabajador,
@@ -2699,12 +2508,20 @@ const modalPerfil = reactive({
   ok: ''
 })
 
-const modalEditTrabajador = reactive({
+const modalPersonal = reactive({
   open: false,
   id: null,
+  usuarioId: null,
   rut: '',
   nombre: '',
   cargo: '',
+  cajas: [],
+  crearUsuario: false,
+  correo: '',
+  rol: 'USER_RENDIDOR',
+  estado: 'activo',
+  passType: 'rut',
+  password: '',
   error: ''
 })
 
@@ -2715,16 +2532,6 @@ const modalEditAdmin = reactive({
   nombre: '',
   correo: '',
   rol: '',
-  estado: 'activo',
-  error: ''
-})
-
-const modalEditUsuario = reactive({
-  open: false,
-  id: null,
-  rut: '',
-  nombre: '',
-  correo: '',
   estado: 'activo',
   error: ''
 })
@@ -2915,8 +2722,7 @@ const tabs = [
 
 const adminTabs = [
   { id: 'admin-users', label: 'Admin Users' },
-  { id: 'usuarios', label: 'Usuarios' },
-  { id: 'trabajadores', label: 'Trabajadores' },
+  { id: 'personal', label: 'Personal / Usuarios' },
   { id: 'tarjetas', label: 'Tarjetas Empresa' },
   { id: 'auditoria', label: 'Auditoría' }
 ]
@@ -2958,8 +2764,6 @@ const anticipoFiltroCaja = ref('')
 const anticipoFiltroMes = ref('')
 
 const adminFormOpen = ref(false)
-const usuarioFormOpen = ref(false)
-const trabajadorFormOpen = ref(false)
 const tarjetaFormOpen = ref(false)
 
 const palabrasDescripcion = computed(() => {
@@ -3144,11 +2948,11 @@ const canEditUsuarios = canCreateUsuarios
 const canToggleAdminEstado = canCreateAdmins
 /** Super Admins y Admin Caja pueden activar/desactivar usuarios rendidores */
 const canToggleUsuarioEstado = canCreateUsuarios
-const canEditTrabajadores = computed(() => {
-  const nivel = sessionAdminNivel.value
-  return nivel === ROLE_DEV || nivel === ROLE_SUPER || nivel === ROLE_ADMIN_CAJA
-})
+const canEditPersonal = canCreateUsuarios
+const canTogglePersonalAcceso = canCreateUsuarios
+const canEditTrabajadores = canEditPersonal
 const togglingEstadoId = ref(null)
+const togglingTarjetaId = ref(null)
 
 /** Admin / Super Admin / Dev pueden rendir a nombre de cualquier trabajador */
 const canIngresarPorOtros = computed(() => {
@@ -3256,33 +3060,8 @@ watch(
 )
 
 const trabajadores = ref([])
-
-const usuarioForm = reactive({
-  trabajadorId: '',
-  nuevoRut: '',
-  nuevoNombre: '',
-  nuevoCargo: '',
-  correo: '',
-  passType: 'rut',
-  password: '',
-  editIndex: null
-})
-
-const usuarioNuevoRutStatus = computed(() => rutStatusLabel(usuarioForm.nuevoRut))
-
-const rutTrabajadorSeleccionado = computed(() => {
-  if (usuarioForm.trabajadorId === 'nuevo') return usuarioForm.nuevoRut
-  const t = trabajadores.value.find((x) => String(x.id) === usuarioForm.trabajadorId)
-  return t?.rut || ''
-})
-
+const personal = ref([])
 const usuarios = ref([])
-
-const trabajadorForm = reactive({
-  rut: '',
-  nombre: '',
-  cargo: ''
-})
 
 const tarjetaForm = reactive({
   editId: null,
@@ -3292,6 +3071,8 @@ const tarjetaForm = reactive({
   banco: '',
   titular: ''
 })
+
+const personalModalRutStatus = computed(() => rutStatusLabel(modalPersonal.rut))
 
 const tarjetasEmpresa = ref([])
 
@@ -3390,15 +3171,23 @@ async function loadDashboardData() {
   dataError.value = ''
   saveError.value = ''
   try {
-    const [cajasRaw, rendRaw, trabRaw, legRaw] = await Promise.all([
+    const [cajasRaw, rendRaw, trabRaw, legRaw, personalRaw] = await Promise.all([
       safeList(api.listCajas),
       safeList(api.listRendiciones),
       safeList(api.listTrabajadores),
-      safeList(api.listLegacy)
+      safeList(api.listLegacy),
+      safeList(api.listPersonal)
     ])
 
     cajas.value = cajasRaw.map(mapCaja)
     trabajadores.value = trabRaw.map(mapTrabajador)
+    personal.value = personalRaw.map(mapPersonal)
+    applyTieneUsuario(
+      trabajadores.value,
+      personal.value
+        .filter((p) => p.usuarioId != null)
+        .map((p) => ({ trabajadorId: p.id }))
+    )
 
     const movOps = rendRaw.map(mapRendicion)
     const legOps = legRaw.map(mapLegacy)
@@ -3409,7 +3198,6 @@ async function loadDashboardData() {
 
     const usuariosRaw = await safeList(api.listUsuarios)
     const mappedUsers = usuariosRaw.map(mapUsuario)
-    applyTieneUsuario(trabajadores.value, mappedUsers)
 
     admins.value = mappedUsers
       .filter((u) =>
@@ -3427,21 +3215,7 @@ async function loadDashboardData() {
         })
       )
 
-    usuarios.value = mappedUsers
-      .filter((u) => u.rol === 'USER_RENDIDOR')
-      .map((u) => ({
-        id: u.id,
-        correo: u.correo,
-        nombre: u.nombre || '',
-        trabajador: u.trabajador,
-        cargo: u.cargo,
-        trabajadorId: u.trabajadorId,
-        rut: u.rut,
-        rol: u.rol,
-        rolLabel: u.rolLabel || 'Usuario',
-        estado: u.estado,
-        estadoApi: u.estadoApi
-      }))
+    usuarios.value = mappedUsers.filter((u) => u.rol === 'USER_RENDIDOR')
 
     const tarjetasRaw = await safeList(api.listTarjetas)
     tarjetasEmpresa.value = tarjetasRaw.map(mapTarjeta)
@@ -4225,73 +3999,141 @@ function closeFormAdminUser() {
   resetAdminForm()
 }
 
-function toggleFormUsuario() {
-  if (usuarioFormOpen.value) {
-    closeFormUsuario()
+function resetPersonalModal() {
+  modalPersonal.open = false
+  modalPersonal.id = null
+  modalPersonal.usuarioId = null
+  modalPersonal.rut = ''
+  modalPersonal.nombre = ''
+  modalPersonal.cargo = ''
+  modalPersonal.cajas = []
+  modalPersonal.crearUsuario = false
+  modalPersonal.correo = ''
+  modalPersonal.rol = 'USER_RENDIDOR'
+  modalPersonal.estado = 'activo'
+  modalPersonal.passType = 'rut'
+  modalPersonal.password = ''
+  modalPersonal.error = ''
+}
+
+function closeModalPersonal() {
+  resetPersonalModal()
+}
+
+function openModalPersonalCreate() {
+  if (!canEditPersonal.value) return
+  resetPersonalModal()
+  modalPersonal.open = true
+  modalPersonal.passType = 'rut'
+}
+
+function openModalPersonalEdit(p) {
+  if (!canEditPersonal.value || !p?.id) return
+  modalPersonal.open = true
+  modalPersonal.id = p.id
+  modalPersonal.usuarioId = p.usuarioId || null
+  modalPersonal.rut = formatRut(p.rut || '')
+  modalPersonal.nombre = p.nombre || ''
+  modalPersonal.cargo = p.cargo === '-' ? '' : p.cargo || ''
+  modalPersonal.cajas = [...(p.cajasAsignadas || [])]
+  modalPersonal.crearUsuario = Boolean(p.usuarioId)
+  modalPersonal.correo = p.correo || ''
+  modalPersonal.rol = p.usuarioRol || 'USER_RENDIDOR'
+  modalPersonal.estado =
+    p.usuarioEstado === 'inactivo' || p.accesoKind === 'inactivo' ? 'inactivo' : 'activo'
+  modalPersonal.passType = p.usuarioId ? 'keep' : 'rut'
+  modalPersonal.password = ''
+  modalPersonal.error = ''
+}
+
+function openModalPersonalCrearUsuario(p) {
+  if (!canEditPersonal.value || !p?.id) return
+  openModalPersonalEdit(p)
+  modalPersonal.crearUsuario = true
+  modalPersonal.passType = 'rut'
+}
+
+async function onSavePersonal() {
+  if (!canEditPersonal.value) return
+  const rutLimpio = cleanRut(modalPersonal.rut)
+  if (!rutLimpio || !modalPersonal.nombre.trim()) return
+  if (!validarRutChileno(rutLimpio)) {
+    modalPersonal.error = 'RUT inválido'
     return
   }
-  resetUsuarioForm()
-  usuarioFormOpen.value = true
-}
 
-function closeFormUsuario() {
-  usuarioFormOpen.value = false
-  resetUsuarioForm()
-}
-
-function toggleFormTrabajador() {
-  if (trabajadorFormOpen.value) {
-    closeFormTrabajador()
-    return
+  const crearUsuario = Boolean(modalPersonal.crearUsuario)
+  let passwordTemporal = null
+  if (crearUsuario) {
+    if (!modalPersonal.correo.trim()) {
+      modalPersonal.error = 'Correo requerido para acceso al sistema'
+      return
+    }
+    const needsPassword = !modalPersonal.usuarioId || modalPersonal.passType !== 'keep'
+    if (needsPassword) {
+      if (modalPersonal.passType === 'manual' && !modalPersonal.password.trim()) {
+        modalPersonal.error = 'Ingresa una contraseña'
+        return
+      }
+      passwordTemporal =
+        modalPersonal.passType === 'manual'
+          ? modalPersonal.password.trim()
+          : passwordFromRut(rutLimpio)
+      if (!passwordTemporal) {
+        modalPersonal.error = 'No se pudo generar la contraseña'
+        return
+      }
+    }
   }
-  trabajadorForm.rut = ''
-  trabajadorForm.nombre = ''
-  trabajadorForm.cargo = ''
-  trabajadorFormOpen.value = true
-}
 
-function closeFormTrabajador() {
-  trabajadorFormOpen.value = false
-  trabajadorForm.rut = ''
-  trabajadorForm.nombre = ''
-  trabajadorForm.cargo = ''
-}
+  const payload = {
+    rut: rutLimpio,
+    nombre_completo: modalPersonal.nombre.trim(),
+    cargo: modalPersonal.cargo.trim() || null,
+    caja_ids: [...modalPersonal.cajas],
+    crear_usuario: crearUsuario && !modalPersonal.usuarioId
+  }
 
-function onEditTrabajador(t) {
-  if (!canEditTrabajadores.value || !t?.id) return
-  modalEditTrabajador.open = true
-  modalEditTrabajador.id = t.id
-  modalEditTrabajador.rut = formatRut(t.rut || '')
-  modalEditTrabajador.nombre = t.nombre || ''
-  modalEditTrabajador.cargo = t.cargo === '-' ? '' : t.cargo || ''
-  modalEditTrabajador.error = ''
-}
+  if (crearUsuario) {
+    payload.correo = modalPersonal.correo.trim()
+    payload.rol = 'USER_RENDIDOR'
+    if (modalPersonal.usuarioId) {
+      payload.estado = modalPersonal.estado
+      if (passwordTemporal) payload.password = passwordTemporal
+      // En edit con switch ON y usuario existente, el backend actualiza si hay campos
+      payload.crear_usuario = true
+    } else if (passwordTemporal) {
+      payload.password = passwordTemporal
+    }
+  }
 
-function closeModalEditTrabajador() {
-  modalEditTrabajador.open = false
-  modalEditTrabajador.id = null
-  modalEditTrabajador.rut = ''
-  modalEditTrabajador.nombre = ''
-  modalEditTrabajador.cargo = ''
-  modalEditTrabajador.error = ''
-}
-
-async function onSaveEditTrabajador() {
-  if (!canEditTrabajadores.value || !modalEditTrabajador.id) return
-  const rutLimpio = cleanRut(modalEditTrabajador.rut)
-  if (!rutLimpio || !modalEditTrabajador.nombre.trim()) return
   try {
-    modalEditTrabajador.error = ''
+    modalPersonal.error = ''
     saveError.value = ''
-    await api.updateTrabajador(modalEditTrabajador.id, {
-      rut: rutLimpio,
-      nombre_completo: modalEditTrabajador.nombre.trim(),
-      cargo: modalEditTrabajador.cargo.trim() || null
-    })
+    const createdNewUser = Boolean(crearUsuario && !modalPersonal.usuarioId && passwordTemporal)
+    let created = null
+    if (modalPersonal.id) {
+      created = await api.updatePersonal(modalPersonal.id, payload)
+    } else {
+      created = await api.createPersonal(payload)
+    }
+    const credNombre = created?.nombre_completo || modalPersonal.nombre.trim()
+    const credRut = formatRut(created?.rut || rutLimpio)
+    const credCorreo = created?.correo || payload.correo
+    const credPass = created?.password || passwordTemporal
     await loadDashboardData()
-    closeModalEditTrabajador()
+    closeModalPersonal()
+    if (createdNewUser && credPass) {
+      openModalCredenciales({
+        nombre: credNombre,
+        rut: credRut,
+        correo: credCorreo,
+        rol: 'Usuario Rendidor',
+        password: credPass
+      })
+    }
   } catch (err) {
-    modalEditTrabajador.error = err?.message || 'No se pudo actualizar el trabajador'
+    modalPersonal.error = err?.message || 'No se pudo guardar el personal'
   }
 }
 
@@ -4350,51 +4192,11 @@ async function onSaveEditAdmin() {
   }
 }
 
-function onEditUsuario(u) {
-  if (!canEditUsuarios.value || !u?.id) return
-  modalEditUsuario.open = true
-  modalEditUsuario.id = u.id
-  modalEditUsuario.rut = u.rut || ''
-  modalEditUsuario.nombre = u.nombre || (u.trabajador === '-' ? '' : u.trabajador) || ''
-  modalEditUsuario.correo = u.correo || ''
-  modalEditUsuario.estado = u.estadoApi || (u.estado === 'Inactivo' ? 'inactivo' : 'activo')
-  modalEditUsuario.error = ''
-}
-
-function closeModalEditUsuario() {
-  modalEditUsuario.open = false
-  modalEditUsuario.id = null
-  modalEditUsuario.rut = ''
-  modalEditUsuario.nombre = ''
-  modalEditUsuario.correo = ''
-  modalEditUsuario.estado = 'activo'
-  modalEditUsuario.error = ''
-}
-
-async function onSaveEditUsuario() {
-  if (!canEditUsuarios.value || !modalEditUsuario.id) return
-  if (!modalEditUsuario.nombre.trim() || !modalEditUsuario.correo.trim()) return
-  try {
-    modalEditUsuario.error = ''
-    saveError.value = ''
-    await api.updateUsuario(modalEditUsuario.id, {
-      correo: modalEditUsuario.correo.trim(),
-      estado: modalEditUsuario.estado,
-      nombre: modalEditUsuario.nombre.trim(),
-      rol: 'USER_RENDIDOR'
-    })
-    await loadDashboardData()
-    closeModalEditUsuario()
-  } catch (err) {
-    modalEditUsuario.error = err?.message || 'No se pudo actualizar el usuario'
-  }
-}
-
 /**
  * Alterna activo ↔ inactivo vía PUT /api/admin/usuarios/:id.
  * Actualiza la fila local al éxito; no permite desactivarse a sí mismo.
  */
-async function toggleEstadoCuenta(row, { canToggle, listRef, label }) {
+async function toggleEstadoCuenta(row, { canToggle, listRef, label, onSuccess }) {
   if (!canToggle || !row?.id) return
   if (row.id === user.value?.id) {
     saveError.value = 'No puedes desactivarte a ti mismo'
@@ -4410,11 +4212,15 @@ async function toggleEstadoCuenta(row, { canToggle, listRef, label }) {
     togglingEstadoId.value = row.id
     saveError.value = ''
     await api.updateUsuario(row.id, { estado: next })
-    const display = next === 'activo' ? 'Activo' : 'Inactivo'
-    const list = listRef.value
-    const idx = list.findIndex((x) => x.id === row.id)
-    if (idx >= 0) {
-      list[idx] = { ...list[idx], estado: display, estadoApi: next }
+    if (typeof onSuccess === 'function') {
+      onSuccess(next)
+    } else {
+      const display = next === 'activo' ? 'Activo' : 'Inactivo'
+      const list = listRef.value
+      const idx = list.findIndex((x) => x.id === row.id)
+      if (idx >= 0) {
+        list[idx] = { ...list[idx], estado: display, estadoApi: next }
+      }
     }
   } catch (err) {
     saveError.value = err?.message || `No se pudo ${next === 'activo' ? 'activar' : 'desactivar'} ${label}`
@@ -4431,23 +4237,52 @@ function onToggleEstadoAdmin(admin) {
   })
 }
 
-function onToggleEstadoUsuario(u) {
-  return toggleEstadoCuenta(u, {
-    canToggle: canToggleUsuarioEstado.value,
-    listRef: usuarios,
-    label: 'el usuario'
-  })
+function onToggleEstadoPersonal(p) {
+  if (!p?.usuarioId) return
+  return toggleEstadoCuenta(
+    {
+      id: p.usuarioId,
+      nombre: p.nombre,
+      correo: p.correo,
+      rut: p.rut,
+      estadoApi: p.accesoKind === 'inactivo' ? 'inactivo' : 'activo',
+      estado: p.accesoLabel
+    },
+    {
+      canToggle: canTogglePersonalAcceso.value,
+      listRef: personal,
+      label: 'el usuario',
+      onSuccess(next) {
+        const idx = personal.value.findIndex((x) => x.id === p.id)
+        if (idx < 0) return
+        const accesoKind = next === 'activo' ? 'activo' : 'inactivo'
+        personal.value[idx] = {
+          ...personal.value[idx],
+          accesoKind,
+          accesoLabel: next === 'activo' ? 'Activo' : 'Inactivo',
+          accesoSistema: accesoKind,
+          usuarioEstado: next
+        }
+      }
+    }
+  )
 }
 
-async function onDeleteTrabajador(t) {
-  if (!t?.id) return
-  if (!confirm(`¿Eliminar al trabajador "${t.nombre}" (${t.rut})? (soft delete)`)) return
+async function onDeletePersonal(p) {
+  if (!canEditPersonal.value || !p?.id) return
+  const msg = p.tieneUsuario
+    ? `¿Eliminar la ficha de "${p.nombre}" (${formatRut(p.rut)})? También se desactivará el acceso de usuario (soft delete).`
+    : `¿Eliminar la ficha de "${p.nombre}" (${formatRut(p.rut)})? (soft delete)`
+  if (!confirm(msg)) return
   try {
     saveError.value = ''
-    await api.deleteTrabajador(t.id)
+    if (p.usuarioId) {
+      await api.deleteUsuario(p.usuarioId)
+    }
+    await api.deleteTrabajador(p.id)
     await loadDashboardData()
   } catch (err) {
-    saveError.value = err?.message || 'No se pudo eliminar el trabajador'
+    saveError.value = err?.message || 'No se pudo eliminar el personal'
   }
 }
 
@@ -4464,18 +4299,6 @@ async function onDeleteAdmin(admin) {
     await loadDashboardData()
   } catch (err) {
     saveError.value = err?.message || 'No se pudo eliminar el administrador'
-  }
-}
-
-async function onDeleteUsuario(u) {
-  if (!canCreateUsuarios.value || !u?.id) return
-  if (!confirm(`¿Eliminar al usuario "${u.correo}"? (soft delete)`)) return
-  try {
-    saveError.value = ''
-    await api.deleteUsuario(u.id)
-    await loadDashboardData()
-  } catch (err) {
-    saveError.value = err?.message || 'No se pudo eliminar el usuario'
   }
 }
 
@@ -4524,6 +4347,37 @@ async function onDeleteTarjeta(t) {
   }
 }
 
+async function onToggleEstadoTarjeta(t) {
+  if (!t?.id) return
+  const next = t.estadoApi === 'activa' ? 'inactiva' : 'activa'
+  if (next === 'inactiva') {
+    if (
+      !confirm(
+        `¿Desactivar la tarjeta "${t.alias}"? No se podrán asignar pagos con fecha igual o posterior a hoy.`
+      )
+    ) {
+      return
+    }
+  }
+  try {
+    togglingTarjetaId.value = t.id
+    saveError.value = ''
+    const updated = await api.updateTarjeta(t.id, { estado: next })
+    const mapped = mapTarjeta(updated)
+    const idx = tarjetasEmpresa.value.findIndex((x) => x.id === t.id)
+    if (idx >= 0) {
+      tarjetasEmpresa.value[idx] = mapped
+    } else {
+      await loadDashboardData()
+    }
+  } catch (err) {
+    saveError.value =
+      err?.message || `No se pudo ${next === 'activa' ? 'activar' : 'desactivar'} la tarjeta`
+  } finally {
+    togglingTarjetaId.value = null
+  }
+}
+
 function shortAdminRol(rol) {
   if (rol.includes('Dev')) return ROLE_DEV
   if (rol.includes('Administrador de Caja') || rol.includes('Admin Caja')) {
@@ -4567,98 +4421,6 @@ async function onSaveAdmin() {
     })
   } catch (err) {
     saveError.value = err?.message || 'No se pudo crear el admin'
-  }
-}
-
-function resetUsuarioForm() {
-  usuarioForm.trabajadorId = ''
-  usuarioForm.nuevoRut = ''
-  usuarioForm.nuevoNombre = ''
-  usuarioForm.nuevoCargo = ''
-  usuarioForm.correo = ''
-  usuarioForm.passType = 'rut'
-  usuarioForm.password = ''
-  usuarioForm.editIndex = null
-}
-
-async function onSaveUsuario() {
-  if (!canCreateUsuarios.value) return
-  if (!usuarioForm.correo.trim() || !usuarioForm.trabajadorId) return
-
-  let trabajadorId = null
-  let rutTrabajador = ''
-  let nombreTrabajador = ''
-
-  try {
-    saveError.value = ''
-
-    if (usuarioForm.trabajadorId === 'nuevo') {
-      const rutLimpio = cleanRut(usuarioForm.nuevoRut)
-      if (!rutLimpio || !usuarioForm.nuevoNombre.trim()) return
-      if (!validarRutChileno(rutLimpio)) return
-      const createdTrab = await api.createTrabajador({
-        rut: rutLimpio,
-        nombre_completo: usuarioForm.nuevoNombre.trim(),
-        cargo: usuarioForm.nuevoCargo.trim() || null
-      })
-      trabajadorId = createdTrab.id
-      rutTrabajador = rutLimpio
-      nombreTrabajador = usuarioForm.nuevoNombre.trim()
-    } else {
-      const t = trabajadores.value.find((x) => String(x.id) === usuarioForm.trabajadorId)
-      if (!t) return
-      trabajadorId = t.id
-      rutTrabajador = cleanRut(t.rut)
-      nombreTrabajador = t.nombre
-    }
-
-    if (usuarioForm.passType === 'manual' && !usuarioForm.password.trim()) return
-
-    const passwordTemporal =
-      usuarioForm.passType === 'manual'
-        ? usuarioForm.password
-        : passwordFromRut(rutTrabajador)
-
-    if (!passwordTemporal) return
-
-    const created = await api.createUsuario({
-      trabajador_id: trabajadorId,
-      rut: rutTrabajador,
-      correo: usuarioForm.correo.trim(),
-      password: passwordTemporal,
-      rol: 'USER_RENDIDOR',
-      estado: 'activo',
-      nombre: nombreTrabajador
-    })
-
-    await loadDashboardData()
-    resetUsuarioForm()
-    closeFormUsuario()
-    openModalCredenciales({
-      ...created,
-      rut: created.rut || rutTrabajador,
-      nombre: created.nombre || nombreTrabajador,
-      password: created.password || passwordTemporal
-    })
-  } catch (err) {
-    saveError.value = err?.message || 'No se pudo crear el usuario'
-  }
-}
-
-async function onSaveTrabajador() {
-  const rutLimpio = cleanRut(trabajadorForm.rut)
-  if (!rutLimpio || !trabajadorForm.nombre.trim()) return
-  try {
-    saveError.value = ''
-    await api.createTrabajador({
-      rut: rutLimpio,
-      nombre_completo: trabajadorForm.nombre.trim(),
-      cargo: trabajadorForm.cargo.trim() || null
-    })
-    await loadDashboardData()
-    closeFormTrabajador()
-  } catch (err) {
-    saveError.value = err?.message || 'No se pudo guardar el trabajador'
   }
 }
 

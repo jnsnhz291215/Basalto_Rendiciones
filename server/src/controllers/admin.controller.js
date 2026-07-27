@@ -1,7 +1,103 @@
 const bcrypt = require('bcryptjs')
-const { query } = require('../config/db')
+const { pool, query } = require('../config/db')
 const { registrarAuditoria } = require('../utils/audit')
-const { ROLES, SUPER_ADMINS } = require('../middlewares/role.middleware')
+const { ROLES, SUPER_ADMINS, ADMINS } = require('../middlewares/role.middleware')
+const {
+  ensureTarjetaFechaDesactivacion,
+  toDateOnly
+} = require('../utils/tarjetaPago')
+
+/** Normaliza RUT para comparar (sin puntos/guión). */
+function cleanRutValue(rut) {
+  return String(rut || '')
+    .replace(/[^0-9kK]/g, '')
+    .toUpperCase()
+}
+
+async function loadCajasByTrabajador() {
+  const cajas = await query(`SELECT trabajador_id, clave_interna FROM trabajador_cajas`)
+  const byTrab = new Map()
+  for (const row of cajas) {
+    if (!byTrab.has(row.trabajador_id)) byTrab.set(row.trabajador_id, [])
+    byTrab.get(row.trabajador_id).push(row.clave_interna)
+  }
+  return byTrab
+}
+
+/**
+ * Resuelve claves de cajas desde body: acepta `caja_ids`, `claves` o `cajas`
+ * (todas son claves_internas / groupKeys, no ids numéricos de filas caja).
+ */
+function parseCajaClaves(body) {
+  const raw = body?.caja_ids ?? body?.claves ?? body?.cajas
+  if (!Array.isArray(raw)) return null
+  return raw
+    .map((c) => String(c).trim().toUpperCase())
+    .filter(Boolean)
+}
+
+async function replaceTrabajadorCajas(connOrNull, trabajadorId, claves) {
+  const exec = connOrNull
+    ? (sql, params) => connOrNull.execute(sql, params)
+    : async (sql, params) => {
+        await query(sql, params)
+      }
+  await exec(`DELETE FROM trabajador_cajas WHERE trabajador_id = ?`, [trabajadorId])
+  for (const clave of claves) {
+    await exec(
+      `INSERT INTO trabajador_cajas (trabajador_id, clave_interna) VALUES (?, ?)`,
+      [trabajadorId, clave]
+    )
+  }
+}
+
+/**
+ * Personal = fichas de trabajadores + LEFT JOIN solo usuarios USER_RENDIDOR
+ * (roles admin se gestionan en pestaña Admins; no mezclar aquí).
+ * Preferencia de match: trabajador_id, fallback RUT normalizado.
+ */
+async function buildPersonalList() {
+  const trabajadores = await query(
+    `SELECT * FROM trabajadores WHERE is_deleted = FALSE ORDER BY nombre_completo ASC`
+  )
+  const usuarios = await query(
+    `SELECT id, trabajador_id, rut, correo, rol, estado
+     FROM usuarios
+     WHERE is_deleted = FALSE AND rol = ?`,
+    [ROLES.USER_RENDIDOR]
+  )
+  const byTrabId = new Map()
+  const byRut = new Map()
+  for (const u of usuarios) {
+    if (u.trabajador_id != null) byTrabId.set(Number(u.trabajador_id), u)
+    const r = cleanRutValue(u.rut)
+    if (r && !byRut.has(r)) byRut.set(r, u)
+  }
+  const byTrabCajas = await loadCajasByTrabajador()
+
+  return trabajadores.map((t) => {
+    const u = byTrabId.get(Number(t.id)) || byRut.get(cleanRutValue(t.rut)) || null
+    return {
+      id: t.id,
+      rut: t.rut,
+      nombre_completo: t.nombre_completo,
+      cargo: t.cargo,
+      created_at: t.created_at,
+      cajas_asignadas: byTrabCajas.get(t.id) || [],
+      usuario_id: u?.id ?? null,
+      correo: u?.correo ?? null,
+      usuario_rol: u?.rol ?? null,
+      usuario_estado: u?.estado ?? null,
+      // Acceso sistema: activo | inactivo | null (sin usuario rendidor)
+      acceso_sistema: u ? (u.estado === 'inactivo' ? 'inactivo' : 'activo') : null
+    }
+  })
+}
+
+async function getPersonalByTrabajadorId(id) {
+  const list = await buildPersonalList()
+  return list.find((p) => Number(p.id) === Number(id)) || null
+}
 
 /* --- Trabajadores --- */
 
@@ -452,10 +548,299 @@ async function softDeleteUsuario(req, res) {
   }
 }
 
+/* --- Personal (trabajadores + usuarios rendidores unificados) --- */
+
+async function listPersonal(req, res) {
+  try {
+    return res.json(await buildPersonalList())
+  } catch (err) {
+    console.error('[listPersonal]', err)
+    return res.status(500).json({ error: 'Internal Server Error' })
+  }
+}
+
+async function createPersonal(req, res) {
+  const conn = await pool.getConnection()
+  try {
+    const body = req.body || {}
+    const rutClean = cleanRutValue(body.rut)
+    const nombre = String(body.nombre_completo || body.nombre || '').trim()
+    const cargo = body.cargo != null ? String(body.cargo).trim() || null : null
+    const crearUsuario = Boolean(body.crear_usuario)
+    const cajaClaves = parseCajaClaves(body)
+
+    if (!rutClean || !nombre) {
+      return res.status(400).json({ error: 'rut y nombre_completo son requeridos' })
+    }
+
+    let passwordPlain = null
+    let rolUsuario = ROLES.USER_RENDIDOR
+    if (crearUsuario) {
+      const correo = String(body.correo || '').trim()
+      const password = body.password
+      rolUsuario = body.rol || ROLES.USER_RENDIDOR
+      if (!correo || !password) {
+        return res.status(400).json({ error: 'correo y password son requeridos para crear usuario' })
+      }
+      // En Personal solo se crean rendidores (admins van a pestaña Admins)
+      if (ADMINS.includes(rolUsuario)) {
+        return res.status(400).json({
+          error: 'No se pueden crear roles admin desde Personal; use Admins'
+        })
+      }
+      if (rolUsuario !== ROLES.USER_RENDIDOR) {
+        return res.status(400).json({ error: 'Rol no permitido en Personal' })
+      }
+      passwordPlain = String(password)
+    }
+
+    await conn.beginTransaction()
+
+    const [trabResult] = await conn.execute(
+      `INSERT INTO trabajadores (rut, nombre_completo, cargo) VALUES (?, ?, ?)`,
+      [rutClean, nombre, cargo]
+    )
+    const trabajadorId = trabResult.insertId
+
+    if (cajaClaves) {
+      await replaceTrabajadorCajas(conn, trabajadorId, cajaClaves)
+    }
+
+    let usuarioRow = null
+    if (crearUsuario) {
+      const hash = await bcrypt.hash(passwordPlain, 10)
+      const [userResult] = await conn.execute(
+        `INSERT INTO usuarios (trabajador_id, rut, correo, password_hash, rol, estado)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          trabajadorId,
+          rutClean,
+          String(body.correo).trim(),
+          hash,
+          rolUsuario,
+          body.estado === 'inactivo' ? 'inactivo' : 'activo'
+        ]
+      )
+      const [createdUsers] = await conn.execute(
+        `SELECT id, trabajador_id, rut, correo, rol, estado, created_at
+         FROM usuarios WHERE id = ? AND is_deleted = FALSE`,
+        [userResult.insertId]
+      )
+      usuarioRow = createdUsers[0] || null
+    }
+
+    await conn.commit()
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      'CREAR',
+      'Personal',
+      `Personal ${nombre} (${rutClean})${crearUsuario ? ' + usuario' : ''}`
+    )
+
+    const personal = await getPersonalByTrabajadorId(trabajadorId)
+    return res.status(201).json({
+      ...personal,
+      ...(usuarioRow && passwordPlain
+        ? { password: passwordPlain, usuario: { ...usuarioRow, password: passwordPlain } }
+        : {})
+    })
+  } catch (err) {
+    try {
+      await conn.rollback()
+    } catch (_) {
+      /* ignore */
+    }
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'RUT o correo ya registrado' })
+    }
+    console.error('[createPersonal]', err)
+    return res.status(500).json({ error: 'Internal Server Error' })
+  } finally {
+    conn.release()
+  }
+}
+
+async function findTrabajadorByIdOrRut(idOrRut) {
+  const raw = String(idOrRut || '').trim()
+  if (!raw) return null
+  if (/^\d+$/.test(raw)) {
+    const byId = await query(
+      `SELECT * FROM trabajadores WHERE id = ? AND is_deleted = FALSE`,
+      [Number(raw)]
+    )
+    if (byId[0]) return byId[0]
+  }
+  const rutClean = cleanRutValue(raw)
+  if (!rutClean) return null
+  const byRut = await query(
+    `SELECT * FROM trabajadores
+     WHERE REPLACE(REPLACE(UPPER(rut), '.', ''), '-', '') = ?
+       AND is_deleted = FALSE
+     LIMIT 1`,
+    [rutClean]
+  )
+  return byRut[0] || null
+}
+
+async function findRendidorForTrabajador(trabajador) {
+  const byId = await query(
+    `SELECT * FROM usuarios
+     WHERE is_deleted = FALSE AND rol = ? AND trabajador_id = ?
+     LIMIT 1`,
+    [ROLES.USER_RENDIDOR, trabajador.id]
+  )
+  if (byId[0]) return byId[0]
+  const rutClean = cleanRutValue(trabajador.rut)
+  if (!rutClean) return null
+  const byRut = await query(
+    `SELECT * FROM usuarios
+     WHERE is_deleted = FALSE AND rol = ?
+       AND REPLACE(REPLACE(UPPER(rut), '.', ''), '-', '') = ?
+     LIMIT 1`,
+    [ROLES.USER_RENDIDOR, rutClean]
+  )
+  return byRut[0] || null
+}
+
+async function updatePersonal(req, res) {
+  const conn = await pool.getConnection()
+  try {
+    const existing = await findTrabajadorByIdOrRut(req.params.idOrRut)
+    if (!existing) return res.status(404).json({ error: 'Personal no encontrado' })
+
+    const body = req.body || {}
+    const nextRut =
+      body.rut !== undefined ? cleanRutValue(body.rut) || existing.rut : cleanRutValue(existing.rut)
+    const nextNombre =
+      body.nombre_completo !== undefined || body.nombre !== undefined
+        ? String(body.nombre_completo || body.nombre || '').trim()
+        : existing.nombre_completo
+    const nextCargo =
+      body.cargo !== undefined
+        ? String(body.cargo || '').trim() || null
+        : existing.cargo
+    const cajaClaves = parseCajaClaves(body)
+    const crearUsuario = Boolean(body.crear_usuario)
+    const wantsUserUpdate =
+      body.correo !== undefined ||
+      body.rol !== undefined ||
+      body.estado !== undefined ||
+      (body.password && String(body.password).trim())
+
+    if (!nextNombre) {
+      return res.status(400).json({ error: 'nombre_completo es requerido' })
+    }
+
+    await conn.beginTransaction()
+
+    await conn.execute(
+      `UPDATE trabajadores
+       SET rut = ?, nombre_completo = ?, cargo = ?
+       WHERE id = ? AND is_deleted = FALSE`,
+      [nextRut, nextNombre, nextCargo, existing.id]
+    )
+
+    if (cajaClaves) {
+      await replaceTrabajadorCajas(conn, existing.id, cajaClaves)
+    }
+
+    let linkedUser = await findRendidorForTrabajador({ ...existing, rut: nextRut })
+    let passwordPlain = null
+
+    if (!linkedUser && crearUsuario) {
+      const correo = String(body.correo || '').trim()
+      const password = body.password
+      if (!correo || !password) {
+        await conn.rollback()
+        return res.status(400).json({ error: 'correo y password son requeridos para crear usuario' })
+      }
+      const rolUsuario = body.rol || ROLES.USER_RENDIDOR
+      if (ADMINS.includes(rolUsuario) || rolUsuario !== ROLES.USER_RENDIDOR) {
+        await conn.rollback()
+        return res.status(400).json({ error: 'Rol no permitido en Personal' })
+      }
+      passwordPlain = String(password)
+      const hash = await bcrypt.hash(passwordPlain, 10)
+      await conn.execute(
+        `INSERT INTO usuarios (trabajador_id, rut, correo, password_hash, rol, estado)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          existing.id,
+          nextRut,
+          correo,
+          hash,
+          ROLES.USER_RENDIDOR,
+          body.estado === 'inactivo' ? 'inactivo' : 'activo'
+        ]
+      )
+    } else if (linkedUser && (crearUsuario || wantsUserUpdate)) {
+      // Switch off no borra el usuario; solo actualiza si envían campos de acceso
+      let passwordHash = linkedUser.password_hash
+      if (body.password && String(body.password).trim()) {
+        passwordPlain = String(body.password).trim()
+        passwordHash = await bcrypt.hash(passwordPlain, 10)
+      }
+      const nextEstado =
+        body.estado === 'inactivo' || body.estado === 'activo'
+          ? body.estado
+          : linkedUser.estado
+      const nextCorreo =
+        body.correo !== undefined ? String(body.correo).trim() || linkedUser.correo : linkedUser.correo
+
+      await conn.execute(
+        `UPDATE usuarios
+         SET correo = ?, estado = ?, password_hash = ?, trabajador_id = ?, rut = ?
+         WHERE id = ? AND is_deleted = FALSE`,
+        [nextCorreo, nextEstado, passwordHash, existing.id, nextRut, linkedUser.id]
+      )
+    }
+
+    await conn.commit()
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      'MODIFICAR',
+      'Personal',
+      `Personal id=${existing.id} actualizado`
+    )
+
+    const personal = await getPersonalByTrabajadorId(existing.id)
+    return res.json({
+      ...personal,
+      ...(passwordPlain ? { password: passwordPlain } : {})
+    })
+  } catch (err) {
+    try {
+      await conn.rollback()
+    } catch (_) {
+      /* ignore */
+    }
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'RUT o correo ya registrado' })
+    }
+    console.error('[updatePersonal]', err)
+    return res.status(500).json({ error: 'Internal Server Error' })
+  } finally {
+    conn.release()
+  }
+}
+
 /* --- Tarjetas --- */
+
+function todayLocalISO() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
 
 async function listTarjetas(req, res) {
   try {
+    await ensureTarjetaFechaDesactivacion()
     const rows = await query(
       `SELECT * FROM tarjetas_empresa WHERE is_deleted = FALSE ORDER BY id DESC`
     )
@@ -468,21 +853,27 @@ async function listTarjetas(req, res) {
 
 async function createTarjeta(req, res) {
   try {
+    await ensureTarjetaFechaDesactivacion()
     const { alias, tipo, ultimos_digitos, banco, titular_nombre, estado } = req.body || {}
     if (!alias?.trim() || !tipo || !ultimos_digitos) {
       return res.status(400).json({ error: 'alias, tipo y ultimos_digitos son requeridos' })
     }
 
+    const nextEstado = estado === 'inactiva' ? 'inactiva' : 'activa'
+    const fechaDesactivacion = nextEstado === 'inactiva' ? todayLocalISO() : null
+
     const result = await query(
-      `INSERT INTO tarjetas_empresa (alias, tipo, ultimos_digitos, banco, titular_nombre, estado)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO tarjetas_empresa
+        (alias, tipo, ultimos_digitos, banco, titular_nombre, estado, fecha_desactivacion)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         alias.trim(),
         tipo,
         String(ultimos_digitos).slice(-4),
         banco || null,
         titular_nombre || null,
-        estado === 'inactiva' ? 'inactiva' : 'activa'
+        nextEstado,
+        fechaDesactivacion
       ]
     )
 
@@ -507,6 +898,7 @@ async function createTarjeta(req, res) {
 
 async function updateTarjeta(req, res) {
   try {
+    await ensureTarjetaFechaDesactivacion()
     const id = Number(req.params.id)
     const existing = await query(
       `SELECT * FROM tarjetas_empresa WHERE id = ? AND is_deleted = FALSE`,
@@ -515,6 +907,16 @@ async function updateTarjeta(req, res) {
     if (!existing[0]) return res.status(404).json({ error: 'Tarjeta no encontrada' })
 
     const { alias, tipo, ultimos_digitos, banco, titular_nombre, estado } = req.body || {}
+    const prev = existing[0]
+    const nextEstado =
+      estado === 'inactiva' || estado === 'activa' ? estado : prev.estado
+
+    let fechaDesactivacion = toDateOnly(prev.fecha_desactivacion)
+    if (nextEstado === 'inactiva' && prev.estado !== 'inactiva') {
+      fechaDesactivacion = todayLocalISO()
+    } else if (nextEstado === 'activa') {
+      fechaDesactivacion = null
+    }
 
     await query(
       `UPDATE tarjetas_empresa
@@ -523,28 +925,31 @@ async function updateTarjeta(req, res) {
            ultimos_digitos = ?,
            banco = ?,
            titular_nombre = ?,
-           estado = ?
+           estado = ?,
+           fecha_desactivacion = ?
        WHERE id = ? AND is_deleted = FALSE`,
       [
-        alias?.trim() || existing[0].alias,
-        tipo || existing[0].tipo,
+        alias?.trim() || prev.alias,
+        tipo || prev.tipo,
         ultimos_digitos !== undefined
           ? String(ultimos_digitos).slice(-4)
-          : existing[0].ultimos_digitos,
-        banco !== undefined ? banco : existing[0].banco,
-        titular_nombre !== undefined ? titular_nombre : existing[0].titular_nombre,
-        estado || existing[0].estado,
+          : prev.ultimos_digitos,
+        banco !== undefined ? banco : prev.banco,
+        titular_nombre !== undefined ? titular_nombre : prev.titular_nombre,
+        nextEstado,
+        fechaDesactivacion,
         id
       ]
     )
 
-    await registrarAuditoria(
-      req.user.id,
-      req.user.nombre,
-      'MODIFICAR',
-      'Tarjetas',
-      `Tarjeta id=${id} actualizada`
-    )
+    const accion =
+      nextEstado !== prev.estado
+        ? nextEstado === 'inactiva'
+          ? `Tarjeta id=${id} desactivada (${fechaDesactivacion})`
+          : `Tarjeta id=${id} reactivada`
+        : `Tarjeta id=${id} actualizada`
+
+    await registrarAuditoria(req.user.id, req.user.nombre, 'MODIFICAR', 'Tarjetas', accion)
 
     const updated = await query(
       `SELECT * FROM tarjetas_empresa WHERE id = ? AND is_deleted = FALSE`,
@@ -646,6 +1051,9 @@ module.exports = {
   createUsuario,
   updateUsuario,
   softDeleteUsuario,
+  listPersonal,
+  createPersonal,
+  updatePersonal,
   listTarjetas,
   createTarjeta,
   updateTarjeta,

@@ -138,6 +138,35 @@ export function mapTrabajador(row) {
   }
 }
 
+/** Ficha trabajador + acceso USER_RENDIDOR opcional (módulo Personal). */
+export function mapPersonal(row) {
+  const acceso = row.acceso_sistema
+  let accesoLabel = 'Solo Ficha'
+  let accesoKind = 'none'
+  if (acceso === 'activo') {
+    accesoLabel = 'Activo'
+    accesoKind = 'activo'
+  } else if (acceso === 'inactivo') {
+    accesoLabel = 'Inactivo'
+    accesoKind = 'inactivo'
+  }
+  return {
+    id: row.id,
+    rut: row.rut,
+    nombre: row.nombre_completo || '',
+    cargo: row.cargo || '-',
+    correo: row.correo || '',
+    cajasAsignadas: Array.isArray(row.cajas_asignadas) ? [...row.cajas_asignadas] : [],
+    usuarioId: row.usuario_id ?? null,
+    usuarioRol: row.usuario_rol || null,
+    usuarioEstado: row.usuario_estado || null,
+    accesoSistema: acceso,
+    accesoLabel,
+    accesoKind,
+    tieneUsuario: Boolean(row.usuario_id)
+  }
+}
+
 export function mapUsuario(row) {
   const nombreTrab = normalizeTrabajadorNombre(row.trabajador_nombre)
   return {
@@ -178,6 +207,9 @@ export function mapAdminFromUsuario(row) {
 }
 
 export function mapTarjeta(row) {
+  const fechaOff = row.fecha_desactivacion
+    ? String(row.fecha_desactivacion).slice(0, 10)
+    : null
   return {
     id: row.id,
     alias: row.alias,
@@ -185,7 +217,9 @@ export function mapTarjeta(row) {
     ultimos4: row.ultimos_digitos,
     banco: row.banco || '-',
     titular: row.titular_nombre || '-',
-    estado: row.estado === 'inactiva' ? 'Inactiva' : 'Activa'
+    estado: row.estado === 'inactiva' ? 'Inactiva' : 'Activa',
+    estadoApi: row.estado === 'inactiva' ? 'inactiva' : 'activa',
+    fechaDesactivacion: fechaOff
   }
 }
 

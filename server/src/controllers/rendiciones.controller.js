@@ -2,6 +2,7 @@ const { query } = require('../config/db')
 const { registrarAuditoria } = require('../utils/audit')
 const { calcularArrastreMes, nextCodigo } = require('../utils/helpers')
 const { ROLES } = require('../middlewares/role.middleware')
+const { assertTarjetaPermitePago } = require('../utils/tarjetaPago')
 
 async function listRendiciones(req, res) {
   try {
@@ -88,6 +89,15 @@ async function createRendicion(req, res) {
       [caja_id]
     )
     if (!cajas[0]) return res.status(404).json({ error: 'Caja no encontrada' })
+
+    const tarjetaCheck = await assertTarjetaPermitePago({
+      tarjetaId: tarjeta_id,
+      origenPago: origen_pago,
+      fechaDocumento: fecha_documento
+    })
+    if (tarjetaCheck) {
+      return res.status(tarjetaCheck.status).json({ error: tarjetaCheck.error })
+    }
 
     const arrastre = calcularArrastreMes(fecha_documento, cajas[0].mes_asignado)
 
@@ -189,6 +199,18 @@ async function updateRendicion(req, res) {
       return res.status(400).json({ error: 'numero_documento es obligatorio para Factura' })
     }
 
+    const nextTarjetaId =
+      tarjeta_id !== undefined ? tarjeta_id : existing[0].tarjeta_id
+    const nextOrigen = origen_pago || existing[0].origen_pago
+    const tarjetaCheck = await assertTarjetaPermitePago({
+      tarjetaId: nextTarjetaId,
+      origenPago: nextOrigen,
+      fechaDocumento: fecha
+    })
+    if (tarjetaCheck) {
+      return res.status(tarjetaCheck.status).json({ error: tarjetaCheck.error })
+    }
+
     await query(
       `UPDATE rendiciones_gastos
        SET fecha_documento = ?,
@@ -207,8 +229,8 @@ async function updateRendicion(req, res) {
         tipo,
         num,
         monto !== undefined ? Number(monto) : existing[0].monto,
-        origen_pago || existing[0].origen_pago,
-        tarjeta_id !== undefined ? tarjeta_id : existing[0].tarjeta_id,
+        nextOrigen,
+        nextTarjetaId,
         comprobante_url !== undefined ? comprobante_url : existing[0].comprobante_url,
         descripcion !== undefined ? descripcion : existing[0].descripcion,
         estado || existing[0].estado,

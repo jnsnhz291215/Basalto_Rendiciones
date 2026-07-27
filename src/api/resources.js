@@ -97,6 +97,24 @@ export async function deleteAnticipo(id) {
   return jsonOrThrow(`/api/anticipos/${id}`, { method: 'DELETE' })
 }
 
+export async function listPersonal() {
+  return unwrapList(await jsonOrThrow('/api/admin/personal'))
+}
+
+export async function createPersonal(payload) {
+  return jsonOrThrow('/api/admin/personal', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updatePersonal(idOrRut, payload) {
+  return jsonOrThrow(`/api/admin/personal/${encodeURIComponent(idOrRut)}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
 export async function listTrabajadores() {
   return unwrapList(await jsonOrThrow('/api/admin/trabajadores'))
 }

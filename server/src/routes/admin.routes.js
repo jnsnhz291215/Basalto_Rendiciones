@@ -9,6 +9,9 @@ const {
   createUsuario,
   updateUsuario,
   softDeleteUsuario,
+  listPersonal,
+  createPersonal,
+  updatePersonal,
   listTarjetas,
   createTarjeta,
   updateTarjeta,
@@ -24,14 +27,19 @@ const router = express.Router()
 router.use(authMiddleware)
 router.use(checkRole(ADMINS))
 
-/* Trabajadores */
+/* Personal unificado (ficha + acceso rendidor opcional) */
+router.get('/personal', listPersonal)
+router.post('/personal', createPersonal)
+router.put('/personal/:idOrRut', updatePersonal)
+
+/* Trabajadores (legacy / otros módulos) */
 router.get('/trabajadores', listTrabajadores)
 router.post('/trabajadores', createTrabajador)
 router.put('/trabajadores/:id', updateTrabajador)
 router.delete('/trabajadores/:id', softDeleteTrabajador)
 router.put('/trabajadores/:id/cajas', setTrabajadorCajas)
 
-/* Usuarios */
+/* Usuarios (legacy / Admins) */
 router.get('/usuarios', listUsuarios)
 router.post('/usuarios', createUsuario)
 router.put('/usuarios/:id', updateUsuario)
