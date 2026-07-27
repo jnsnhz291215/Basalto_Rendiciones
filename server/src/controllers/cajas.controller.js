@@ -142,7 +142,7 @@ async function createCaja(req, res) {
         [
           clave,
           nombre_exterior.trim(),
-          centro_costo?.trim() || '—',
+          centro_costo?.trim() || '-',
           responsable_id || null,
           mes_asignado,
           Number(fondo_estimado_mes) || 0,

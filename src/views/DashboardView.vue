@@ -750,7 +750,7 @@
                 }"
               >
                 <td class="dash-mono">{{ row.fecha }}</td>
-                <td class="dash-mono dash-nowrap">{{ row.subidoEl || '—' }}</td>
+                <td class="dash-mono dash-nowrap">{{ row.subidoEl || '-' }}</td>
                 <td>
                   <span v-if="row.legacy" class="dash-badge dash-badge--legacy">Legacy</span>
                   <span v-else class="dash-rinde">{{ row.rinde }}</span>
@@ -762,7 +762,7 @@
                   >
                     Arrastre ({{ row.arrastreMes }})
                   </span>
-                  <span v-else class="dash-muted">—</span>
+                  <span v-else class="dash-muted">-</span>
                 </td>
                 <td class="dash-table-strong">{{ row.trabajador }}</td>
                 <td>
@@ -796,7 +796,7 @@
                       }}
                     </button>
                     <span v-else-if="row.legacy" class="dash-badge dash-badge--legacy">Solo lectura</span>
-                    <span v-else class="dash-muted">—</span>
+                    <span v-else class="dash-muted">-</span>
                     <button
                       v-if="row.estado === 'Por Corregir' && !row.legacy"
                       class="dash-btn-ghost-sm"
@@ -1328,7 +1328,7 @@
                   >
                     📄 {{ labelAdjunto(row.comprobanteNombre) }}
                   </button>
-                  <span v-else class="dash-adjunto-empty">—</span>
+                  <span v-else class="dash-adjunto-empty">-</span>
                 </td>
                 <td class="dash-table-right dash-rinde">{{ row.monto }}</td>
               </tr>
@@ -1912,9 +1912,9 @@
                 </thead>
                 <tbody>
                   <tr v-for="admin in admins" :key="admin.id || admin.rut">
-                    <td class="dash-table-strong dash-mono">{{ admin.rut || '—' }}</td>
-                    <td>{{ admin.nombre || '—' }}</td>
-                    <td>{{ admin.correo || '—' }}</td>
+                    <td class="dash-table-strong dash-mono">{{ admin.rut || '-' }}</td>
+                    <td>{{ admin.nombre || '-' }}</td>
+                    <td>{{ admin.correo || '-' }}</td>
                     <td>
                       <span class="dash-badge dash-badge--accent">{{ admin.rol }}</span>
                     </td>
@@ -2111,9 +2111,9 @@
                 </thead>
                 <tbody>
                   <tr v-for="u in usuarios" :key="u.id || u.correo">
-                    <td class="dash-table-strong dash-mono">{{ u.rut || '—' }}</td>
-                    <td>{{ u.nombre || '—' }}</td>
-                    <td>{{ u.correo || '—' }}</td>
+                    <td class="dash-table-strong dash-mono">{{ u.rut || '-' }}</td>
+                    <td>{{ u.nombre || '-' }}</td>
+                    <td>{{ u.correo || '-' }}</td>
                     <td>
                       <span class="dash-badge dash-badge--accent">{{ u.rolLabel || u.rol || 'Usuario' }}</span>
                     </td>
@@ -2122,7 +2122,7 @@
                         class="dash-status"
                         :class="u.estado === 'Activo' ? 'dash-status--ok' : 'dash-status--warn'"
                       >
-                        {{ u.estado || '—' }}
+                        {{ u.estado || '-' }}
                       </span>
                     </td>
                     <td v-if="canCreateUsuarios" class="dash-table-center dash-table-actions">
@@ -2317,7 +2317,7 @@
             >
               <div class="dash-modal" role="dialog" aria-modal="true">
                 <div class="dash-modal-head">
-                  <h3>Asignar cajas — {{ modalAsignarCajas.nombre }}</h3>
+                  <h3>Asignar cajas - {{ modalAsignarCajas.nombre }}</h3>
                   <button
                     class="dash-modal-close"
                     type="button"
@@ -2591,7 +2591,7 @@
           </div>
 
           <div v-else class="dash-panel dash-panel--placeholder">
-            <p>Sección “{{ currentAdminTabLabel }}” — próximamente.</p>
+            <p>Sección “{{ currentAdminTabLabel }}” - próximamente.</p>
           </div>
         </div>
     </main>
@@ -2602,7 +2602,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useAuth } from '../composables/useAuth'
-// TEMP_AUTH_BYPASS — revertir antes de commit
+// TEMP_AUTH_BYPASS - revertir antes de commit
 import { TEMP_AUTH_BYPASS } from '../TEMP_AUTH_BYPASS'
 import { passwordFromRut, rutStatusLabel, validarRutChileno } from '../utils/rut'
 import * as api from '../api/resources'
@@ -2687,7 +2687,7 @@ function onDocClick(event) {
 
 function openModalCredenciales(payload) {
   modalCredenciales.open = true
-  modalCredenciales.nombre = payload.nombre || payload.trabajador_nombre || '—'
+  modalCredenciales.nombre = payload.nombre || payload.trabajador_nombre || '-'
   modalCredenciales.rut = payload.rut || ''
   modalCredenciales.correo = payload.correo || ''
   modalCredenciales.rol = rolUiFromApi(payload.rol) || payload.rol || ''
@@ -3618,7 +3618,7 @@ watch(
 
 const informeResultado = reactive({
   titulo: 'Cartola Consolidada del Mes',
-  periodo: 'Período: — | Caja: Todas',
+  periodo: 'Período: - | Caja: Todas',
   total: '0 Registros'
 })
 
@@ -3760,7 +3760,7 @@ function openModalCorregir(row) {
   modalCorregir.prevDocto = row.docto
   modalCorregir.prevPago = row.pago
   modalCorregir.prevMonto = row.monto
-  modalCorregir.prevDescripcion = row.descripcion || '—'
+  modalCorregir.prevDescripcion = row.descripcion || '-'
   modalCorregir.tipo = tipoBase
   modalCorregir.monto = montoNum || ''
   modalCorregir.metodoPago = row.metodoPago || 'efectivo'
@@ -4123,7 +4123,7 @@ async function onSaveCaja() {
   const payload = {
     clave_interna: groupKey,
     nombre_exterior: displayName,
-    centro_costo: cajaForm.centroCosto.trim() || '—',
+    centro_costo: cajaForm.centroCosto.trim() || '-',
     responsable_id: cajaForm.responsableId ? Number(cajaForm.responsableId) : null,
     mes_asignado: cajaForm.mes,
     fondo_estimado_mes: parseMontoInput(cajaForm.fondoEstimado),
@@ -4207,7 +4207,7 @@ function onEditTrabajador(t) {
   modalEditTrabajador.id = t.id
   modalEditTrabajador.rut = t.rut || ''
   modalEditTrabajador.nombre = t.nombre || ''
-  modalEditTrabajador.cargo = t.cargo === '—' ? '' : t.cargo || ''
+  modalEditTrabajador.cargo = t.cargo === '-' ? '' : t.cargo || ''
   modalEditTrabajador.error = ''
 }
 
@@ -4298,7 +4298,7 @@ function onEditUsuario(u) {
   modalEditUsuario.open = true
   modalEditUsuario.id = u.id
   modalEditUsuario.rut = u.rut || ''
-  modalEditUsuario.nombre = u.nombre || (u.trabajador === '—' ? '' : u.trabajador) || ''
+  modalEditUsuario.nombre = u.nombre || (u.trabajador === '-' ? '' : u.trabajador) || ''
   modalEditUsuario.correo = u.correo || ''
   modalEditUsuario.estado = u.estadoApi || (u.estado === 'Inactivo' ? 'inactivo' : 'activo')
   modalEditUsuario.error = ''
@@ -4401,8 +4401,8 @@ function onEditTarjeta(t) {
   tarjetaForm.alias = t.alias || ''
   tarjetaForm.tipo = t.tipo === 'Débito' || t.tipo === 'Debito' ? 'Débito' : 'Crédito'
   tarjetaForm.ultimos4 = t.ultimos4 || ''
-  tarjetaForm.banco = t.banco === '—' ? '' : t.banco || ''
-  tarjetaForm.titular = t.titular === '—' ? '' : t.titular || ''
+  tarjetaForm.banco = t.banco === '-' ? '' : t.banco || ''
+  tarjetaForm.titular = t.titular === '-' ? '' : t.titular || ''
   tarjetaFormOpen.value = true
 }
 
@@ -4577,7 +4577,7 @@ async function onSaveTarjeta() {
 
 async function onLogout() {
   userMenuOpen.value = false
-  // TEMP_AUTH_BYPASS — revertir antes de commit
+  // TEMP_AUTH_BYPASS - revertir antes de commit
   if (TEMP_AUTH_BYPASS) {
     sessionStorage.removeItem('TEMP_AUTH_BYPASS_OK')
   }

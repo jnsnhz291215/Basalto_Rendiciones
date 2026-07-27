@@ -66,7 +66,7 @@ a:hover {
   color: var(--ink);
 }
 
-/* —— Panel izquierdo (branding) —— */
+/* -- Panel izquierdo (branding) -- */
 .brand-panel {
   display: none;
   position: relative;
@@ -141,7 +141,7 @@ a:hover {
   color: #64748b;
 }
 
-/* —— Panel derecho (auth) —— */
+/* -- Panel derecho (auth) -- */
 .auth-panel {
   width: 100%;
   min-height: 100vh;
@@ -360,7 +360,7 @@ a:hover {
 }
 
 
-/* —— Dashboard —— */
+/* -- Dashboard -- */
 .dash {
   height: 100vh;
   min-height: 100vh;
@@ -1200,7 +1200,7 @@ a:hover {
 }
 
 
-/* —— Asignación a Conductor —— */
+/* -- Asignación a Conductor -- */
 .dash-assign {
   display: flex;
   flex-direction: column;
@@ -1341,7 +1341,7 @@ a:hover {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
-/* —— Informes y Cartola —— */
+/* -- Informes y Cartola -- */
 .dash-informes {
   display: flex;
   flex-direction: column;
@@ -1594,7 +1594,7 @@ a:hover {
 }
 
 
-/* —— Gestión de Cajas —— */
+/* -- Gestión de Cajas -- */
 .dash-cajas-list {
   display: flex;
   flex-direction: column;
@@ -2031,7 +2031,7 @@ a:hover {
 }
 
 
-/* —— Administración —— */
+/* -- Administración -- */
 .dash-admin {
   display: flex;
   flex-direction: column;
@@ -2239,7 +2239,7 @@ a:hover {
 }
 
 
-/* —— Auditoría —— */
+/* -- Auditoría -- */
 .dash-audit-filters {
   display: grid;
   grid-template-columns: 1fr;
@@ -2302,7 +2302,7 @@ a:hover {
 }
 
 
-/* —— Rendición de Gastos (extendido) —— */
+/* -- Rendición de Gastos (extendido) -- */
 .dash-rendicion-form {
   display: flex;
   flex-direction: column;

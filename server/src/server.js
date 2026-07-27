@@ -59,7 +59,7 @@ app.use('/api/anticipos', anticiposRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/legacy', legacyRoutes)
 
-// Archivos de storage (comprobantes, etc.) — lectura vía /api/files/*
+// Archivos de storage (comprobantes, etc.) - lectura vía /api/files/*
 app.use(
   '/api/files',
   express.static(STORAGE_ROOT, {
@@ -69,7 +69,7 @@ app.use(
   })
 )
 
-// Front Vue (dist/) en el mismo proceso — el dominio apunta a este Express
+// Front Vue (dist/) en el mismo proceso - el dominio apunta a este Express
 const distPath = path.join(__dirname, '..', '..', 'dist')
 const distIndex = path.join(distPath, 'index.html')
 const distExists = fs.existsSync(distIndex)
@@ -95,7 +95,7 @@ app.listen(PORT, () => {
   if (distExists) {
     console.log(`Sirviendo frontend desde ${distPath}`)
   } else {
-    console.warn(`AVISO: no hay dist/ en ${distPath} — el front no se servirá`)
+    console.warn(`AVISO: no hay dist/ en ${distPath} - el front no se servirá`)
   }
 })
 

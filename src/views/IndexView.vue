@@ -137,7 +137,7 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useAuth } from '../composables/useAuth'
-// TEMP_AUTH_BYPASS — revertir antes de commit
+// TEMP_AUTH_BYPASS - revertir antes de commit
 import { TEMP_AUTH_BYPASS } from '../TEMP_AUTH_BYPASS'
 import { cleanRut, formatRut } from '../utils/rut'
 
@@ -169,7 +169,7 @@ onMounted(async () => {
 async function handleLogin() {
   formError.value = ''
   try {
-    // TEMP_AUTH_BYPASS — revertir antes de commit
+    // TEMP_AUTH_BYPASS - revertir antes de commit
     if (TEMP_AUTH_BYPASS) {
       sessionStorage.setItem('TEMP_AUTH_BYPASS_OK', '1')
     }

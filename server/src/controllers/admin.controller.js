@@ -3,7 +3,7 @@ const { query } = require('../config/db')
 const { registrarAuditoria } = require('../utils/audit')
 const { ROLES, SUPER_ADMINS } = require('../middlewares/role.middleware')
 
-/* ——— Trabajadores ——— */
+/* --- Trabajadores --- */
 
 async function listTrabajadores(req, res) {
   try {
@@ -172,7 +172,7 @@ async function setTrabajadorCajas(req, res) {
   }
 }
 
-/* ——— Usuarios ——— */
+/* --- Usuarios --- */
 
 async function listUsuarios(req, res) {
   try {
@@ -443,7 +443,7 @@ async function softDeleteUsuario(req, res) {
   }
 }
 
-/* ——— Tarjetas ——— */
+/* --- Tarjetas --- */
 
 async function listTarjetas(req, res) {
   try {
@@ -573,7 +573,7 @@ async function softDeleteTarjeta(req, res) {
   }
 }
 
-/* ——— Audit logs (solo lectura) ——— */
+/* --- Audit logs (solo lectura) --- */
 
 async function listAuditLogs(req, res) {
   try {
@@ -601,7 +601,7 @@ async function listAuditLogs(req, res) {
   }
 }
 
-/* ——— Sync bidireccional Turnos ↔ Rendiciones ——— */
+/* --- Sync bidireccional Turnos ↔ Rendiciones --- */
 
 async function syncBidireccionalHandler(req, res) {
   try {
@@ -614,7 +614,7 @@ async function syncBidireccionalHandler(req, res) {
       req.user.nombre,
       'MODIFICAR',
       'Sync',
-      `Sync bidireccional${dryRun ? ' dry-run' : ''} — errores: ${result.stats?.errores?.length || 0}`
+      `Sync bidireccional${dryRun ? ' dry-run' : ''} - errores: ${result.stats?.errores?.length || 0}`
     )
 
     return res.json(result)

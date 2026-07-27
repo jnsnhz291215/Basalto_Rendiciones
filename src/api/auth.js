@@ -136,7 +136,7 @@ export function persistSessionProfile(data) {
   return user
 }
 
-/** @deprecated alias — login ya persiste con persistSessionProfile */
+/** @deprecated alias - login ya persiste con persistSessionProfile */
 export function persistLoginProfile(data) {
   return persistSessionProfile(data)
 }

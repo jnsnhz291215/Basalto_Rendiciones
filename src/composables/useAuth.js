@@ -1,6 +1,6 @@
 import { reactive, computed } from 'vue'
 import * as authApi from '../api/auth'
-// TEMP_AUTH_BYPASS — solo para maquetar UI sin API; en local con server debe ser false
+// TEMP_AUTH_BYPASS - solo para maquetar UI sin API; en local con server debe ser false
 import { TEMP_AUTH_BYPASS, TEMP_BYPASS_USER } from '../TEMP_AUTH_BYPASS'
 
 const state = reactive({

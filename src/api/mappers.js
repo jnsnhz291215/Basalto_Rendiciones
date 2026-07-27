@@ -117,8 +117,8 @@ export function mapCaja(row) {
     id: row.id,
     groupKey: row.clave_interna,
     displayName: row.nombre_exterior,
-    centroCosto: row.centro_costo || '—',
-    responsable: row.responsable_nombre || '—',
+    centroCosto: row.centro_costo || '-',
+    responsable: row.responsable_nombre || '-',
     responsableId: row.responsable_id ?? null,
     fondoEstimado: formatMontoApi(row.fondo_estimado_mes),
     fondoEstimadoNum: Number(row.fondo_estimado_mes) || 0,
@@ -132,7 +132,7 @@ export function mapTrabajador(row) {
     id: row.id,
     rut: row.rut,
     nombre: row.nombre_completo,
-    cargo: row.cargo || '—',
+    cargo: row.cargo || '-',
     tieneUsuario: false,
     cajasAsignadas: Array.isArray(row.cajas_asignadas) ? [...row.cajas_asignadas] : []
   }
@@ -144,8 +144,8 @@ export function mapUsuario(row) {
     id: row.id,
     correo: row.correo,
     nombre: nombreTrab,
-    trabajador: nombreTrab || '—',
-    cargo: row.cargo || '—',
+    trabajador: nombreTrab || '-',
+    cargo: row.cargo || '-',
     trabajadorId: row.trabajador_id,
     rut: row.rut,
     rol: row.rol,
@@ -158,7 +158,7 @@ export function mapUsuario(row) {
 /** Nombre de ficha trabajador; nunca usar correo como fallback de nombre. */
 function normalizeTrabajadorNombre(value) {
   const raw = value == null ? '' : String(value).trim()
-  if (!raw || raw === '—') return ''
+  if (!raw || raw === '-') return ''
   return raw
 }
 
@@ -183,8 +183,8 @@ export function mapTarjeta(row) {
     alias: row.alias,
     tipo: row.tipo === 'Debito' || row.tipo === 'Débito' ? 'Débito' : 'Crédito',
     ultimos4: row.ultimos_digitos,
-    banco: row.banco || '—',
-    titular: row.titular_nombre || '—',
+    banco: row.banco || '-',
+    titular: row.titular_nombre || '-',
     estado: row.estado === 'inactiva' ? 'Inactiva' : 'Activa'
   }
 }
@@ -260,7 +260,7 @@ export function mapAnticipo(row) {
     conductor: row.trabajador_nombre || '',
     trabajadorId: row.trabajador_id,
     doc: row.codigo_vale,
-    observaciones: row.observacion || '—',
+    observaciones: row.observacion || '-',
     monto: formatMontoApi(row.monto),
     cajaGroupKey: row.clave_interna || '',
     cajaId: row.caja_id,
@@ -272,7 +272,7 @@ export function mapAuditLog(row) {
   const accion = row.accion || ''
   return {
     fechaHora: formatSubidoElFromIso(row.created_at).replace(' hrs', '') || String(row.created_at || ''),
-    actor: row.usuario_nombre || '—',
+    actor: row.usuario_nombre || '-',
     rol: '',
     accion,
     accionClass: ACCION_CLASS[accion] || 'dash-badge--info',

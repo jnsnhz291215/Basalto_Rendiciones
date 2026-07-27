@@ -43,10 +43,10 @@ router.post('/tarjetas', createTarjeta)
 router.put('/tarjetas/:id', updateTarjeta)
 router.delete('/tarjetas/:id', softDeleteTarjeta)
 
-/* Audit logs — solo Super Admins */
+/* Audit logs - solo Super Admins */
 router.get('/audit-logs', checkRole(SUPER_ADMINS), listAuditLogs)
 
-/* Sync Turnos ↔ Rendiciones — solo Super Admins */
+/* Sync Turnos ↔ Rendiciones - solo Super Admins */
 router.post('/sync-bidireccional', checkRole(SUPER_ADMINS), syncBidireccionalHandler)
 
 module.exports = router

@@ -3,7 +3,7 @@ import * as authApi from '../api/auth'
 import IndexView from '../views/IndexView.vue'
 import DashboardView from '../views/DashboardView.vue'
 import SinPermisoView from '../views/SinPermisoView.vue'
-// TEMP_AUTH_BYPASS — solo UI sin API; con server local debe ser false
+// TEMP_AUTH_BYPASS - solo UI sin API; con server local debe ser false
 import { TEMP_AUTH_BYPASS, TEMP_BYPASS_USER } from '../TEMP_AUTH_BYPASS'
 
 const router = createRouter({
