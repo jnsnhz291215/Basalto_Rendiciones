@@ -310,6 +310,15 @@ async function updateUsuario(req, res) {
       return res.status(403).json({ error: 'No puedes modificar administradores' })
     }
 
+    // No permitir desactivarse a sí mismo
+    if (
+      id === Number(req.user.id) &&
+      estado === 'inactivo' &&
+      row.estado === 'activo'
+    ) {
+      return res.status(400).json({ error: 'No puedes desactivarte a ti mismo' })
+    }
+
     // Mismas restricciones de creación al asignar roles admin
     if (nextRol !== row.rol) {
       if (

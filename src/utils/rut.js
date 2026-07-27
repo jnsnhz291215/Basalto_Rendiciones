@@ -19,6 +19,15 @@ export function formatRut(rut) {
   return `${withDots}-${dv}`
 }
 
+/**
+ * Procesa un input en tiempo real: solo dígitos+K (máx. 9),
+ * retorna limpio (API) y display (puntos + guión).
+ */
+export function fromRutInput(value) {
+  const clean = cleanRut(value).slice(0, 9)
+  return { clean, display: formatRut(clean) }
+}
+
 export function validarRutChileno(rut) {
   const cleaned = cleanRut(rut)
   if (cleaned.length < 8 || cleaned.length > 9) return false

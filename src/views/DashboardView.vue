@@ -78,7 +78,7 @@
         <form class="dash-admin-form" @submit.prevent="onSavePerfil">
           <div class="dash-field">
             <label>RUT</label>
-            <input :value="user?.rut || ''" type="text" disabled class="dash-mono" />
+            <input :value="formatRut(user?.rut || '')" type="text" disabled class="dash-mono" />
           </div>
           <div class="dash-field">
             <label>Correo</label>
@@ -124,7 +124,12 @@
         <form class="dash-admin-form" @submit.prevent="onSaveEditTrabajador">
           <div class="dash-field">
             <label>RUT</label>
-            <input v-model="modalEditTrabajador.rut" type="text" placeholder="12.345.678-9" />
+            <input
+              :value="modalEditTrabajador.rut"
+              type="text"
+              placeholder="12.345.678-9"
+              @input="modalEditTrabajador.rut = fromRutInput($event.target.value).display"
+            />
           </div>
           <div class="dash-field">
             <label>Nombres y Apellidos</label>
@@ -177,7 +182,7 @@
         <form class="dash-admin-form" @submit.prevent="onSaveEditAdmin">
           <div class="dash-field">
             <label>RUT</label>
-            <input :value="modalEditAdmin.rut" type="text" disabled class="dash-mono" />
+            <input :value="formatRut(modalEditAdmin.rut)" type="text" disabled class="dash-mono" />
           </div>
           <div class="dash-field">
             <label>Nombre Completo</label>
@@ -244,7 +249,7 @@
         <form class="dash-admin-form" @submit.prevent="onSaveEditUsuario">
           <div class="dash-field">
             <label>RUT</label>
-            <input :value="modalEditUsuario.rut" type="text" disabled class="dash-mono" />
+            <input :value="formatRut(modalEditUsuario.rut)" type="text" disabled class="dash-mono" />
           </div>
           <div class="dash-field">
             <label>Nombre Completo</label>
@@ -1822,9 +1827,10 @@
                       </span>
                     </div>
                     <input
-                      v-model="adminForm.rut"
+                      :value="adminForm.rut"
                       type="text"
-                      placeholder="12345678-9"
+                      placeholder="12.345.678-9"
+                      @input="adminForm.rut = fromRutInput($event.target.value).display"
                     />
                   </div>
                   <div class="dash-field">
@@ -1919,7 +1925,25 @@
                       <span class="dash-badge dash-badge--accent">{{ admin.rol }}</span>
                     </td>
                     <td class="dash-table-center">
+                      <button
+                        v-if="canToggleAdminEstado && admin.id"
+                        type="button"
+                        class="dash-status dash-status--toggle"
+                        :class="admin.estado === 'Activo' ? 'dash-status--ok' : 'dash-status--warn'"
+                        :title="
+                          admin.id === user?.id
+                            ? 'No puedes cambiar tu propio estado'
+                            : admin.estado === 'Activo'
+                              ? 'Click para desactivar'
+                              : 'Click para activar'
+                        "
+                        :disabled="admin.id === user?.id || togglingEstadoId === admin.id"
+                        @click="onToggleEstadoAdmin(admin)"
+                      >
+                        {{ admin.estado }}
+                      </button>
                       <span
+                        v-else
                         class="dash-status"
                         :class="admin.estado === 'Activo' ? 'dash-status--ok' : 'dash-status--warn'"
                       >
@@ -2039,9 +2063,10 @@
                       </span>
                     </div>
                     <input
-                      v-model="usuarioForm.nuevoRut"
+                      :value="usuarioForm.nuevoRut"
                       type="text"
-                      placeholder="12345678-9"
+                      placeholder="12.345.678-9"
+                      @input="usuarioForm.nuevoRut = fromRutInput($event.target.value).display"
                     />
                   </div>
                   <div class="dash-field">
@@ -2118,7 +2143,25 @@
                       <span class="dash-badge dash-badge--accent">{{ u.rolLabel || u.rol || 'Usuario' }}</span>
                     </td>
                     <td class="dash-table-center">
+                      <button
+                        v-if="canToggleUsuarioEstado && u.id"
+                        type="button"
+                        class="dash-status dash-status--toggle"
+                        :class="u.estado === 'Activo' ? 'dash-status--ok' : 'dash-status--warn'"
+                        :title="
+                          u.id === user?.id
+                            ? 'No puedes cambiar tu propio estado'
+                            : u.estado === 'Activo'
+                              ? 'Click para desactivar'
+                              : 'Click para activar'
+                        "
+                        :disabled="u.id === user?.id || togglingEstadoId === u.id"
+                        @click="onToggleEstadoUsuario(u)"
+                      >
+                        {{ u.estado || '-' }}
+                      </button>
                       <span
+                        v-else
                         class="dash-status"
                         :class="u.estado === 'Activo' ? 'dash-status--ok' : 'dash-status--warn'"
                       >
@@ -2205,9 +2248,10 @@
                   <div class="dash-field">
                     <label>RUT</label>
                     <input
-                      v-model="trabajadorForm.rut"
+                      :value="trabajadorForm.rut"
                       type="text"
                       placeholder="12.345.678-9"
+                      @input="trabajadorForm.rut = fromRutInput($event.target.value).display"
                     />
                   </div>
                   <div class="dash-field">
@@ -2604,7 +2648,14 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { useAuth } from '../composables/useAuth'
 // TEMP_AUTH_BYPASS - revertir antes de commit
 import { TEMP_AUTH_BYPASS } from '../TEMP_AUTH_BYPASS'
-import { passwordFromRut, rutStatusLabel, validarRutChileno } from '../utils/rut'
+import {
+  cleanRut,
+  formatRut,
+  fromRutInput,
+  passwordFromRut,
+  rutStatusLabel,
+  validarRutChileno
+} from '../utils/rut'
 import * as api from '../api/resources'
 import { persistSessionProfile } from '../api/auth'
 import {
@@ -2688,7 +2739,7 @@ function onDocClick(event) {
 function openModalCredenciales(payload) {
   modalCredenciales.open = true
   modalCredenciales.nombre = payload.nombre || payload.trabajador_nombre || '-'
-  modalCredenciales.rut = payload.rut || ''
+  modalCredenciales.rut = formatRut(payload.rut || '')
   modalCredenciales.correo = payload.correo || ''
   modalCredenciales.rol = rolUiFromApi(payload.rol) || payload.rol || ''
   modalCredenciales.password = payload.password || ''
@@ -3089,10 +3140,15 @@ const canCreateUsuarios = computed(() => {
 
 const canEditAdmins = canCreateAdmins
 const canEditUsuarios = canCreateUsuarios
+/** Solo Super Admins pueden activar/desactivar administradores */
+const canToggleAdminEstado = canCreateAdmins
+/** Super Admins y Admin Caja pueden activar/desactivar usuarios rendidores */
+const canToggleUsuarioEstado = canCreateUsuarios
 const canEditTrabajadores = computed(() => {
   const nivel = sessionAdminNivel.value
   return nivel === ROLE_DEV || nivel === ROLE_SUPER || nivel === ROLE_ADMIN_CAJA
 })
+const togglingEstadoId = ref(null)
 
 /** Admin / Super Admin / Dev pueden rendir a nombre de cualquier trabajador */
 const canIngresarPorOtros = computed(() => {
@@ -4205,7 +4261,7 @@ function onEditTrabajador(t) {
   if (!canEditTrabajadores.value || !t?.id) return
   modalEditTrabajador.open = true
   modalEditTrabajador.id = t.id
-  modalEditTrabajador.rut = t.rut || ''
+  modalEditTrabajador.rut = formatRut(t.rut || '')
   modalEditTrabajador.nombre = t.nombre || ''
   modalEditTrabajador.cargo = t.cargo === '-' ? '' : t.cargo || ''
   modalEditTrabajador.error = ''
@@ -4222,12 +4278,13 @@ function closeModalEditTrabajador() {
 
 async function onSaveEditTrabajador() {
   if (!canEditTrabajadores.value || !modalEditTrabajador.id) return
-  if (!modalEditTrabajador.rut.trim() || !modalEditTrabajador.nombre.trim()) return
+  const rutLimpio = cleanRut(modalEditTrabajador.rut)
+  if (!rutLimpio || !modalEditTrabajador.nombre.trim()) return
   try {
     modalEditTrabajador.error = ''
     saveError.value = ''
     await api.updateTrabajador(modalEditTrabajador.id, {
-      rut: modalEditTrabajador.rut.trim(),
+      rut: rutLimpio,
       nombre_completo: modalEditTrabajador.nombre.trim(),
       cargo: modalEditTrabajador.cargo.trim() || null
     })
@@ -4333,6 +4390,55 @@ async function onSaveEditUsuario() {
   }
 }
 
+/**
+ * Alterna activo ↔ inactivo vía PUT /api/admin/usuarios/:id.
+ * Actualiza la fila local al éxito; no permite desactivarse a sí mismo.
+ */
+async function toggleEstadoCuenta(row, { canToggle, listRef, label }) {
+  if (!canToggle || !row?.id) return
+  if (row.id === user.value?.id) {
+    saveError.value = 'No puedes desactivarte a ti mismo'
+    return
+  }
+  const actual = row.estadoApi || (row.estado === 'Inactivo' ? 'inactivo' : 'activo')
+  const next = actual === 'activo' ? 'inactivo' : 'activo'
+  if (next === 'inactivo') {
+    const nombre = row.nombre || row.correo || row.rut || label
+    if (!confirm(`¿Desactivar a "${nombre}"? No podrá iniciar sesión.`)) return
+  }
+  try {
+    togglingEstadoId.value = row.id
+    saveError.value = ''
+    await api.updateUsuario(row.id, { estado: next })
+    const display = next === 'activo' ? 'Activo' : 'Inactivo'
+    const list = listRef.value
+    const idx = list.findIndex((x) => x.id === row.id)
+    if (idx >= 0) {
+      list[idx] = { ...list[idx], estado: display, estadoApi: next }
+    }
+  } catch (err) {
+    saveError.value = err?.message || `No se pudo ${next === 'activo' ? 'activar' : 'desactivar'} ${label}`
+  } finally {
+    togglingEstadoId.value = null
+  }
+}
+
+function onToggleEstadoAdmin(admin) {
+  return toggleEstadoCuenta(admin, {
+    canToggle: canToggleAdminEstado.value,
+    listRef: admins,
+    label: 'el administrador'
+  })
+}
+
+function onToggleEstadoUsuario(u) {
+  return toggleEstadoCuenta(u, {
+    canToggle: canToggleUsuarioEstado.value,
+    listRef: usuarios,
+    label: 'el usuario'
+  })
+}
+
 async function onDeleteTrabajador(t) {
   if (!t?.id) return
   if (!confirm(`¿Eliminar al trabajador "${t.nombre}" (${t.rut})? (soft delete)`)) return
@@ -4428,22 +4534,23 @@ function shortAdminRol(rol) {
 
 async function onSaveAdmin() {
   if (!canCreateAdmins.value) return
-  if (!adminForm.rut.trim() || !adminForm.nombre.trim() || !adminForm.correo.trim()) return
-  if (!validarRutChileno(adminForm.rut)) return
+  const rutLimpio = cleanRut(adminForm.rut)
+  if (!rutLimpio || !adminForm.nombre.trim() || !adminForm.correo.trim()) return
+  if (!validarRutChileno(rutLimpio)) return
   if (!creatableAdminRoles.value.includes(adminForm.rol)) return
   if (adminForm.passType === 'manual' && !adminForm.password.trim()) return
 
   const passwordTemporal =
     adminForm.passType === 'manual'
       ? adminForm.password
-      : passwordFromRut(adminForm.rut)
+      : passwordFromRut(rutLimpio)
 
   if (!passwordTemporal) return
 
   try {
     saveError.value = ''
     const created = await api.createUsuario({
-      rut: adminForm.rut.trim(),
+      rut: rutLimpio,
       correo: adminForm.correo.trim(),
       password: passwordTemporal,
       rol: rolApiFromUi(shortAdminRol(adminForm.rol)),
@@ -4454,6 +4561,7 @@ async function onSaveAdmin() {
     closeFormAdminUser()
     openModalCredenciales({
       ...created,
+      rut: created.rut || rutLimpio,
       nombre: adminForm.nombre.trim(),
       password: created.password || passwordTemporal
     })
@@ -4485,21 +4593,22 @@ async function onSaveUsuario() {
     saveError.value = ''
 
     if (usuarioForm.trabajadorId === 'nuevo') {
-      if (!usuarioForm.nuevoRut.trim() || !usuarioForm.nuevoNombre.trim()) return
-      if (!validarRutChileno(usuarioForm.nuevoRut)) return
+      const rutLimpio = cleanRut(usuarioForm.nuevoRut)
+      if (!rutLimpio || !usuarioForm.nuevoNombre.trim()) return
+      if (!validarRutChileno(rutLimpio)) return
       const createdTrab = await api.createTrabajador({
-        rut: usuarioForm.nuevoRut.trim(),
+        rut: rutLimpio,
         nombre_completo: usuarioForm.nuevoNombre.trim(),
         cargo: usuarioForm.nuevoCargo.trim() || null
       })
       trabajadorId = createdTrab.id
-      rutTrabajador = usuarioForm.nuevoRut.trim()
+      rutTrabajador = rutLimpio
       nombreTrabajador = usuarioForm.nuevoNombre.trim()
     } else {
       const t = trabajadores.value.find((x) => String(x.id) === usuarioForm.trabajadorId)
       if (!t) return
       trabajadorId = t.id
-      rutTrabajador = t.rut
+      rutTrabajador = cleanRut(t.rut)
       nombreTrabajador = t.nombre
     }
 
@@ -4527,6 +4636,7 @@ async function onSaveUsuario() {
     closeFormUsuario()
     openModalCredenciales({
       ...created,
+      rut: created.rut || rutTrabajador,
       nombre: created.nombre || nombreTrabajador,
       password: created.password || passwordTemporal
     })
@@ -4536,11 +4646,12 @@ async function onSaveUsuario() {
 }
 
 async function onSaveTrabajador() {
-  if (!trabajadorForm.rut.trim() || !trabajadorForm.nombre.trim()) return
+  const rutLimpio = cleanRut(trabajadorForm.rut)
+  if (!rutLimpio || !trabajadorForm.nombre.trim()) return
   try {
     saveError.value = ''
     await api.createTrabajador({
-      rut: trabajadorForm.rut.trim(),
+      rut: rutLimpio,
       nombre_completo: trabajadorForm.nombre.trim(),
       cargo: trabajadorForm.cargo.trim() || null
     })

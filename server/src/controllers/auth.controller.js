@@ -65,7 +65,9 @@ async function login(req, res) {
     }
     if (user.estado !== 'activo') {
       console.warn(`[login] usuario id=${user.id} estado=${user.estado}`)
-      return res.status(401).json({ error: 'Credenciales inválidas' })
+      return res.status(401).json({
+        error: 'Tu cuenta está desactivada. Contacta a un administrador.'
+      })
     }
 
     const hash = normalizePasswordHash(user.password_hash)

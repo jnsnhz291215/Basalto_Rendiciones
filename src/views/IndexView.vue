@@ -139,7 +139,7 @@ import { onMounted, ref } from 'vue'
 import { useAuth } from '../composables/useAuth'
 // TEMP_AUTH_BYPASS - revertir antes de commit
 import { TEMP_AUTH_BYPASS } from '../TEMP_AUTH_BYPASS'
-import { cleanRut, formatRut } from '../utils/rut'
+import { cleanRut, fromRutInput } from '../utils/rut'
 
 const { user, loading, error, bootstrapped, bootstrap, login } = useAuth()
 
@@ -151,9 +151,9 @@ const password = ref('')
 const formError = ref('')
 
 function onRutInput(event) {
-  const cleaned = cleanRut(event.target.value).slice(0, 9)
-  rutClean.value = cleaned
-  rutDisplay.value = formatRut(cleaned)
+  const { clean, display } = fromRutInput(event.target.value)
+  rutClean.value = clean
+  rutDisplay.value = display
 }
 
 /** Evita autofill al cargar; se desbloquea al enfocar. */
