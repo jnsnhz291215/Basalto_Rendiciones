@@ -6,6 +6,7 @@ const express = require('express')
 const cors = require('cors')
 
 const { STORAGE_ROOT, ensureStorageDirs } = require('./config/storage')
+const { ensureCajasSchema } = require('./utils/ensureCajasSchema')
 
 const authRoutes = require('./routes/auth.routes')
 const cajasRoutes = require('./routes/cajas.routes')
@@ -90,12 +91,18 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Internal Server Error' })
 })
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`Basalto Rendiciones API escuchando en http://localhost:${PORT}`)
   if (distExists) {
     console.log(`Sirviendo frontend desde ${distPath}`)
   } else {
     console.warn(`AVISO: no hay dist/ en ${distPath} - el front no se servirá`)
+  }
+  try {
+    await ensureCajasSchema()
+    console.log('[schema] cajas_chicas + centros_costo OK')
+  } catch (err) {
+    console.warn('[schema] ensureCajasSchema:', err.message)
   }
 })
 

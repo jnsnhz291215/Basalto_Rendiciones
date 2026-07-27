@@ -113,17 +113,12 @@ export function rolApiFromUi(label) {
 }
 
 export function mapCaja(row) {
+  const interior = row.nombre_interior || row.clave_interna || ''
   return {
     id: row.id,
-    groupKey: row.clave_interna,
+    groupKey: interior,
     displayName: row.nombre_exterior,
-    centroCosto: row.centro_costo || '-',
-    responsable: row.responsable_nombre || '-',
-    responsableId: row.responsable_id ?? null,
-    fondoEstimado: formatMontoApi(row.fondo_estimado_mes),
-    fondoEstimadoNum: Number(row.fondo_estimado_mes) || 0,
-    mes: row.mes_asignado,
-    estado: row.estado === 'inactiva' ? 'inactiva' : 'activa'
+    nombreInterior: interior
   }
 }
 
@@ -324,29 +319,10 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;')
 }
 
-/** Cartola simple: aperturas (fondo caja) + rendiciones + anticipos del mes */
+/** Cartola simple: rendiciones + anticipos (ya no hay inyección de fondo en caja) */
 export function buildCartola({ cajas, movimientos, asignaciones }) {
   const rows = []
-
-  for (const c of cajas) {
-    if (c.estado !== 'activa') continue
-    rows.push({
-      fecha: `01/${String(c.mes).slice(5)}/${String(c.mes).slice(0, 4)}`,
-      mes: c.mes,
-      cajaGroupKey: c.groupKey,
-      doc: `DEP-${c.id || c.groupKey}`,
-      docClass: 'dash-doc-muted',
-      tipoKey: 'apertura',
-      tipo: 'Inyección Fondo',
-      badgeClass: 'dash-badge--ok',
-      detalle: `Apertura ${c.displayName}`,
-      responsable: c.responsable || 'Administración',
-      abono: c.fondoEstimado,
-      abonoClass: 'dash-metric-value--ok dash-table-amount',
-      cargo: '-',
-      cargoClass: 'dash-muted'
-    })
-  }
+  void cajas
 
   for (const m of movimientos) {
     if (m.legacy) continue

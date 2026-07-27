@@ -160,26 +160,31 @@ Todas las tablas de negocio (salvo `audit_logs`) incluyen `is_deleted` + `delete
 
 ---
 
-### 6.3 `cajas_chicas` — Presupuestos mensuales
+### 6.3 `cajas_chicas` — Cajas
 
-**Propósito:** Cada fila = caja de **un mes** para una faena/grupo.
+**Propósito:** Catálogo de cajas. Solo **nombre exterior** + **nombre interior**.
 
 | Campo | Notas |
 |-------|--------|
 | `id` | PK |
-| `clave_interna` | Agrupador inmutable (ej. `FAENA_NORTE`) |
-| `nombre_exterior` | Texto libre visible (ej. “caja pagos x mes julio”) |
-| `mes_asignado` | `YYYY-MM` |
-| `fondo_estimado_mes` | |
-| `centro_costo` | Opcional |
-| `responsable_id` | FK → `trabajadores` |
-| `estado` | `activa` / `inactiva` |
+| `clave_interna` | Nombre interior / agrupador (único) |
+| `nombre_exterior` | Nombre visible |
+| soft delete / timestamps | |
 
-**Lógica:** Misma `clave_interna` + distinto `mes_asignado` = otro presupuesto mensual; reportes anuales agrupan por `clave_interna`.
+**Eliminado del modelo:** `mes_asignado`, `fondo_estimado_mes`, `centro_costo`, `responsable_id`, `estado`.
 
-**Validación:** Correcto y alineado con Gestión de Cajas.
+---
 
-**Unique sugerido:** (`clave_interna`, `mes_asignado`) donde `is_deleted = false`.
+### 6.3b `centros_costo` — Centros de costo
+
+| Campo | Notas |
+|-------|--------|
+| `id` | PK propio |
+| `codigo` | Único (ej. `CC-101`) |
+| `nombre` | Opcional |
+| soft delete / timestamps | |
+
+API: `GET/POST /api/cajas/centros-costo`, `PUT/DELETE /api/cajas/centros-costo/:id`.
 
 ---
 
@@ -347,17 +352,22 @@ CREATE TABLE cajas_chicas (
     id INT AUTO_INCREMENT PRIMARY KEY,
     clave_interna VARCHAR(50) NOT NULL,
     nombre_exterior VARCHAR(150) NOT NULL,
-    centro_costo VARCHAR(100) NOT NULL,
-    responsable_id INT NULL,
-    mes_asignado VARCHAR(7) NOT NULL,
-    fondo_estimado_mes DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
-    estado ENUM('activa', 'inactiva') DEFAULT 'activa',
     is_deleted BOOLEAN DEFAULT FALSE,
     deleted_at DATETIME NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_cajas_responsable FOREIGN KEY (responsable_id) REFERENCES trabajadores(id) ON DELETE RESTRICT,
-    UNIQUE KEY uk_caja_clave_mes (clave_interna, mes_asignado)
+    UNIQUE KEY uk_caja_nombre_interior (clave_interna)
+) ENGINE=InnoDB;
+
+CREATE TABLE centros_costo (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    codigo VARCHAR(50) NOT NULL,
+    nombre VARCHAR(150) NULL,
+    is_deleted BOOLEAN DEFAULT FALSE,
+    deleted_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_centros_costo_codigo (codigo)
 ) ENGINE=InnoDB;
 
 -- 5. TARJETAS CORPORATIVAS

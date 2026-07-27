@@ -1,6 +1,6 @@
 const { query } = require('../config/db')
 const { registrarAuditoria } = require('../utils/audit')
-const { calcularArrastreMes, nextCodigo } = require('../utils/helpers')
+const { calcularArrastreMes, nextCodigo, mesActualYYYYMM } = require('../utils/helpers')
 const { ROLES } = require('../middlewares/role.middleware')
 const { assertTarjetaPermitePago } = require('../utils/tarjetaPago')
 
@@ -10,7 +10,7 @@ async function listRendiciones(req, res) {
     const params = []
     let sql = `
       SELECT r.*,
-             c.clave_interna, c.nombre_exterior, c.mes_asignado,
+             c.clave_interna, c.nombre_exterior,
              t.nombre_completo AS trabajador_nombre
       FROM rendiciones_gastos r
       INNER JOIN cajas_chicas c ON c.id = r.caja_id AND c.is_deleted = FALSE
@@ -26,7 +26,7 @@ async function listRendiciones(req, res) {
       params.push(Number(trabajador_id))
     }
     if (mes) {
-      sql += ' AND c.mes_asignado = ?'
+      sql += ` AND DATE_FORMAT(r.fecha_documento, '%Y-%m') = ?`
       params.push(mes)
     }
     if (q?.trim()) {
@@ -85,7 +85,7 @@ async function createRendicion(req, res) {
     }
 
     const cajas = await query(
-      `SELECT id, mes_asignado FROM cajas_chicas WHERE id = ? AND is_deleted = FALSE`,
+      `SELECT id FROM cajas_chicas WHERE id = ? AND is_deleted = FALSE`,
       [caja_id]
     )
     if (!cajas[0]) return res.status(404).json({ error: 'Caja no encontrada' })
@@ -99,7 +99,7 @@ async function createRendicion(req, res) {
       return res.status(tarjetaCheck.status).json({ error: tarjetaCheck.error })
     }
 
-    const arrastre = calcularArrastreMes(fecha_documento, cajas[0].mes_asignado)
+    const arrastre = calcularArrastreMes(fecha_documento, mesActualYYYYMM())
 
     const maxRows = await query(
       `SELECT MAX(CAST(SUBSTRING_INDEX(codigo_rinde, '-', -1) AS UNSIGNED)) AS max_num
@@ -178,13 +178,7 @@ async function updateRendicion(req, res) {
     let arrastre = existing[0].arrastre_mes
     const fecha = fecha_documento || existing[0].fecha_documento
     if (fecha_documento) {
-      const cajas = await query(
-        `SELECT mes_asignado FROM cajas_chicas WHERE id = ? AND is_deleted = FALSE`,
-        [existing[0].caja_id]
-      )
-      if (cajas[0]) {
-        arrastre = calcularArrastreMes(fecha, cajas[0].mes_asignado)
-      }
+      arrastre = calcularArrastreMes(fecha, mesActualYYYYMM())
     }
 
     const tipo = tipo_documento || existing[0].tipo_documento

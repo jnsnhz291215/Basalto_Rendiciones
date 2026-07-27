@@ -8,7 +8,7 @@ async function listAnticipos(req, res) {
     const params = []
     let sql = `
       SELECT a.*,
-             c.clave_interna, c.nombre_exterior, c.mes_asignado,
+             c.clave_interna, c.nombre_exterior,
              t.nombre_completo AS trabajador_nombre
       FROM anticipos a
       INNER JOIN cajas_chicas c ON c.id = a.caja_id AND c.is_deleted = FALSE

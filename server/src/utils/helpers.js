@@ -13,12 +13,19 @@ const MESES_ES = [
   'Diciembre'
 ]
 
+function mesActualYYYYMM() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}`
+}
+
 /**
- * Compara fecha_documento (Date|string YYYY-MM-DD) con mes_asignado (YYYY-MM).
+ * Compara fecha_documento (Date|string YYYY-MM-DD) con mes de referencia (YYYY-MM).
  * Si el documento es de un mes anterior → "Arrastre (Mes)"; si no → null.
  */
-function calcularArrastreMes(fechaDocumento, mesAsignado) {
-  if (!fechaDocumento || !mesAsignado) return null
+function calcularArrastreMes(fechaDocumento, mesReferencia) {
+  if (!fechaDocumento || !mesReferencia) return null
 
   const fecha =
     fechaDocumento instanceof Date
@@ -27,14 +34,14 @@ function calcularArrastreMes(fechaDocumento, mesAsignado) {
 
   if (Number.isNaN(fecha.getTime())) return null
 
-  const [yCaja, mCaja] = String(mesAsignado).split('-').map(Number)
+  const [yRef, mRef] = String(mesReferencia).split('-').map(Number)
   const yDoc = fecha.getUTCFullYear()
   const mDoc = fecha.getUTCMonth() + 1
 
   const docKey = yDoc * 12 + mDoc
-  const cajaKey = yCaja * 12 + mCaja
+  const refKey = yRef * 12 + mRef
 
-  if (docKey < cajaKey) {
+  if (docKey < refKey) {
     return `Arrastre (${MESES_ES[mDoc - 1]})`
   }
   return null
@@ -45,4 +52,4 @@ function nextCodigo(prefix, maxNum) {
   return `${prefix}-${n}`
 }
 
-module.exports = { calcularArrastreMes, nextCodigo, MESES_ES }
+module.exports = { calcularArrastreMes, nextCodigo, MESES_ES, mesActualYYYYMM }

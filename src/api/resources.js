@@ -43,6 +43,28 @@ export async function deleteCaja(id) {
   return jsonOrThrow(`/api/cajas/${id}`, { method: 'DELETE' })
 }
 
+export async function listCentrosCosto() {
+  return unwrapList(await jsonOrThrow('/api/cajas/centros-costo'))
+}
+
+export async function createCentroCosto(payload) {
+  return jsonOrThrow('/api/cajas/centros-costo', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateCentroCosto(id, payload) {
+  return jsonOrThrow(`/api/cajas/centros-costo/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deleteCentroCosto(id) {
+  return jsonOrThrow(`/api/cajas/centros-costo/${id}`, { method: 'DELETE' })
+}
+
 export async function listRendiciones(params = {}) {
   const qs = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {

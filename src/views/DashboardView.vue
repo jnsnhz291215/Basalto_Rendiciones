@@ -1592,13 +1592,13 @@
         </div>
       </div>
 
-      <!-- Gestión de Cajas -->
+      <!-- Cajas -->
       <div v-else-if="activeTab === 'cajas'" class="dash-cajas-gestion">
         <div class="dash-cajas-toolbar">
           <div>
-            <h3 class="dash-cajas-toolbar-title">Presupuestos y Cajas Chicas</h3>
+            <h3 class="dash-cajas-toolbar-title">Cajas</h3>
             <p class="dash-cajas-toolbar-hint">
-              Listado histórico y proyección de fondos por caja.
+              Nombre exterior (visible) y nombre interior (agrupador).
             </p>
           </div>
           <button
@@ -1607,7 +1607,7 @@
             @click="toggleFormCaja"
           >
             <span>{{ cajaFormOpen ? '▲' : '＋' }}</span>
-            <span>{{ cajaFormOpen ? 'Ocultar Formulario' : 'Nueva Caja Chica' }}</span>
+            <span>{{ cajaFormOpen ? 'Ocultar Formulario' : 'Nueva Caja' }}</span>
           </button>
         </div>
 
@@ -1623,10 +1623,10 @@
           <div class="dash-caja-form-head">
             <div>
               <h2 class="dash-assign-title dash-assign-title--flush">
-                {{ cajaForm.editIndex !== null ? 'Editar Presupuesto de Caja' : 'Configuración de Caja Chica' }}
+                {{ cajaForm.editId ? 'Editar Caja' : 'Configuración de Caja' }}
               </h2>
               <p class="dash-hint">
-                Asigna la clave interna de agrupación y el presupuesto mensual.
+                Solo nombre exterior e interior.
               </p>
             </div>
             <button
@@ -1640,105 +1640,30 @@
           </div>
 
           <form class="dash-caja-form" @submit.prevent="onSaveCaja">
-            <div class="dash-caja-block">
-              <span class="dash-caja-block-label dash-caja-block-label--accent">
-                1. Identificación General
-              </span>
-
-              <div class="dash-caja-grid-2">
-                <div class="dash-field">
-                  <label>Nombre Visible (Exterior)</label>
-                  <input
-                    v-model="cajaForm.displayName"
-                    type="text"
-                    placeholder="Ej: caja pagos x mes julio"
-                    required
-                  />
-                </div>
-
-                <div class="dash-field">
-                  <label class="dash-label-accent">Clave Interna (Agrupador) 🔑</label>
-                  <div class="dash-stack-tight">
-                    <select
-                      v-model="cajaForm.groupKeySelect"
-                      class="dash-mono"
-                      :disabled="cajaForm.editIndex !== null"
-                      @change="onGroupKeySelectChange"
-                    >
-                      <option value="">-- Seleccionar Grupo Existente --</option>
-                      <option
-                        v-for="g in gruposInternosExistentes"
-                        :key="g.groupKey"
-                        :value="g.groupKey"
-                      >
-                        {{ g.groupKey }} ({{ g.ejemploExterior }})
-                      </option>
-                      <option value="__NUEVO__">+ Crear Nueva Clave</option>
-                    </select>
-                    <input
-                      v-if="cajaForm.groupKeySelect === '__NUEVO__'"
-                      v-model="cajaForm.groupKeyNuevo"
-                      type="text"
-                      placeholder="Ej: FAENA_SUR"
-                      class="dash-mono dash-input-accent-border"
-                      @input="onGroupKeyNuevoInput"
-                    />
-                  </div>
-                </div>
+            <div class="dash-caja-grid-2">
+              <div class="dash-field">
+                <label>Nombre Exterior</label>
+                <input
+                  v-model="cajaForm.displayName"
+                  type="text"
+                  placeholder="Ej: Caja Faena Norte"
+                  required
+                />
               </div>
-
-              <div class="dash-caja-grid-2">
-                <div class="dash-field">
-                  <label>Responsable</label>
-                  <select v-model="cajaForm.responsableId">
-                    <option value="">Seleccionar Responsable...</option>
-                    <option v-for="t in trabajadores" :key="t.id" :value="String(t.id)">
-                      {{ t.nombre }}
-                    </option>
-                  </select>
-                </div>
-
-                <div class="dash-field">
-                  <label>Centro de Costo</label>
-                  <input
-                    v-model="cajaForm.centroCosto"
-                    type="text"
-                    placeholder="Ej: CC-101 / Basalto"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div class="dash-caja-block dash-caja-block--budget">
-              <span class="dash-caja-block-label">2. Asignación Mensual</span>
-
-              <div class="dash-caja-grid-3">
-                <div class="dash-field">
-                  <label>Mes</label>
-                  <select v-model="cajaForm.mes" class="dash-input-strong">
-                    <option v-for="m in mesesDisponibles" :key="m.value" :value="m.value">
-                      {{ m.label }}
-                    </option>
-                  </select>
-                </div>
-
-                <div class="dash-field">
-                  <label>Fondo ($)</label>
-                  <input
-                    v-model="cajaForm.fondoEstimado"
-                    type="number"
-                    placeholder="2000000"
-                    class="dash-input-strong"
-                  />
-                </div>
-
-                <div class="dash-field">
-                  <label>Estado</label>
-                  <select v-model="cajaForm.estado">
-                    <option value="activa">Activa</option>
-                    <option value="inactiva">Inactiva</option>
-                  </select>
-                </div>
+              <div class="dash-field">
+                <label>Nombre Interior</label>
+                <input
+                  v-model="cajaForm.nombreInterior"
+                  type="text"
+                  placeholder="Ej: FAENA_NORTE"
+                  class="dash-mono"
+                  required
+                  :disabled="Boolean(cajaForm.editId)"
+                  @input="cajaForm.nombreInterior = normalizarGroupKey(cajaForm.nombreInterior)"
+                />
+                <span v-if="cajaForm.editId" class="dash-field-hint">
+                  El nombre interior no se puede cambiar al editar.
+                </span>
               </div>
             </div>
 
@@ -1747,7 +1672,7 @@
                 Cancelar
               </button>
               <button class="dash-btn-primary" type="submit">
-                <span>Guardar Presupuesto</span>
+                <span>{{ cajaForm.editId ? 'Guardar Cambios' : 'Guardar Caja' }}</span>
               </button>
             </div>
           </form>
@@ -1759,32 +1684,133 @@
           <table class="dash-table">
             <thead>
               <tr>
-                <th>Clave Interna</th>
-                <th>Nombre Visible (Exterior)</th>
-                <th>Mes</th>
-                <th>CC</th>
-                <th>Responsable</th>
-                <th class="dash-table-right">Fondo Estimado</th>
+                <th>Nombre Exterior</th>
+                <th>Nombre Interior</th>
                 <th class="dash-table-center">Acciones</th>
               </tr>
             </thead>
             <tbody>
               <tr
                 v-for="(caja, index) in cajasOrdenadas"
-                :key="`${caja.groupKey}-${caja.mes}`"
-                :class="{ 'dash-row-muted': caja.estado === 'inactiva' }"
+                :key="caja.id || caja.groupKey"
               >
-                <td class="dash-mono dash-rinde">{{ caja.groupKey }}</td>
                 <td class="dash-table-strong">{{ caja.displayName }}</td>
-                <td class="dash-mono">{{ labelMes(caja.mes) }}</td>
-                <td class="dash-mono">{{ caja.centroCosto }}</td>
-                <td>{{ caja.responsable }}</td>
-                <td class="dash-table-right dash-table-amount dash-metric-value--ok">
-                  {{ caja.fondoEstimado }}
-                </td>
+                <td class="dash-mono dash-rinde">{{ caja.groupKey }}</td>
                 <td class="dash-table-center">
                   <button class="dash-btn-edit" type="button" @click="onEditCaja(index)">
                     Editar
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Centro de Costos -->
+      <div v-else-if="activeTab === 'centros-costo'" class="dash-cajas-gestion">
+        <div class="dash-cajas-toolbar">
+          <div>
+            <h3 class="dash-cajas-toolbar-title">Centro de Costos</h3>
+            <p class="dash-cajas-toolbar-hint">
+              Catálogo de centros de costo con ID propio.
+            </p>
+          </div>
+          <button
+            class="dash-btn-primary dash-btn-toggle-caja"
+            type="button"
+            @click="toggleFormCc"
+          >
+            <span>{{ ccFormOpen ? '▲' : '＋' }}</span>
+            <span>{{ ccFormOpen ? 'Ocultar Formulario' : 'Nuevo Centro de Costo' }}</span>
+          </button>
+        </div>
+
+        <div class="dash-collapse" :class="{ 'dash-collapse--open': ccFormOpen }">
+          <div class="dash-collapse-inner">
+            <div class="dash-panel dash-caja-form-panel dash-collapse-panel">
+              <div class="dash-caja-form-head">
+                <div>
+                  <h2 class="dash-assign-title dash-assign-title--flush">
+                    {{ ccForm.editId ? 'Editar Centro de Costo' : 'Nuevo Centro de Costo' }}
+                  </h2>
+                  <p class="dash-hint">Código único y nombre descriptivo.</p>
+                </div>
+                <button
+                  class="dash-modal-close"
+                  type="button"
+                  aria-label="Cerrar formulario"
+                  @click="closeFormCc"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form class="dash-caja-form" @submit.prevent="onSaveCentroCosto">
+                <div class="dash-caja-grid-2">
+                  <div class="dash-field">
+                    <label>Código</label>
+                    <input
+                      v-model="ccForm.codigo"
+                      type="text"
+                      class="dash-mono"
+                      placeholder="Ej: CC-101"
+                      required
+                    />
+                  </div>
+                  <div class="dash-field">
+                    <label>Nombre</label>
+                    <input
+                      v-model="ccForm.nombre"
+                      type="text"
+                      placeholder="Ej: Basalto Norte"
+                    />
+                  </div>
+                </div>
+                <div class="dash-caja-form-actions">
+                  <button class="dash-btn-secondary" type="button" @click="closeFormCc">
+                    Cancelar
+                  </button>
+                  <button class="dash-btn-primary" type="submit">
+                    {{ ccForm.editId ? 'Guardar Cambios' : 'Guardar Centro de Costo' }}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="dash-table-wrap">
+          <table class="dash-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Código</th>
+                <th>Nombre</th>
+                <th class="dash-table-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="cc in centrosCosto" :key="cc.id">
+                <td class="dash-mono">{{ cc.id }}</td>
+                <td class="dash-mono dash-rinde">{{ cc.codigo }}</td>
+                <td>{{ cc.nombre || '-' }}</td>
+                <td class="dash-table-center dash-table-actions">
+                  <button
+                    class="dash-btn-icon"
+                    type="button"
+                    title="Editar"
+                    @click="onEditCentroCosto(cc)"
+                  >
+                    ✎
+                  </button>
+                  <button
+                    class="dash-btn-icon dash-btn-icon--danger"
+                    type="button"
+                    title="Eliminar"
+                    @click="onDeleteCentroCosto(cc)"
+                  >
+                    🗑
                   </button>
                 </td>
               </tr>
@@ -2107,19 +2133,20 @@
                       </button>
                       <button
                         v-if="canEditPersonal && !p.tieneUsuario"
-                        class="dash-btn-edit"
+                        class="dash-btn-icon"
                         type="button"
                         title="Crear usuario"
                         @click="openModalPersonalCrearUsuario(p)"
                       >
-                        Crear Usuario
+                        ＋
                       </button>
                       <button
-                        class="dash-btn-edit"
+                        class="dash-btn-icon"
                         type="button"
+                        title="Asignar cajas"
                         @click="openModalAsignarCajas(p)"
                       >
-                        Asignar cajas
+                        ▦
                       </button>
                       <button
                         v-if="canEditPersonal"
@@ -2717,7 +2744,8 @@ const tabs = [
   { id: 'rendicion', label: 'Rendición de Gastos' },
   { id: 'asignacion', label: 'Asignación a Conductor' },
   { id: 'informes', label: 'Informes y Cartola' },
-  { id: 'cajas', label: 'Gestión de Cajas' }
+  { id: 'cajas', label: 'Cajas' },
+  { id: 'centros-costo', label: 'Centro de Costos' }
 ]
 
 const adminTabs = [
@@ -2882,18 +2910,19 @@ const cajaFormOpen = ref(false)
 const formCajaEl = ref(null)
 
 const cajaForm = reactive({
-  groupKeySelect: '',
-  groupKeyNuevo: '',
   displayName: '',
-  centroCosto: '',
-  responsableId: '',
-  fondoEstimado: '',
-  mes: '',
-  estado: 'activa',
+  nombreInterior: '',
   editIndex: null,
   editId: null,
-  mesOriginal: null,
   groupKeyOriginal: null
+})
+
+const ccFormOpen = ref(false)
+
+const ccForm = reactive({
+  editId: null,
+  codigo: '',
+  nombre: ''
 })
 
 const adminForm = reactive({
@@ -3086,6 +3115,7 @@ const auditoriaFiltro = reactive({
 const auditoriaLogs = ref([])
 
 const cajas = ref([])
+const centrosCosto = ref([])
 
 async function safeList(fn, fallback = []) {
   try {
@@ -3108,53 +3138,24 @@ function applyTieneUsuario(trabajadoresList, usuariosList) {
 function syncSelectoresCajaMes() {
   if (!cajas.value.length) {
     cajaActiva.value = ''
-    mesActivo.value = ''
-    return
-  }
-
-  const nombres = [
-    'Enero',
-    'Febrero',
-    'Marzo',
-    'Abril',
-    'Mayo',
-    'Junio',
-    'Julio',
-    'Agosto',
-    'Septiembre',
-    'Octubre',
-    'Noviembre',
-    'Diciembre'
-  ]
-  const known = new Set(mesesDisponibles.value.map((m) => m.value))
-  for (const c of cajas.value) {
-    if (c.mes && !known.has(c.mes)) {
-      const [y, m] = String(c.mes).split('-')
-      const mi = Number(m) - 1
-      mesesDisponibles.value.push({
-        value: c.mes,
-        label: `${nombres[mi] || m} ${y}`
-      })
-      known.add(c.mes)
+  } else {
+    const keys = [...new Set(cajas.value.map((c) => c.groupKey))]
+    if (!keys.includes(cajaActiva.value)) {
+      cajaActiva.value = keys[0] || ''
     }
   }
-  mesesDisponibles.value.sort((a, b) => a.value.localeCompare(b.value))
 
-  const keys = [...new Set(cajas.value.map((c) => c.groupKey))]
-  if (!keys.includes(cajaActiva.value)) {
-    cajaActiva.value = keys[0] || ''
+  if (!mesesDisponibles.value.some((m) => m.value === mesActivo.value)) {
+    const now = new Date()
+    const cur = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    mesActivo.value =
+      mesesDisponibles.value.find((m) => m.value === cur)?.value ||
+      mesesDisponibles.value[0]?.value ||
+      ''
   }
-  const meses = [
-    ...new Set(cajas.value.filter((c) => c.groupKey === cajaActiva.value).map((c) => c.mes))
-  ].sort()
-  if (!meses.includes(mesActivo.value)) {
-    mesActivo.value = meses[0] || ''
-  }
+
   if (!asignacion.fondo && cajaActiva.value) {
     asignacion.fondo = cajaActiva.value
-  }
-  if (!cajaForm.mes && mesActivo.value) {
-    cajaForm.mes = mesActivo.value
   }
 }
 
@@ -3171,15 +3172,21 @@ async function loadDashboardData() {
   dataError.value = ''
   saveError.value = ''
   try {
-    const [cajasRaw, rendRaw, trabRaw, legRaw, personalRaw] = await Promise.all([
+    const [cajasRaw, rendRaw, trabRaw, legRaw, personalRaw, ccRaw] = await Promise.all([
       safeList(api.listCajas),
       safeList(api.listRendiciones),
       safeList(api.listTrabajadores),
       safeList(api.listLegacy),
-      safeList(api.listPersonal)
+      safeList(api.listPersonal),
+      safeList(api.listCentrosCosto)
     ])
 
     cajas.value = cajasRaw.map(mapCaja)
+    centrosCosto.value = ccRaw.map((row) => ({
+      id: row.id,
+      codigo: row.codigo,
+      nombre: row.nombre || ''
+    }))
     trabajadores.value = trabRaw.map(mapTrabajador)
     personal.value = personalRaw.map(mapPersonal)
     applyTieneUsuario(
@@ -3234,44 +3241,21 @@ async function loadDashboardData() {
   }
 }
 
-function findCajaIdByGroupMes(groupKey, mes) {
-  const c = cajas.value.find((x) => x.groupKey === groupKey && x.mes === mes)
-  return c?.id ?? null
+function findCajaIdByGroupKey(groupKey) {
+  return cajas.value.find((x) => x.groupKey === groupKey)?.id ?? null
 }
 
 function findCajaIdForGasto(groupKey) {
-  return (
-    findCajaIdByGroupMes(groupKey, mesActivo.value) ||
-    cajas.value.find((x) => x.groupKey === groupKey && x.estado === 'activa')?.id ||
-    null
-  )
+  return findCajaIdByGroupKey(groupKey)
 }
 
 const cajasOrdenadas = computed(() =>
-  [...cajas.value].sort((a, b) => {
-    const byKey = a.groupKey.localeCompare(b.groupKey)
-    if (byKey !== 0) return byKey
-    return String(b.mes).localeCompare(String(a.mes))
-  })
+  [...cajas.value].sort((a, b) => a.groupKey.localeCompare(b.groupKey))
 )
-
-/** Grupos internos únicos para el selector (con un ejemplo de nombre exterior) */
-const gruposInternosExistentes = computed(() => {
-  const map = new Map()
-  for (const c of cajas.value) {
-    if (!map.has(c.groupKey)) {
-      map.set(c.groupKey, c.displayName)
-    }
-  }
-  return [...map.entries()].map(([groupKey, ejemploExterior]) => ({
-    groupKey,
-    ejemploExterior
-  }))
-})
 
 const cajasActivasOpciones = computed(() => {
   const map = new Map()
-  for (const c of cajas.value.filter((x) => x.estado === 'activa')) {
+  for (const c of cajas.value) {
     if (!map.has(c.groupKey)) {
       map.set(c.groupKey, c.displayName)
     }
@@ -3283,12 +3267,7 @@ const cajasActivasOpciones = computed(() => {
 })
 
 const cajasActivas = computed(() =>
-  cajas.value.filter(
-    (x) =>
-      x.estado === 'activa' &&
-      x.groupKey === cajaActiva.value &&
-      x.mes === mesActivo.value
-  )
+  cajas.value.filter((x) => x.groupKey === cajaActiva.value)
 )
 
 function labelCajaGroup(groupKey) {
@@ -3772,8 +3751,7 @@ async function onSaveAsignacion() {
   if (!asignacion.conductorId || !asignacion.monto) return
 
   const cajaId =
-    findCajaIdByGroupMes(asignacion.fondo, mesActivo.value) ||
-    findCajaIdForGasto(asignacion.fondo)
+    findCajaIdByGroupKey(asignacion.fondo) || findCajaIdForGasto(asignacion.fondo)
   if (!cajaId) {
     saveError.value = 'Selecciona una caja con presupuesto para el mes activo'
     return
@@ -3866,17 +3844,10 @@ function formatMonto(value) {
 }
 
 function resetCajaForm() {
-  cajaForm.groupKeySelect = ''
-  cajaForm.groupKeyNuevo = ''
   cajaForm.displayName = ''
-  cajaForm.centroCosto = ''
-  cajaForm.responsableId = ''
-  cajaForm.fondoEstimado = ''
-  cajaForm.mes = mesActivo.value
-  cajaForm.estado = 'activa'
+  cajaForm.nombreInterior = ''
   cajaForm.editIndex = null
   cajaForm.editId = null
-  cajaForm.mesOriginal = null
   cajaForm.groupKeyOriginal = null
 }
 
@@ -3901,78 +3872,107 @@ function openFormCajaForEdit() {
   })
 }
 
-function onGroupKeySelectChange() {
-  if (cajaForm.groupKeySelect !== '__NUEVO__') {
-    cajaForm.groupKeyNuevo = ''
-  }
-}
-
-function onGroupKeyNuevoInput() {
-  cajaForm.groupKeyNuevo = normalizarGroupKey(cajaForm.groupKeyNuevo)
-}
-
-function resolveGroupKey() {
-  if (cajaForm.editIndex !== null && cajaForm.groupKeyOriginal) {
-    return cajaForm.groupKeyOriginal
-  }
-  if (cajaForm.groupKeySelect === '__NUEVO__') {
-    return normalizarGroupKey(cajaForm.groupKeyNuevo)
-  }
-  return normalizarGroupKey(cajaForm.groupKeySelect)
-}
-
 function onEditCaja(sortedIndex) {
   const caja = cajasOrdenadas.value[sortedIndex]
   if (!caja) return
-  const realIndex = cajas.value.findIndex(
-    (c) => c.groupKey === caja.groupKey && c.mes === caja.mes
-  )
+  const realIndex = cajas.value.findIndex((c) => c.id === caja.id)
   if (realIndex < 0) return
 
-  cajaForm.groupKeySelect = caja.groupKey
-  cajaForm.groupKeyNuevo = ''
   cajaForm.displayName = caja.displayName
-  cajaForm.centroCosto = caja.centroCosto
-  cajaForm.responsableId = caja.responsableId != null ? String(caja.responsableId) : ''
-  cajaForm.fondoEstimado = String(caja.fondoEstimado).replace(/\D/g, '')
-  cajaForm.mes = caja.mes
-  cajaForm.estado = caja.estado
+  cajaForm.nombreInterior = caja.groupKey
   cajaForm.editIndex = realIndex
   cajaForm.editId = caja.id
-  cajaForm.mesOriginal = caja.mes
   cajaForm.groupKeyOriginal = caja.groupKey
   openFormCajaForEdit()
 }
 
 async function onSaveCaja() {
-  const groupKey = resolveGroupKey()
   const displayName = cajaForm.displayName.trim()
-  if (!groupKey || !displayName) return
-  if (!cajaForm.fondoEstimado) return
-
-  const payload = {
-    clave_interna: groupKey,
-    nombre_exterior: displayName,
-    centro_costo: cajaForm.centroCosto.trim() || '-',
-    responsable_id: cajaForm.responsableId ? Number(cajaForm.responsableId) : null,
-    mes_asignado: cajaForm.mes,
-    fondo_estimado_mes: parseMontoInput(cajaForm.fondoEstimado),
-    estado: cajaForm.estado
-  }
+  const nombreInterior = normalizarGroupKey(
+    cajaForm.editId ? cajaForm.groupKeyOriginal || cajaForm.nombreInterior : cajaForm.nombreInterior
+  )
+  if (!displayName || !nombreInterior) return
 
   try {
     saveError.value = ''
-    if (cajaForm.editId && cajaForm.mesOriginal === cajaForm.mes) {
-      const { clave_interna, ...updatePayload } = payload
-      await api.updateCaja(cajaForm.editId, updatePayload)
+    if (cajaForm.editId) {
+      await api.updateCaja(cajaForm.editId, {
+        nombre_exterior: displayName
+      })
     } else {
-      await api.createCaja(payload)
+      await api.createCaja({
+        nombre_exterior: displayName,
+        nombre_interior: nombreInterior,
+        clave_interna: nombreInterior
+      })
     }
-    if (!cajaActiva.value) cajaActiva.value = groupKey
+    if (!cajaActiva.value) cajaActiva.value = nombreInterior
     await loadDashboardData()
     closeFormCaja()
   } catch (err) {
     saveError.value = err?.message || 'No se pudo guardar la caja'
+  }
+}
+
+function resetCcForm() {
+  ccForm.editId = null
+  ccForm.codigo = ''
+  ccForm.nombre = ''
+}
+
+function closeFormCc() {
+  ccFormOpen.value = false
+  resetCcForm()
+}
+
+function toggleFormCc() {
+  if (ccFormOpen.value) {
+    closeFormCc()
+    return
+  }
+  resetCcForm()
+  ccFormOpen.value = true
+}
+
+function onEditCentroCosto(cc) {
+  ccForm.editId = cc.id
+  ccForm.codigo = cc.codigo || ''
+  ccForm.nombre = cc.nombre || ''
+  ccFormOpen.value = true
+}
+
+async function onSaveCentroCosto() {
+  const codigo = String(ccForm.codigo || '')
+    .trim()
+    .toUpperCase()
+  if (!codigo) return
+  try {
+    saveError.value = ''
+    const payload = {
+      codigo,
+      nombre: ccForm.nombre.trim() || null
+    }
+    if (ccForm.editId) {
+      await api.updateCentroCosto(ccForm.editId, payload)
+    } else {
+      await api.createCentroCosto(payload)
+    }
+    await loadDashboardData()
+    closeFormCc()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo guardar el centro de costo'
+  }
+}
+
+async function onDeleteCentroCosto(cc) {
+  if (!cc?.id) return
+  if (!confirm(`¿Eliminar el centro de costo "${cc.codigo}"?`)) return
+  try {
+    saveError.value = ''
+    await api.deleteCentroCosto(cc.id)
+    await loadDashboardData()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo eliminar el centro de costo'
   }
 }
 
