@@ -2,6 +2,7 @@
 
 const ESTADO_CLASS = {
   'Sin Devolución': 'dash-status--warn',
+  Parcial: 'dash-status--info',
   Devuelto: 'dash-status--ok',
   'Por Corregir': 'dash-status--danger',
   Aprobado: 'dash-status--ok',
@@ -261,7 +262,9 @@ export function mapRendicion(row) {
   return {
     id: row.id,
     fecha: toDDMMYYYY(row.fecha_documento),
+    fechaSort: String(row.fecha_documento || '').slice(0, 10),
     subidoEl: formatSubidoElFromIso(row.created_at),
+    createdAtMs: row.created_at ? new Date(row.created_at).getTime() : 0,
     arrastreMes: parseArrastreMes(row.arrastre_mes),
     rinde: row.codigo_rinde,
     trabajador: row.trabajador_nombre || '',
@@ -272,6 +275,7 @@ export function mapRendicion(row) {
     estado: row.estado || 'Sin Devolución',
     estadoClass: ESTADO_CLASS[row.estado] || 'dash-status--warn',
     metodoPago: metodoFromOrigen(row.origen_pago),
+    tarjetaId: row.tarjeta_id ?? null,
     cajaGroupKey: row.clave_interna || '',
     cajaId: row.caja_id,
     descripcion: row.descripcion || '',
@@ -316,6 +320,9 @@ export function mapAnticipo(row) {
   return {
     id: row.id,
     fecha: toDDMMYYYY(row.fecha),
+    fechaSort: String(row.fecha || '').slice(0, 10),
+    subidoEl: formatSubidoElFromIso(row.created_at),
+    createdAtMs: row.created_at ? new Date(row.created_at).getTime() : 0,
     conductor: row.trabajador_nombre || '',
     trabajadorId: row.trabajador_id,
     doc: row.codigo_vale,

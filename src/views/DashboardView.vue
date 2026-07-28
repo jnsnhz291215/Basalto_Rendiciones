@@ -326,6 +326,100 @@
       </div>
     </div>
 
+    <!-- Modal historial parcial (mes trabajador+caja) -->
+    <div
+      v-if="modalParcialMes.open"
+      class="dash-modal-backdrop"
+      @click.self="closeModalParcialMes"
+    >
+      <div
+        class="dash-modal dash-modal--wide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-parcial-title"
+      >
+        <div class="dash-modal-head">
+          <div>
+            <h3 id="modal-parcial-title">Historial del mes</h3>
+            <p class="dash-hint">
+              {{ modalParcialMes.trabajador }} · {{ modalParcialMes.cajaLabel }} ·
+              {{ modalParcialMes.mesLabel }}
+            </p>
+          </div>
+          <button
+            class="dash-modal-close"
+            type="button"
+            aria-label="Cerrar"
+            @click="closeModalParcialMes"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="dash-table-wrap dash-parcial-table">
+          <table class="dash-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Hora</th>
+                <th>Tipo</th>
+                <th>Doc</th>
+                <th>Detalle</th>
+                <th class="dash-table-right">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(item, idx) in modalParcialMes.items" :key="idx">
+                <td class="dash-mono">{{ item.fecha }}</td>
+                <td class="dash-mono dash-nowrap">{{ item.hora }}</td>
+                <td>
+                  <span class="dash-badge" :class="item.badgeClass">{{ item.tipo }}</span>
+                </td>
+                <td class="dash-mono" :class="item.docClass">{{ item.doc }}</td>
+                <td>{{ item.detalle }}</td>
+                <td class="dash-table-right dash-table-amount">{{ item.monto }}</td>
+              </tr>
+              <tr v-if="!modalParcialMes.items.length">
+                <td colspan="6" class="dash-cajas-empty">Sin movimientos en el mes.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="dash-parcial-totales">
+          <div class="dash-parcial-total">
+            <span class="dash-parcial-total-label">Total anticipos</span>
+            <span class="dash-parcial-total-value">{{ modalParcialMes.totalAnticipos }}</span>
+          </div>
+          <div class="dash-parcial-total">
+            <span class="dash-parcial-total-label">Total declarado</span>
+            <span class="dash-parcial-total-value">{{ modalParcialMes.totalDeclarado }}</span>
+          </div>
+          <div class="dash-parcial-total dash-parcial-total--accent">
+            <span class="dash-parcial-total-label">{{ modalParcialMes.labelDevolucion }}</span>
+            <span class="dash-parcial-total-value">{{ modalParcialMes.totalDevolucion }}</span>
+          </div>
+          <p class="dash-hint dash-parcial-quien">
+            <template v-if="modalParcialMes.quien === 'trabajador'">
+              Debe devolver: <strong>Trabajador</strong> (quedó saldo de anticipo sin gastar).
+            </template>
+            <template v-else-if="modalParcialMes.quien === 'empresa'">
+              Debe devolver: <strong>Empresa</strong> (lo declarado supera el anticipo recibido).
+            </template>
+            <template v-else>
+              No hay saldo a devolver (anticipo y declarado quedan parejos).
+            </template>
+          </p>
+        </div>
+
+        <div class="dash-modal-actions">
+          <button class="dash-btn-secondary" type="button" @click="closeModalParcialMes">
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal historial cartola -->
     <div
       v-if="modalHistorialCartola.open"
@@ -935,15 +1029,16 @@
                     class="dash-word-count"
                     :class="{ 'dash-word-count--over': letrasDescripcion > 500 }"
                   >
-                    {{ letrasDescripcion }} / 500 letras
+                    {{ letrasDescripcion }} / 500 caracteres
                   </span>
                 </div>
                 <textarea
-                  v-model="gasto.descripcion"
+                  :value="gasto.descripcion"
                   rows="3"
                   maxlength="500"
                   placeholder="Detalle amplio del gasto..."
                   class="dash-textarea"
+                  @input="onGastoDescripcionInput"
                 ></textarea>
               </div>
 
@@ -1089,7 +1184,22 @@
                 </td>
                 <td class="dash-table-right dash-table-amount">{{ row.monto }}</td>
                 <td class="dash-table-center">
-                  <span class="dash-status" :class="row.estadoClass">{{ row.estado }}</span>
+                  <button
+                    v-if="estadoDevolucionDisplay(row).parcial"
+                    type="button"
+                    class="dash-status dash-status--toggle dash-status--info"
+                    title="Ver historial del mes (anticipos y gastos)"
+                    @click="openModalParcialMes(row)"
+                  >
+                    Parcial
+                  </button>
+                  <span
+                    v-else
+                    class="dash-status"
+                    :class="estadoDevolucionDisplay(row).class"
+                  >
+                    {{ estadoDevolucionDisplay(row).label }}
+                  </span>
                 </td>
                 <td class="dash-table-center">
                   <div class="dash-actions-cell">
@@ -1362,7 +1472,7 @@
                     class="dash-word-count"
                     :class="{ 'dash-word-count--over': letrasComentarioAdmin > 500 }"
                   >
-                    {{ letrasComentarioAdmin }} / 500 letras
+                    {{ letrasComentarioAdmin }} / 500 caracteres
                   </span>
                 </div>
 
@@ -1387,12 +1497,13 @@
                 </div>
 
                 <textarea
-                  v-model="modalResponder.comentario"
+                  :value="modalResponder.comentario"
                   rows="3"
                   maxlength="500"
-                  placeholder="Ej: Factura ilegible, favor subir foto donde se aprecie claramente el RUT y monto..."
+                  placeholder="Ej: Factura ilegible favor subir foto donde se aprecie claramente el RUT y monto"
                   class="dash-textarea"
                   :required="comentarioRequeridoAdmin"
+                  @input="onComentarioAdminInput"
                 ></textarea>
               </div>
 
@@ -1567,20 +1678,24 @@
               <div v-if="modalCorregir.campos.descripcion" class="dash-field">
                 <label>Descripción / Observación</label>
                 <textarea
-                  v-model="modalCorregir.descripcion"
+                  :value="modalCorregir.descripcion"
                   rows="2"
+                  maxlength="500"
                   placeholder="Actualiza el detalle del gasto..."
                   class="dash-textarea"
+                  @input="onCorregirDescripcionInput"
                 ></textarea>
               </div>
 
               <div class="dash-field">
                 <label>Respuesta / Aclaración al Admin</label>
                 <textarea
-                  v-model="modalCorregir.respuesta"
+                  :value="modalCorregir.respuesta"
                   rows="2"
-                  placeholder="Ej: Subo nueva foto enfocada con el número de boleta legible..."
+                  maxlength="500"
+                  placeholder="Ej: Subo nueva foto enfocada con el numero de boleta legible"
                   class="dash-textarea"
+                  @input="onCorregirRespuestaInput"
                 ></textarea>
               </div>
 
@@ -1761,15 +1876,16 @@
                     class="dash-word-count"
                     :class="{ 'dash-word-count--over': letrasObservacionAnticipo > 500 }"
                   >
-                    {{ letrasObservacionAnticipo }} / 500 letras
+                    {{ letrasObservacionAnticipo }} / 500 caracteres
                   </span>
                 </div>
                 <textarea
-                  v-model="asignacion.observaciones"
+                  :value="asignacion.observaciones"
                   rows="3"
                   maxlength="500"
                   placeholder="Detalle amplio del anticipo..."
                   class="dash-textarea"
+                  @input="onAnticipoObservacionInput"
                 ></textarea>
               </div>
 
@@ -4554,6 +4670,19 @@ const modalHistorialCartola = reactive({
   comprobanteNombre: ''
 })
 
+const modalParcialMes = reactive({
+  open: false,
+  trabajador: '',
+  cajaLabel: '',
+  mesLabel: '',
+  items: [],
+  totalAnticipos: '$ 0',
+  totalDeclarado: '$ 0',
+  totalDevolucion: '$ 0',
+  labelDevolucion: 'Total devolución (trabajador)',
+  quien: '' // trabajador | empresa | ''
+})
+
 const cartolaFiltrada = computed(() =>
   cartola.value.filter((row) => {
     if (filtrosInforme.mes && row.mes !== filtrosInforme.mes) return false
@@ -4779,6 +4908,142 @@ function toggleCartolaAccordion(key) {
   cartolaAccordionOpen[key] = !isCartolaAccordionOpen(key)
 }
 
+function horaFromSubidoEl(subidoEl) {
+  const m = String(subidoEl || '').match(/(\d{2}:\d{2})/)
+  return m ? m[1] : '--:--'
+}
+
+function mismoTrabajadorCaja(a, b) {
+  if (!a || !b) return false
+  if (String(a.trabajadorId) !== String(b.trabajadorId)) return false
+  if (a.cajaId != null && b.cajaId != null) {
+    return Number(a.cajaId) === Number(b.cajaId)
+  }
+  return Boolean(a.cajaGroupKey) && a.cajaGroupKey === b.cajaGroupKey
+}
+
+/** Pago con tarjeta de la empresa (vinculada) → Sin Devolución. */
+function esPagoTarjetaEmpresa(row) {
+  if (!row || row.legacy) return false
+  return (
+    Boolean(row.tarjetaId) &&
+    (row.metodoPago === 'debito' || row.metodoPago === 'credito')
+  )
+}
+
+function tieneAnticipoMesTrabajadorCaja(row) {
+  if (!row?.trabajadorId) return false
+  const mes = mesFromFechaDDMMYYYY(row.fecha)
+  if (!mes) return false
+  return asignaciones.value.some(
+    (a) =>
+      mismoTrabajadorCaja(a, row) && mesFromFechaDDMMYYYY(a.fecha) === mes
+  )
+}
+
+/**
+ * Estado visible en historial:
+ * - Estados admin (Por Corregir / Devuelto / Aprobado / Rechazado) se respetan.
+ * - Tarjeta empresa → Sin Devolución.
+ * - Efectivo (u otro sin tarjeta empresa) con anticipo del mes → Parcial (clickeable).
+ */
+function estadoDevolucionDisplay(row) {
+  if (!row) return { label: '-', class: 'dash-status--off', parcial: false }
+  const adminStates = ['Por Corregir', 'Devuelto', 'Aprobado', 'Rechazado']
+  if (adminStates.includes(row.estado)) {
+    return { label: row.estado, class: row.estadoClass, parcial: false }
+  }
+  if (esPagoTarjetaEmpresa(row)) {
+    return { label: 'Sin Devolución', class: 'dash-status--warn', parcial: false }
+  }
+  if (tieneAnticipoMesTrabajadorCaja(row)) {
+    return { label: 'Parcial', class: 'dash-status--info', parcial: true }
+  }
+  return {
+    label: row.estado || 'Sin Devolución',
+    class: row.estadoClass || 'dash-status--warn',
+    parcial: false
+  }
+}
+
+function openModalParcialMes(row) {
+  if (!row?.trabajadorId) return
+  const mes = mesFromFechaDDMMYYYY(row.fecha)
+  if (!mes) return
+
+  const anticiposMes = asignaciones.value.filter(
+    (a) => mismoTrabajadorCaja(a, row) && mesFromFechaDDMMYYYY(a.fecha) === mes
+  )
+  // Gastos en efectivo del mes (consumen anticipo); tarjeta empresa no aplica
+  const gastosMes = movimientos.value.filter(
+    (m) =>
+      !m.legacy &&
+      mismoTrabajadorCaja(m, row) &&
+      mesFromFechaDDMMYYYY(m.fecha) === mes &&
+      m.metodoPago === 'efectivo'
+  )
+
+  const items = [
+    ...anticiposMes.map((a) => ({
+      tipo: 'Anticipo',
+      badgeClass: 'dash-badge--info',
+      doc: a.doc || '-',
+      docClass: 'dash-doc-muted',
+      detalle: a.observaciones === '-' ? 'Anticipo' : a.observaciones || 'Anticipo',
+      fecha: a.fecha,
+      hora: horaFromSubidoEl(a.subidoEl),
+      monto: a.monto,
+      sortKey: `${a.fechaSort || ''}|${String(a.createdAtMs || 0).padStart(13, '0')}|A|${a.id}`
+    })),
+    ...gastosMes.map((g) => ({
+      tipo: 'Gasto',
+      badgeClass: 'dash-badge--warn',
+      doc: g.rinde || '-',
+      docClass: 'dash-rinde',
+      detalle: g.descripcion || g.docto || 'Gasto',
+      fecha: g.fecha,
+      hora: horaFromSubidoEl(g.subidoEl),
+      monto: g.monto,
+      sortKey: `${g.fechaSort || ''}|${String(g.createdAtMs || 0).padStart(13, '0')}|G|${g.id}`
+    }))
+  ].sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+
+  const totalAnticipos = anticiposMes.reduce((acc, a) => acc + parseMontoNumber(a.monto), 0)
+  const totalDeclarado = gastosMes.reduce((acc, g) => acc + parseMontoNumber(g.monto), 0)
+  const diff = totalAnticipos - totalDeclarado
+  let quien = ''
+  let labelDevolucion = 'Total devolución'
+  let montoDevolucion = 0
+  if (diff > 0) {
+    quien = 'trabajador'
+    labelDevolucion = 'Total devolución (trabajador)'
+    montoDevolucion = diff
+  } else if (diff < 0) {
+    quien = 'empresa'
+    labelDevolucion = 'Total devolución (empresa)'
+    montoDevolucion = Math.abs(diff)
+  } else {
+    labelDevolucion = 'Total devolución'
+    montoDevolucion = 0
+  }
+
+  modalParcialMes.open = true
+  modalParcialMes.trabajador = row.trabajador || 'Trabajador'
+  modalParcialMes.cajaLabel = labelCajaGroup(row.cajaGroupKey) || 'Caja'
+  modalParcialMes.mesLabel = labelMes(mes)
+  modalParcialMes.items = items
+  modalParcialMes.totalAnticipos = formatMonto(totalAnticipos)
+  modalParcialMes.totalDeclarado = formatMonto(totalDeclarado)
+  modalParcialMes.totalDevolucion = formatMonto(montoDevolucion)
+  modalParcialMes.labelDevolucion = labelDevolucion
+  modalParcialMes.quien = quien
+}
+
+function closeModalParcialMes() {
+  modalParcialMes.open = false
+  modalParcialMes.items = []
+}
+
 function openModalHistorialCartola(row) {
   if (!row) return
   modalHistorialCartola.open = true
@@ -4822,9 +5087,11 @@ function onRespuestaFile(event) {
 }
 
 async function onSaveRespuesta() {
+  modalResponder.comentario = sanitizeTextoLibre(modalResponder.comentario, 500)
   if (comentarioRequeridoAdmin.value && !modalResponder.comentario.trim()) {
     return
   }
+  if (modalResponder.comentario.length > 500) return
 
   const row = movimientos.value.find((m) => m.rinde === modalResponder.rinde)
   if (!row || row.legacy || !row.id) {
@@ -5948,11 +6215,31 @@ async function onSaveAdmin() {
   }
 }
 
-/** Letras, números, espacios, / y - ; máx. 100. */
-function sanitizeTextoLibre(value) {
+/** Letras, números, espacios, / y - ; máx. configurable (default 100). */
+function sanitizeTextoLibre(value, maxLen = 100) {
   return String(value || '')
     .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ0-9 /\-]/g, '')
-    .slice(0, 100)
+    .slice(0, maxLen)
+}
+
+function onGastoDescripcionInput(event) {
+  gasto.descripcion = sanitizeTextoLibre(event.target.value, 500)
+}
+
+function onAnticipoObservacionInput(event) {
+  asignacion.observaciones = sanitizeTextoLibre(event.target.value, 500)
+}
+
+function onComentarioAdminInput(event) {
+  modalResponder.comentario = sanitizeTextoLibre(event.target.value, 500)
+}
+
+function onCorregirDescripcionInput(event) {
+  modalCorregir.descripcion = sanitizeTextoLibre(event.target.value, 500)
+}
+
+function onCorregirRespuestaInput(event) {
+  modalCorregir.respuesta = sanitizeTextoLibre(event.target.value, 500)
 }
 
 function onPersonalNombreInput(event) {

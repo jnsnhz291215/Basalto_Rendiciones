@@ -1428,6 +1428,47 @@ a:hover {
   margin: 0.5rem 0 1rem;
 }
 
+.dash-parcial-table {
+  margin: 0.5rem 0 1rem;
+  max-height: 45vh;
+  overflow: auto;
+}
+
+.dash-parcial-totales {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 0;
+  border-top: 1px solid #334155;
+}
+
+.dash-parcial-total {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  font-size: 0.875rem;
+}
+
+.dash-parcial-total-label {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.dash-parcial-total-value {
+  color: #e2e8f0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.dash-parcial-total--accent .dash-parcial-total-label,
+.dash-parcial-total--accent .dash-parcial-total-value {
+  color: #fb923c;
+}
+
+.dash-parcial-quien {
+  margin: 0.25rem 0 0;
+}
+
 .dash-assign-title {
   margin: 0 0 1rem;
   padding-bottom: 0.75rem;
