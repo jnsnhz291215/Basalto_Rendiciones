@@ -1997,7 +1997,7 @@
                       <tr>
                         <th>Nombre Exterior</th>
                         <th class="dash-table-center">Personal</th>
-                        <th class="dash-table-right">Total Mes</th>
+                        <th class="dash-table-right">Total Mes({{ labelMesHostCajas }})</th>
                         <th class="dash-table-right">Total Año</th>
                         <th class="dash-table-center">Acciones</th>
                       </tr>
@@ -2005,17 +2005,19 @@
                     <tbody>
                       <tr v-for="caja in grupo.cajas" :key="caja.id || caja.groupKey">
                         <td class="dash-table-strong">{{ caja.displayName }}</td>
-                        <td class="dash-table-center dash-table-actions dash-caja-personal-cell">
-                          <span class="dash-caja-personal-count">{{ countPersonalCaja(caja) }}</span>
-                          <button
-                            class="dash-btn-icon"
-                            type="button"
-                            title="Ver personal asignado"
-                            :disabled="countPersonalCaja(caja) === 0"
-                            @click="openModalPersonalCaja(caja)"
-                          >
-                            <i class="fa-solid fa-eye" aria-hidden="true"></i>
-                          </button>
+                        <td class="dash-table-center">
+                          <div class="dash-caja-personal-cell">
+                            <span class="dash-caja-personal-count">{{ countPersonalCaja(caja) }}</span>
+                            <button
+                              class="dash-btn-icon"
+                              type="button"
+                              title="Ver personal asignado"
+                              :disabled="countPersonalCaja(caja) === 0"
+                              @click="openModalPersonalCaja(caja)"
+                            >
+                              <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                            </button>
+                          </div>
                         </td>
                         <td class="dash-table-right dash-table-amount">{{ formatMonto(caja.totalMes) }}</td>
                         <td class="dash-table-right dash-table-amount">{{ formatMonto(caja.totalAnio) }}</td>
@@ -4012,6 +4014,12 @@ const MESES_ES = [
   'Noviembre',
   'Diciembre'
 ]
+
+/** Mes del PC host en mayúsculas para encabezado de totales de cajas (ej. JULIO). */
+const labelMesHostCajas = computed(() => {
+  const now = new Date()
+  return (MESES_ES[now.getMonth()] || '').toUpperCase()
+})
 
 /** DD/MM/YYYY → YYYY-MM */
 function mesFromFechaDDMMYYYY(fecha) {
