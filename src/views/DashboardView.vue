@@ -931,7 +931,8 @@
                   <select v-model="gasto.tipo" @change="onGastoTipoChange">
                     <option>Boleta</option>
                     <option>Factura</option>
-                    <option>Ticket Peaje</option>
+                    <option>Peaje</option>
+                    <option>Guía Despacho</option>
                   </select>
                 </div>
                 <div v-if="gasto.tipo === 'Factura'" class="dash-field">
@@ -1630,7 +1631,8 @@
                   <select v-model="modalCorregir.tipo">
                     <option>Boleta</option>
                     <option>Factura</option>
-                    <option>Ticket Peaje</option>
+                    <option>Peaje</option>
+                    <option>Guía Despacho</option>
                   </select>
                 </div>
                 <div v-if="modalCorregir.campos.monto" class="dash-field">
@@ -5351,7 +5353,8 @@ async function onSaveRespuesta() {
 function openModalCorregir(row) {
   const numeroMatch = String(row.docto || '').match(/#?\s*(\d+)/)
   const montoNum = String(row.monto || '').replace(/\D/g, '')
-  const tipoBase = String(row.docto || 'Boleta').split('#')[0].trim() || 'Boleta'
+  let tipoBase = String(row.docto || 'Boleta').split('#')[0].trim() || 'Boleta'
+  if (tipoBase === 'Ticket Peaje') tipoBase = 'Peaje'
   const campos = { ...camposCorregirDefault(), ...(row.camposCorregir || {}) }
 
   modalCorregir.open = true

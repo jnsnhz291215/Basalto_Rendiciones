@@ -8,6 +8,7 @@ const cors = require('cors')
 const { STORAGE_ROOT, ensureStorageDirs } = require('./config/storage')
 const { ensureCajasSchema } = require('./utils/ensureCajasSchema')
 const { ensureAsignacionesSchema } = require('./utils/ensureAsignacionesSchema')
+const { ensureRendicionesTipoDocto } = require('./utils/ensureRendicionesTipoDocto')
 
 const authRoutes = require('./routes/auth.routes')
 const cajasRoutes = require('./routes/cajas.routes')
@@ -110,6 +111,12 @@ app.listen(PORT, async () => {
     console.log('[schema] asignaciones (anticipos + bancos_origen) OK')
   } catch (err) {
     console.warn('[schema] ensureAsignacionesSchema:', err.message)
+  }
+  try {
+    await ensureRendicionesTipoDocto()
+    console.log('[schema] rendiciones tipo_documento OK')
+  } catch (err) {
+    console.warn('[schema] ensureRendicionesTipoDocto:', err.message)
   }
 })
 

@@ -1,6 +1,6 @@
 /**
- * Plantillas Excel reales (.xlsx) sin dependencias.
- * Genera un ZIP OOXML válido para que Excel no muestre aviso de extensión.
+ * Plantillas Excel (.xlsx) sin dependencias.
+ * Genera ZIP OOXML válido para Excel / Google Sheets / LibreOffice.
  */
 
 function escapeXml(value) {
@@ -22,38 +22,66 @@ function colLetter(index0) {
   return s
 }
 
-function sheetRowsXml(headers, rows) {
-  const all = [
-    headers,
-    ...rows.map((r) =>
-      headers.map((h, i) => {
-        const val = Array.isArray(r) ? r[i] : r[h]
-        return val ?? ''
-      })
-    )
-  ]
-  return all
-    .map((row, rIdx) => {
-      const cells = row
-        .map((val, cIdx) => {
-          const ref = `${colLetter(cIdx)}${rIdx + 1}`
-          if (typeof val === 'number' && Number.isFinite(val)) {
-            return `<c r="${ref}"><v>${val}</v></c>`
+/**
+ * @param {{ r: number, c: number, v: string|number, header?: boolean }[]} cells
+ * @param {{ width: number }[]} [cols]
+ */
+function worksheetFromCells(cells, cols = []) {
+  const byRow = new Map()
+  for (const cell of cells) {
+    if (!byRow.has(cell.r)) byRow.set(cell.r, [])
+    byRow.get(cell.r).push(cell)
+  }
+
+  const rowXml = [...byRow.keys()]
+    .sort((a, b) => a - b)
+    .map((r) => {
+      const list = byRow
+        .get(r)
+        .sort((a, b) => a.c - b.c)
+        .map((cell) => {
+          const ref = `${colLetter(cell.c)}${cell.r}`
+          const style = cell.header ? ' s="1"' : ''
+          if (typeof cell.v === 'number' && Number.isFinite(cell.v)) {
+            return `<c r="${ref}"${style}><v>${cell.v}</v></c>`
           }
-          const text = escapeXml(val)
-          return `<c r="${ref}" t="inlineStr"><is><t>${text}</t></is></c>`
+          return `<c r="${ref}"${style} t="inlineStr"><is><t>${escapeXml(cell.v)}</t></is></c>`
         })
         .join('')
-      return `<row r="${rIdx + 1}">${cells}</row>`
+      return `<row r="${r}">${list}</row>`
     })
     .join('')
-}
 
-function worksheetXml(headers, rows) {
+  const colsXml =
+    cols.length > 0
+      ? `<cols>${cols
+          .map(
+            (col, i) =>
+              `<col min="${i + 1}" max="${i + 1}" width="${col.width}" customWidth="1"/>`
+          )
+          .join('')}</cols>`
+      : ''
+
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <sheetData>${sheetRowsXml(headers, rows)}</sheetData>
+  ${colsXml}
+  <sheetData>${rowXml}</sheetData>
 </worksheet>`
+}
+
+function tableCells(startRow, startCol, rows, { headerRows = 1 } = {}) {
+  const cells = []
+  rows.forEach((row, ri) => {
+    row.forEach((v, ci) => {
+      cells.push({
+        r: startRow + ri,
+        c: startCol + ci,
+        v,
+        header: ri < headerRows
+      })
+    })
+  })
+  return cells
 }
 
 function workbookXml(sheetNames) {
@@ -71,12 +99,16 @@ function workbookXml(sheetNames) {
 }
 
 function workbookRelsXml(count) {
-  const rels = Array.from({ length: count }, (_, i) => {
+  const sheetRels = Array.from({ length: count }, (_, i) => {
     const n = i + 1
     return `<Relationship Id="rId${n}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${n}.xml"/>`
   }).join('')
+  const stylesRid = `rId${count + 1}`
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  ${sheetRels}
+  <Relationship Id="${stylesRid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`
 }
 
 function rootRelsXml() {
@@ -96,11 +128,36 @@ function contentTypesXml(sheetCount) {
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
   ${overrides}
 </Types>`
 }
 
-/** CRC32 para ZIP store */
+function stylesXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="2">
+    <font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/></font>
+    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font>
+  </fonts>
+  <fills count="3">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FF0F172A"/></patternFill></fill>
+  </fills>
+  <borders count="1">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+  </borders>
+  <cellStyleXfs count="1">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0"/>
+  </cellStyleXfs>
+  <cellXfs count="2">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/>
+  </cellXfs>
+</styleSheet>`
+}
+
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256)
   for (let i = 0; i < 256; i++) {
@@ -144,10 +201,6 @@ function encodeUtf8(str) {
   return new TextEncoder().encode(str)
 }
 
-/**
- * ZIP con método Store (sin compresión) — suficiente para xlsx válido.
- * @param {{ name: string, data: Uint8Array }[]} files
- */
 function zipStore(files) {
   const localParts = []
   const centralParts = []
@@ -212,19 +265,24 @@ function zipStore(files) {
   return concatBytes([...localParts, centralDir, end])
 }
 
+/**
+ * @param {string} filename
+ * @param {{ name: string, xml: string }[]} sheets
+ */
 function downloadXlsx(filename, sheets) {
   const names = sheets.map((s) => s.name)
   const files = [
     { name: '[Content_Types].xml', data: encodeUtf8(contentTypesXml(sheets.length)) },
     { name: '_rels/.rels', data: encodeUtf8(rootRelsXml()) },
     { name: 'xl/workbook.xml', data: encodeUtf8(workbookXml(names)) },
-    { name: 'xl/_rels/workbook.xml.rels', data: encodeUtf8(workbookRelsXml(sheets.length)) }
+    { name: 'xl/_rels/workbook.xml.rels', data: encodeUtf8(workbookRelsXml(sheets.length)) },
+    { name: 'xl/styles.xml', data: encodeUtf8(stylesXml()) }
   ]
 
   sheets.forEach((sheet, i) => {
     files.push({
       name: `xl/worksheets/sheet${i + 1}.xml`,
-      data: encodeUtf8(worksheetXml(sheet.headers, sheet.rows))
+      data: encodeUtf8(sheet.xml)
     })
   })
 
@@ -242,6 +300,12 @@ function downloadXlsx(filename, sheets) {
   URL.revokeObjectURL(url)
 }
 
+const EMPTY_DATA_ROWS = 8
+
+function blankRows(colCount, count) {
+  return Array.from({ length: count }, () => Array(colCount).fill(''))
+}
+
 /** Plantilla de importación de gastos / rendiciones */
 export function descargarPlantillaGastos() {
   const headers = [
@@ -257,41 +321,79 @@ export function descargarPlantillaGastos() {
     'descripcion'
   ]
 
-  const ejemplo = [
-    '28/07/2026',
-    '21.191.911-6',
-    'Juan Sanhueza',
-    'TestCAJA',
-    'Boleta',
-    '',
-    20000,
-    'efectivo',
-    '',
-    'Detalle del gasto (obligatorio)'
+  const dataTable = [headers, ...blankRows(headers.length, EMPTY_DATA_ROWS)]
+
+  // Leyenda a la derecha (columna L = índice 11)
+  const leyendaOrigen = [
+    ['origen_pago', 'Significado'],
+    ['e / E', 'Efectivo'],
+    ['d / D', 'Débito'],
+    ['c / C', 'Crédito']
+  ]
+
+  const leyendaTipo = [
+    ['tipo_documento', 'Valores'],
+    ['Boleta', 'Sin N° docto'],
+    ['Factura', 'Requiere numero_documento'],
+    ['Peaje', 'Sin N° docto'],
+    ['Guía Despacho', 'Sin N° docto']
+  ]
+
+  const notas = [
+    ['Notas'],
+    ['fecha: DD/MM/AAAA'],
+    ['caja: clave interna de la caja'],
+    ['monto: solo números (ej. 15000)'],
+    ['tarjeta_ultimos4: obligatorio si d o c'],
+    ['descripcion: obligatoria (máx. 500)'],
+    ['Mayúsculas o minúsculas en e/d/c']
+  ]
+
+  const cells = [
+    ...tableCells(1, 0, dataTable),
+    ...tableCells(1, 11, leyendaOrigen),
+    ...tableCells(7, 11, leyendaTipo),
+    ...tableCells(13, 11, notas, { headerRows: 1 })
+  ]
+
+  const cols = [
+    ...Array(10).fill(null).map((_, i) => ({
+      width: [12, 14, 18, 14, 14, 14, 12, 12, 14, 28][i]
+    })),
+    { width: 3 },
+    { width: 16 },
+    { width: 28 }
   ]
 
   const instrHeaders = ['Campo', 'Obligatorio', 'Descripción']
   const instrRows = [
-    ['fecha', 'Sí', 'Fecha del documento. Formato DD/MM/YYYY'],
+    instrHeaders,
+    ['fecha', 'Sí', 'Fecha del documento. Formato DD/MM/AAAA'],
     ['trabajador_rut', 'Sí', 'RUT del trabajador (con o sin puntos)'],
-    ['trabajador_nombre', 'No', 'Nombre referencial (se busca por RUT)'],
-    ['caja', 'Sí', 'Clave interna / nombre de la caja (como en el sistema)'],
-    ['tipo_documento', 'Sí', 'Boleta | Factura | Ticket Peaje'],
+    ['trabajador_nombre', 'No', 'Solo referencia; se busca por RUT'],
+    ['caja', 'Sí', 'Clave interna / nombre de la caja en el sistema'],
+    ['tipo_documento', 'Sí', 'Boleta | Factura | Peaje | Guía Despacho'],
     ['numero_documento', 'Condicional', 'Obligatorio si tipo_documento = Factura'],
-    ['monto', 'Sí', 'Monto total en pesos chilenos (sin $ ni puntos)'],
-    ['origen_pago', 'Sí', 'efectivo | tarjeta'],
-    ['tarjeta_ultimos4', 'Condicional', 'Obligatorio si origen_pago = tarjeta'],
+    ['monto', 'Sí', 'Monto en pesos (sin $ ni puntos)'],
+    ['origen_pago', 'Sí', 'e = Efectivo | d = Débito | c = Crédito (mayúscula o minúscula)'],
+    ['tarjeta_ultimos4', 'Condicional', 'Obligatorio si origen_pago = d o c'],
     ['descripcion', 'Sí', 'Descripción / observación (máx. 500 caracteres)'],
-    [
-      'NOTA',
-      '',
-      'Los comprobantes (PDF/PNG/JPG) se adjuntan después en el sistema. No elimine la fila de encabezados.'
-    ]
+    ['NOTA', '', 'Los comprobantes se adjuntan después en el sistema. No borre la fila de encabezados.']
   ]
 
   downloadXlsx('plantilla_importacion_gastos.xlsx', [
-    { name: 'Gastos', headers, rows: [ejemplo] },
-    { name: 'Instrucciones', headers: instrHeaders, rows: instrRows }
+    {
+      name: 'Gastos',
+      xml: worksheetFromCells(cells, cols)
+    },
+    {
+      name: 'Instrucciones',
+      xml: worksheetFromCells(tableCells(1, 0, instrRows), [
+        { width: 18 },
+        { width: 14 },
+        { width: 55 }
+      ])
+    }
   ])
 }
 
@@ -309,38 +411,69 @@ export function descargarPlantillaAsignaciones() {
     'observacion'
   ]
 
-  const ejemplo = [
-    '28/07/2026',
-    '21.191.911-6',
-    'Juan Sanhueza',
-    'TestCAJA',
-    '01',
-    30000,
-    '00123456789',
-    'BANCO DE CHILE',
-    'Motivo de la asignación (máx. 500)'
+  const dataTable = [headers, ...blankRows(headers.length, EMPTY_DATA_ROWS)]
+
+  const leyendaBanco = [
+    ['banco_origen', 'Ejemplos'],
+    ['BANCO DE CHILE', 'Usar MAYÚSCULAS'],
+    ['SANTANDER', ''],
+    ['BCI', ''],
+    ['SCOTIABANK', ''],
+    ['ITAÚ', '']
+  ]
+
+  const notas = [
+    ['Notas'],
+    ['fecha: DD/MM/AAAA'],
+    ['caja: clave interna (fondo fijo)'],
+    ['monto: solo números'],
+    ['numero_cuenta: obligatorio'],
+    ['banco_origen: obligatorio'],
+    ['observacion: máx. 500 caracteres']
+  ]
+
+  const cells = [
+    ...tableCells(1, 0, dataTable),
+    ...tableCells(1, 10, leyendaBanco),
+    ...tableCells(9, 10, notas, { headerRows: 1 })
+  ]
+
+  const cols = [
+    ...Array(9).fill(null).map((_, i) => ({
+      width: [12, 14, 18, 14, 12, 12, 16, 18, 28][i]
+    })),
+    { width: 3 },
+    { width: 18 },
+    { width: 20 }
   ]
 
   const instrHeaders = ['Campo', 'Obligatorio', 'Descripción']
   const instrRows = [
-    ['fecha', 'Sí', 'Fecha de la asignación. Formato DD/MM/YYYY'],
+    instrHeaders,
+    ['fecha', 'Sí', 'Fecha de la asignación. Formato DD/MM/AAAA'],
     ['trabajador_rut', 'Sí', 'RUT del trabajador (con o sin puntos)'],
-    ['trabajador_nombre', 'No', 'Nombre referencial (se busca por RUT)'],
+    ['trabajador_nombre', 'No', 'Solo referencia; se busca por RUT'],
     ['caja', 'Sí', 'Clave interna / nombre de la caja (fondo fijo)'],
     ['n_doc_vale', 'No', 'Número de documento / vale'],
-    ['monto', 'Sí', 'Monto en pesos chilenos (sin $ ni puntos)'],
+    ['monto', 'Sí', 'Monto en pesos (sin $ ni puntos)'],
     ['numero_cuenta', 'Sí', 'Número de cuenta bancaria (solo dígitos)'],
-    ['banco_origen', 'Sí', 'Banco en MAYÚSCULAS (ej: BANCO DE CHILE, SANTANDER)'],
-    ['observacion', 'No', 'Observaciones / motivo (máx. 500 caracteres)'],
-    [
-      'NOTA',
-      '',
-      'Los comprobantes (PDF/PNG/JPG) se adjuntan después en el sistema. No elimine la fila de encabezados.'
-    ]
+    ['banco_origen', 'Sí', 'Banco en MAYÚSCULAS (ej. BANCO DE CHILE)'],
+    ['observacion', 'No', 'Observaciones / motivo (máx. 500)'],
+    ['NOTA', '', 'Los comprobantes se adjuntan después en el sistema. No borre la fila de encabezados.']
   ]
 
   downloadXlsx('plantilla_importacion_asignaciones.xlsx', [
-    { name: 'Asignaciones', headers, rows: [ejemplo] },
-    { name: 'Instrucciones', headers: instrHeaders, rows: instrRows }
+    {
+      name: 'Asignaciones',
+      xml: worksheetFromCells(cells, cols)
+    },
+    {
+      name: 'Instrucciones',
+      xml: worksheetFromCells(tableCells(1, 0, instrRows), [
+        { width: 18 },
+        { width: 14 },
+        { width: 55 }
+      ])
+    }
   ])
 }

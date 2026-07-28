@@ -250,7 +250,8 @@ export function mapTarjeta(row) {
 }
 
 export function mapRendicion(row) {
-  const tipo = row.tipo_documento || ''
+  let tipo = row.tipo_documento || ''
+  if (tipo === 'Ticket Peaje') tipo = 'Peaje'
   const num = row.numero_documento
   const docto =
     tipo === 'Factura' && num
