@@ -312,6 +312,7 @@ export function descargarPlantillaGastos() {
     'fecha',
     'trabajador_rut',
     'trabajador_nombre',
+    'cc',
     'caja',
     'tipo_documento',
     'numero_documento',
@@ -323,7 +324,7 @@ export function descargarPlantillaGastos() {
 
   const dataTable = [headers, ...blankRows(headers.length, EMPTY_DATA_ROWS)]
 
-  // Leyenda a la derecha (columna L = índice 11)
+  // Leyendas a la derecha (columna M = índice 12)
   const leyendaOrigen = [
     ['origen_pago', 'Significado'],
     ['e / E', 'Efectivo'],
@@ -332,37 +333,40 @@ export function descargarPlantillaGastos() {
   ]
 
   const leyendaTipo = [
-    ['tipo_documento', 'Valores'],
-    ['Boleta', 'Sin N° docto'],
-    ['Factura', 'Requiere numero_documento'],
-    ['Peaje', 'Sin N° docto'],
-    ['Guía Despacho', 'Sin N° docto']
+    ['tipo_documento', 'Significado'],
+    ['b / B', 'Boleta (sin N° docto)'],
+    ['f / F', 'Factura (requiere numero_documento)'],
+    ['p / P', 'Peaje (sin N° docto)'],
+    ['g / G', 'Guía Despacho (sin N° docto)']
   ]
 
   const notas = [
     ['Notas'],
     ['fecha: DD/MM/AAAA'],
+    ['cc: nombre del centro de cobro / empresa'],
     ['caja: clave interna de la caja'],
     ['monto: solo números (ej. 15000)'],
     ['tarjeta_ultimos4: obligatorio si d o c'],
     ['descripcion: obligatoria (máx. 500)'],
-    ['Mayúsculas o minúsculas en e/d/c']
+    ['Letras e/d/c y b/f/p/g: mayúscula o minúscula']
   ]
 
   const cells = [
     ...tableCells(1, 0, dataTable),
-    ...tableCells(1, 11, leyendaOrigen),
-    ...tableCells(7, 11, leyendaTipo),
-    ...tableCells(13, 11, notas, { headerRows: 1 })
+    ...tableCells(1, 12, leyendaOrigen),
+    ...tableCells(7, 12, leyendaTipo),
+    ...tableCells(14, 12, notas, { headerRows: 1 })
   ]
 
   const cols = [
-    ...Array(10).fill(null).map((_, i) => ({
-      width: [12, 14, 18, 14, 14, 14, 12, 12, 14, 28][i]
-    })),
+    ...Array(11)
+      .fill(null)
+      .map((_, i) => ({
+        width: [12, 14, 18, 16, 14, 12, 14, 12, 12, 14, 28][i]
+      })),
     { width: 3 },
     { width: 16 },
-    { width: 28 }
+    { width: 36 }
   ]
 
   const instrHeaders = ['Campo', 'Obligatorio', 'Descripción']
@@ -371,9 +375,14 @@ export function descargarPlantillaGastos() {
     ['fecha', 'Sí', 'Fecha del documento. Formato DD/MM/AAAA'],
     ['trabajador_rut', 'Sí', 'RUT del trabajador (con o sin puntos)'],
     ['trabajador_nombre', 'No', 'Solo referencia; se busca por RUT'],
+    ['cc', 'Sí', 'Centro de cobro / empresa (nombre como en el sistema)'],
     ['caja', 'Sí', 'Clave interna / nombre de la caja en el sistema'],
-    ['tipo_documento', 'Sí', 'Boleta | Factura | Peaje | Guía Despacho'],
-    ['numero_documento', 'Condicional', 'Obligatorio si tipo_documento = Factura'],
+    [
+      'tipo_documento',
+      'Sí',
+      'b = Boleta | f = Factura | p = Peaje | g = Guía Despacho (mayúscula o minúscula)'
+    ],
+    ['numero_documento', 'Condicional', 'Obligatorio si tipo_documento = f'],
     ['monto', 'Sí', 'Monto en pesos (sin $ ni puntos)'],
     ['origen_pago', 'Sí', 'e = Efectivo | d = Débito | c = Crédito (mayúscula o minúscula)'],
     ['tarjeta_ultimos4', 'Condicional', 'Obligatorio si origen_pago = d o c'],
@@ -391,7 +400,7 @@ export function descargarPlantillaGastos() {
       xml: worksheetFromCells(tableCells(1, 0, instrRows), [
         { width: 18 },
         { width: 14 },
-        { width: 55 }
+        { width: 70 }
       ])
     }
   ])
@@ -403,6 +412,7 @@ export function descargarPlantillaAsignaciones() {
     'fecha',
     'trabajador_rut',
     'trabajador_nombre',
+    'cc',
     'caja',
     'n_doc_vale',
     'monto',
@@ -425,6 +435,7 @@ export function descargarPlantillaAsignaciones() {
   const notas = [
     ['Notas'],
     ['fecha: DD/MM/AAAA'],
+    ['cc: centro de cobro / empresa'],
     ['caja: clave interna (fondo fijo)'],
     ['monto: solo números'],
     ['numero_cuenta: obligatorio'],
@@ -434,14 +445,16 @@ export function descargarPlantillaAsignaciones() {
 
   const cells = [
     ...tableCells(1, 0, dataTable),
-    ...tableCells(1, 10, leyendaBanco),
-    ...tableCells(9, 10, notas, { headerRows: 1 })
+    ...tableCells(1, 11, leyendaBanco),
+    ...tableCells(9, 11, notas, { headerRows: 1 })
   ]
 
   const cols = [
-    ...Array(9).fill(null).map((_, i) => ({
-      width: [12, 14, 18, 14, 12, 12, 16, 18, 28][i]
-    })),
+    ...Array(10)
+      .fill(null)
+      .map((_, i) => ({
+        width: [12, 14, 18, 16, 14, 12, 12, 16, 18, 28][i]
+      })),
     { width: 3 },
     { width: 18 },
     { width: 20 }
@@ -453,6 +466,7 @@ export function descargarPlantillaAsignaciones() {
     ['fecha', 'Sí', 'Fecha de la asignación. Formato DD/MM/AAAA'],
     ['trabajador_rut', 'Sí', 'RUT del trabajador (con o sin puntos)'],
     ['trabajador_nombre', 'No', 'Solo referencia; se busca por RUT'],
+    ['cc', 'Sí', 'Centro de cobro / empresa (nombre como en el sistema)'],
     ['caja', 'Sí', 'Clave interna / nombre de la caja (fondo fijo)'],
     ['n_doc_vale', 'No', 'Número de documento / vale'],
     ['monto', 'Sí', 'Monto en pesos (sin $ ni puntos)'],
