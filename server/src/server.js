@@ -7,6 +7,7 @@ const cors = require('cors')
 
 const { STORAGE_ROOT, ensureStorageDirs } = require('./config/storage')
 const { ensureCajasSchema } = require('./utils/ensureCajasSchema')
+const { ensureAsignacionesSchema } = require('./utils/ensureAsignacionesSchema')
 
 const authRoutes = require('./routes/auth.routes')
 const cajasRoutes = require('./routes/cajas.routes')
@@ -103,6 +104,12 @@ app.listen(PORT, async () => {
     console.log('[schema] cajas_chicas + centros_costo OK')
   } catch (err) {
     console.warn('[schema] ensureCajasSchema:', err.message)
+  }
+  try {
+    await ensureAsignacionesSchema()
+    console.log('[schema] asignaciones (anticipos + bancos_origen) OK')
+  } catch (err) {
+    console.warn('[schema] ensureAsignacionesSchema:', err.message)
   }
 })
 

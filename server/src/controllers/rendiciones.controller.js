@@ -135,6 +135,10 @@ async function createRendicion(req, res) {
       })
     }
 
+    if (!String(descripcion || '').trim()) {
+      return res.status(400).json({ error: 'La descripción / observación es obligatoria.' })
+    }
+
     if (
       tipo_documento === 'Factura' &&
       !String(numero_documento || '').trim() &&
@@ -197,7 +201,7 @@ async function createRendicion(req, res) {
         origen_pago,
         tarjeta_id || null,
         comprobante_url || null,
-        descripcion || null,
+        String(descripcion).trim(),
         arrastre
       ]
     )

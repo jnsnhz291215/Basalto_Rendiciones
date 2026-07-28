@@ -1,10 +1,24 @@
+'use strict'
+
 const { query } = require('../config/db')
 const { registrarAuditoria } = require('../utils/audit')
 const { nextCodigo } = require('../utils/helpers')
 const { canDevHardDelete } = require('../config/devFlags')
+const {
+  ensureAsignacionesSchema,
+  normalizeBancoNombre,
+  upsertBancoOrigen
+} = require('../utils/ensureAsignacionesSchema')
+
+function normalizeNumeroCuenta(value) {
+  return String(value || '')
+    .replace(/[^0-9]/g, '')
+    .slice(0, 40)
+}
 
 async function listAnticipos(req, res) {
   try {
+    await ensureAsignacionesSchema()
     const { caja_id, trabajador_id, mes, q } = req.query
     const params = []
     let sql = `
@@ -45,10 +59,45 @@ async function listAnticipos(req, res) {
   }
 }
 
+async function listBancosOrigen(req, res) {
+  try {
+    await ensureAsignacionesSchema()
+    const q = normalizeBancoNombre(req.query.q || '')
+    let rows
+    if (q) {
+      rows = await query(
+        `SELECT id, nombre FROM bancos_origen
+         WHERE nombre LIKE ?
+         ORDER BY nombre ASC
+         LIMIT 30`,
+        [`%${q}%`]
+      )
+    } else {
+      rows = await query(
+        `SELECT id, nombre FROM bancos_origen ORDER BY nombre ASC LIMIT 100`
+      )
+    }
+    return res.json(rows)
+  } catch (err) {
+    console.error('[listBancosOrigen]', err)
+    return res.status(500).json({ error: 'Internal Server Error' })
+  }
+}
+
 async function createAnticipo(req, res) {
   try {
-    const { caja_id, trabajador_id, fecha, monto, observacion, comprobante_url, codigo_vale } =
-      req.body || {}
+    await ensureAsignacionesSchema()
+    const {
+      caja_id,
+      trabajador_id,
+      fecha,
+      monto,
+      observacion,
+      comprobante_url,
+      codigo_vale,
+      numero_cuenta,
+      banco_origen
+    } = req.body || {}
 
     if (!caja_id || !trabajador_id || !fecha || monto === undefined) {
       return res.status(400).json({ error: 'caja_id, trabajador_id, fecha y monto son requeridos' })
@@ -56,8 +105,17 @@ async function createAnticipo(req, res) {
 
     if (!String(comprobante_url || '').trim()) {
       return res.status(400).json({
-        error: 'El comprobante es obligatorio. Ningún anticipo puede guardarse sin documento.'
+        error: 'El comprobante es obligatorio. Ninguna asignación puede guardarse sin documento.'
       })
+    }
+
+    const cuenta = normalizeNumeroCuenta(numero_cuenta)
+    const banco = await upsertBancoOrigen(banco_origen)
+    if (!cuenta) {
+      return res.status(400).json({ error: 'Número de cuenta es obligatorio' })
+    }
+    if (!banco) {
+      return res.status(400).json({ error: 'Banco origen es obligatorio' })
     }
 
     let codigo = codigo_vale?.trim()
@@ -71,14 +129,17 @@ async function createAnticipo(req, res) {
 
     const result = await query(
       `INSERT INTO anticipos
-        (codigo_vale, caja_id, trabajador_id, fecha, monto, observacion, comprobante_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        (codigo_vale, caja_id, trabajador_id, fecha, monto, numero_cuenta, banco_origen,
+         observacion, comprobante_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         codigo,
         caja_id,
         trabajador_id,
         fecha,
         Number(monto),
+        cuenta,
+        banco,
         observacion || null,
         comprobante_url || null
       ]
@@ -88,8 +149,8 @@ async function createAnticipo(req, res) {
       req.user.id,
       req.user.nombre,
       'CREAR',
-      'Anticipos',
-      `Anticipo ${codigo} a trabajador_id=${trabajador_id} ($${monto})`
+      'Asignaciones',
+      `Asignación ${codigo} a trabajador_id=${trabajador_id} ($${monto}) · ${banco}`
     )
 
     const created = await query(
@@ -105,14 +166,42 @@ async function createAnticipo(req, res) {
 
 async function updateAnticipo(req, res) {
   try {
+    await ensureAsignacionesSchema()
     const id = Number(req.params.id)
     const existing = await query(
       `SELECT * FROM anticipos WHERE id = ? AND is_deleted = FALSE`,
       [id]
     )
-    if (!existing[0]) return res.status(404).json({ error: 'Anticipo no encontrado' })
+    if (!existing[0]) return res.status(404).json({ error: 'Asignación no encontrada' })
 
-    const { fecha, monto, observacion, comprobante_url, trabajador_id, caja_id } = req.body || {}
+    const {
+      fecha,
+      monto,
+      observacion,
+      comprobante_url,
+      trabajador_id,
+      caja_id,
+      numero_cuenta,
+      banco_origen
+    } = req.body || {}
+
+    let nextCuenta = existing[0].numero_cuenta
+    if (numero_cuenta !== undefined) {
+      nextCuenta = normalizeNumeroCuenta(numero_cuenta)
+      if (!nextCuenta) {
+        return res.status(400).json({ error: 'Número de cuenta es obligatorio' })
+      }
+    }
+
+    let nextBanco = existing[0].banco_origen
+    if (banco_origen !== undefined) {
+      nextBanco = await upsertBancoOrigen(banco_origen)
+      if (!nextBanco) {
+        return res.status(400).json({ error: 'Banco origen es obligatorio' })
+      }
+    } else if (nextBanco) {
+      nextBanco = normalizeBancoNombre(nextBanco)
+    }
 
     await query(
       `UPDATE anticipos
@@ -120,6 +209,8 @@ async function updateAnticipo(req, res) {
            trabajador_id = ?,
            fecha = ?,
            monto = ?,
+           numero_cuenta = ?,
+           banco_origen = ?,
            observacion = ?,
            comprobante_url = ?
        WHERE id = ? AND is_deleted = FALSE`,
@@ -128,6 +219,8 @@ async function updateAnticipo(req, res) {
         trabajador_id || existing[0].trabajador_id,
         fecha || existing[0].fecha,
         monto !== undefined ? Number(monto) : existing[0].monto,
+        nextCuenta,
+        nextBanco,
         observacion !== undefined ? observacion : existing[0].observacion,
         comprobante_url !== undefined ? comprobante_url : existing[0].comprobante_url,
         id
@@ -138,8 +231,8 @@ async function updateAnticipo(req, res) {
       req.user.id,
       req.user.nombre,
       'MODIFICAR',
-      'Anticipos',
-      `Anticipo ${existing[0].codigo_vale} modificado`
+      'Asignaciones',
+      `Asignación ${existing[0].codigo_vale} modificada`
     )
 
     const updated = await query(
@@ -160,7 +253,7 @@ async function softDeleteAnticipo(req, res) {
       `SELECT * FROM anticipos WHERE id = ? AND is_deleted = FALSE`,
       [id]
     )
-    if (!existing[0]) return res.status(404).json({ error: 'Anticipo no encontrado' })
+    if (!existing[0]) return res.status(404).json({ error: 'Asignación no encontrada' })
 
     const allowHard = canDevHardDelete(req.user)
     if (allowHard) {
@@ -169,8 +262,8 @@ async function softDeleteAnticipo(req, res) {
         req.user.id,
         req.user.nombre,
         'ELIMINAR',
-        'Anticipos',
-        `HARD delete anticipo ${existing[0].codigo_vale}`
+        'Asignaciones',
+        `HARD delete asignación ${existing[0].codigo_vale}`
       )
       return res.json({ ok: true, hard: true })
     }
@@ -185,8 +278,8 @@ async function softDeleteAnticipo(req, res) {
       req.user.id,
       req.user.nombre,
       'ELIMINAR',
-      'Anticipos',
-      `Soft delete anticipo ${existing[0].codigo_vale}`
+      'Asignaciones',
+      `Soft delete asignación ${existing[0].codigo_vale}`
     )
     return res.json({ ok: true })
   } catch (err) {
@@ -197,6 +290,7 @@ async function softDeleteAnticipo(req, res) {
 
 module.exports = {
   listAnticipos,
+  listBancosOrigen,
   createAnticipo,
   updateAnticipo,
   softDeleteAnticipo

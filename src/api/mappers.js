@@ -328,6 +328,8 @@ export function mapAnticipo(row) {
     doc: row.codigo_vale,
     observaciones: row.observacion || '-',
     monto: formatMontoApi(row.monto),
+    numeroCuenta: row.numero_cuenta || '',
+    bancoOrigen: row.banco_origen || '',
     cajaGroupKey: row.clave_interna || '',
     cajaId: row.caja_id,
     comprobanteNombre: row.comprobante_url || ''
@@ -359,16 +361,30 @@ function escapeHtml(str) {
 /** Cartola simple: rendiciones + anticipos (ya no hay inyección de fondo en caja) */
 export function buildCartola({ cajas, movimientos, asignaciones }) {
   const rows = []
-  void cajas
+  const cajaByKey = new Map()
+  for (const c of cajas || []) {
+    if (!c?.groupKey) continue
+    if (!cajaByKey.has(c.groupKey)) cajaByKey.set(c.groupKey, c)
+  }
+
+  function metaCaja(groupKey) {
+    const caja = cajaByKey.get(groupKey) || null
+    return {
+      cajaGroupKey: groupKey || '',
+      centroCobroId: caja?.centroCobroId ?? null,
+      centroCobroNombre: caja?.centroCobroNombre || null
+    }
+  }
 
   for (const m of movimientos) {
     if (m.legacy) continue
     const mes = mesFromDDMMYYYY(m.fecha)
+    const meta = metaCaja(m.cajaGroupKey)
     rows.push({
       id: m.id,
       fecha: m.fecha,
       mes,
-      cajaGroupKey: m.cajaGroupKey,
+      ...meta,
       doc: m.rinde,
       docClass: 'dash-rinde',
       tipoKey: 'rendicion',
@@ -393,17 +409,18 @@ export function buildCartola({ cajas, movimientos, asignaciones }) {
 
   for (const a of asignaciones) {
     const mes = mesFromDDMMYYYY(a.fecha)
+    const meta = metaCaja(a.cajaGroupKey)
     rows.push({
       id: a.id,
       fecha: a.fecha,
       mes,
-      cajaGroupKey: a.cajaGroupKey,
+      ...meta,
       doc: a.doc,
       docClass: 'dash-doc-muted',
       tipoKey: 'anticipo',
-      tipo: 'Anticipo',
+      tipo: 'Asignación',
       badgeClass: 'dash-badge--info',
-      detalle: a.observaciones || 'Anticipo',
+      detalle: a.observaciones || 'Asignación',
       responsable: a.conductor,
       abono: '-',
       abonoClass: 'dash-muted',

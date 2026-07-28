@@ -1,6 +1,7 @@
 const express = require('express')
 const {
   listAnticipos,
+  listBancosOrigen,
   createAnticipo,
   updateAnticipo,
   softDeleteAnticipo
@@ -13,6 +14,7 @@ const router = express.Router()
 router.use(authMiddleware)
 router.use(checkRole(ADMINS))
 
+router.get('/bancos', listBancosOrigen)
 router.get('/', listAnticipos)
 router.post('/', createAnticipo)
 router.put('/:id', updateAnticipo)

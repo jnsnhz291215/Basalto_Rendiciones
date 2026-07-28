@@ -154,6 +154,15 @@ export async function deleteAnticipo(id) {
   return jsonOrThrow(`/api/anticipos/${id}`, { method: 'DELETE' })
 }
 
+export async function listBancosOrigen(params = {}) {
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') qs.set(k, String(v))
+  }
+  const q = qs.toString()
+  return unwrapList(await jsonOrThrow(`/api/anticipos/bancos${q ? `?${q}` : ''}`))
+}
+
 export async function listPersonal() {
   return unwrapList(await jsonOrThrow('/api/admin/personal'))
 }

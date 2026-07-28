@@ -376,8 +376,8 @@
                   <span class="dash-badge" :class="item.badgeClass">{{ item.tipo }}</span>
                 </td>
                 <td class="dash-mono" :class="item.docClass">{{ item.doc }}</td>
-                <td>{{ item.detalle }}</td>
-                <td class="dash-table-right dash-table-amount">{{ item.monto }}</td>
+                <td :title="item.detalle">{{ item.detalle }}</td>
+                <td class="dash-table-right dash-table-amount dash-nowrap">{{ item.monto }}</td>
               </tr>
               <tr v-if="!modalParcialMes.items.length">
                 <td colspan="6" class="dash-cajas-empty">Sin movimientos en el mes.</td>
@@ -388,7 +388,7 @@
 
         <div class="dash-parcial-totales">
           <div class="dash-parcial-total">
-            <span class="dash-parcial-total-label">Total anticipos</span>
+            <span class="dash-parcial-total-label">Total asignaciones</span>
             <span class="dash-parcial-total-value">{{ modalParcialMes.totalAnticipos }}</span>
           </div>
           <div class="dash-parcial-total">
@@ -401,13 +401,13 @@
           </div>
           <p class="dash-hint dash-parcial-quien">
             <template v-if="modalParcialMes.quien === 'trabajador'">
-              Debe devolver: <strong>Trabajador</strong> (quedó saldo de anticipo sin gastar).
+              Debe devolver: <strong>Trabajador</strong> (quedó saldo de asignación sin gastar).
             </template>
             <template v-else-if="modalParcialMes.quien === 'empresa'">
-              Debe devolver: <strong>Empresa</strong> (lo declarado supera el anticipo recibido).
+              Debe devolver: <strong>Empresa</strong> (lo declarado supera la asignación recibida).
             </template>
             <template v-else>
-              No hay saldo a devolver (anticipo y declarado quedan parejos).
+              No hay saldo a devolver (asignación y declarado quedan parejos).
             </template>
           </p>
         </div>
@@ -773,7 +773,7 @@
 
             <div class="dash-metric-card">
               <div>
-                <p class="dash-metric-label">Anticipos</p>
+                <p class="dash-metric-label">Asignaciones</p>
                 <p class="dash-metric-value dash-metric-value--accent">
                   {{ formatMonto(resumenCaja.anticipos_pendientes.total) }}
                 </p>
@@ -1024,7 +1024,7 @@
 
               <div class="dash-form--section">
                 <div class="dash-desc-head">
-                  <label class="dash-field-label">Descripción / Observación</label>
+                  <label class="dash-field-label">Descripción / Observación *</label>
                   <span
                     class="dash-word-count"
                     :class="{ 'dash-word-count--over': letrasDescripcion > 500 }"
@@ -1038,6 +1038,7 @@
                   maxlength="500"
                   placeholder="Detalle amplio del gasto..."
                   class="dash-textarea"
+                  required
                   @input="onGastoDescripcionInput"
                 ></textarea>
               </div>
@@ -1112,7 +1113,7 @@
 
           <div v-if="historialFiltroActivo" class="dash-historial-totales">
             <div class="dash-historial-total">
-              <span class="dash-historial-total-label">Total Anticipo</span>
+              <span class="dash-historial-total-label">Total Asignación</span>
               <span class="dash-historial-total-value">{{ formatMontoCl(totalesHistorial.anticipo) }}</span>
             </div>
             <div class="dash-historial-total">
@@ -1371,7 +1372,7 @@
             <div v-else-if="modalVerificar.phase === 'ok'" class="dash-verify-body">
               <p class="dash-verify-ok">
                 Documento validado. Guardando
-                {{ pendingVerifyKind === 'anticipo' ? 'anticipo' : 'rendición' }}…
+                {{ pendingVerifyKind === 'anticipo' ? 'asignación' : 'rendición' }}…
               </p>
             </div>
           </div>
@@ -1712,14 +1713,14 @@
         </div>
       </template>
 
-      <!-- Anticipo -->
+      <!-- Asignación -->
       <div v-else-if="activeTab === 'asignacion' && isAdminSession" class="dash-assign">
         <div class="dash-rendicion-gestion">
           <div class="dash-cajas-toolbar">
             <div>
-              <h3 class="dash-cajas-toolbar-title">Anticipo</h3>
+              <h3 class="dash-cajas-toolbar-title">Asignación</h3>
               <p class="dash-cajas-toolbar-hint">
-                Registro de anticipos entregados a trabajadores.
+                Registro de asignaciones entregadas a trabajadores.
               </p>
             </div>
             <div class="dash-toolbar-actions">
@@ -1734,7 +1735,7 @@
               >
                 <span>{{ anticipoFormOpen ? '▲' : '＋' }}</span>
                 <span>
-                  {{ anticipoFormOpen ? 'Ocultar Formulario' : 'Registrar Anticipo' }}
+                  {{ anticipoFormOpen ? 'Ocultar Formulario' : 'Registrar Asignación' }}
                 </span>
               </button>
             </div>
@@ -1749,10 +1750,10 @@
             <div class="dash-caja-form-head">
               <div>
                 <h2 class="dash-assign-title dash-assign-title--flush">
-                  Nuevo Anticipo
+                  Nueva Asignación
                 </h2>
                 <p class="dash-hint">
-                  Completa los datos del anticipo entregado.
+                  Completa los datos de la asignación entregada.
                 </p>
               </div>
               <button
@@ -1849,7 +1850,57 @@
                     @input="onAsignacionMontoInput"
                   />
                 </div>
-                <div class="dash-field dash-gasto-span-3">
+                <div class="dash-field">
+                  <label>Número de cuenta *</label>
+                  <input
+                    :value="asignacion.numeroCuenta"
+                    type="text"
+                    inputmode="numeric"
+                    maxlength="40"
+                    placeholder="00123456789"
+                    class="dash-mono"
+                    required
+                    @input="onAsignacionCuentaInput"
+                  />
+                </div>
+                <div class="dash-field">
+                  <label>Banco origen *</label>
+                  <div class="dash-combobox">
+                    <input
+                      :value="asignacion.bancoOrigen"
+                      type="text"
+                      class="dash-combobox-input"
+                      placeholder="Ej: BANCO DE CHILE"
+                      autocomplete="off"
+                      maxlength="120"
+                      required
+                      @focus="onBancoOrigenFocus"
+                      @input="onBancoOrigenInput"
+                      @keydown.down.prevent="highlightBancoOrigen(1)"
+                      @keydown.up.prevent="highlightBancoOrigen(-1)"
+                      @keydown.enter.prevent="confirmBancoOrigenHighlight"
+                      @keydown.escape="bancoOrigenOpen = false"
+                      @blur="onBancoOrigenBlur"
+                    />
+                    <ul
+                      v-if="bancoOrigenOpen && bancoOrigenSugerencias.length"
+                      class="dash-combobox-list"
+                      role="listbox"
+                    >
+                      <li
+                        v-for="(b, idx) in bancoOrigenSugerencias"
+                        :key="b"
+                        class="dash-combobox-option"
+                        :class="{ 'dash-combobox-option--active': idx === bancoOrigenHighlight }"
+                        role="option"
+                        @mousedown.prevent="selectBancoOrigen(b)"
+                      >
+                        {{ b }}
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+                <div class="dash-field">
                   <label>Comprobante *</label>
                   <input
                     ref="anticipoFileInputEl"
@@ -1883,7 +1934,7 @@
                   :value="asignacion.observaciones"
                   rows="3"
                   maxlength="500"
-                  placeholder="Detalle amplio del anticipo..."
+                  placeholder="Detalle amplio de la asignación..."
                   class="dash-textarea"
                   @input="onAnticipoObservacionInput"
                 ></textarea>
@@ -1894,7 +1945,7 @@
                   Cancelar
                 </button>
                 <button class="dash-btn-primary" type="submit">
-                  <span>Guardar Anticipo</span>
+                  <span>Guardar Asignación</span>
                 </button>
               </div>
             </form>
@@ -1906,8 +1957,8 @@
         <div class="dash-table-wrap">
           <div class="dash-panel-head dash-cajas-head">
             <div>
-              <h3>Anticipos recientes</h3>
-              <p>Listado de anticipos entregados a trabajadores.</p>
+              <h3>Asignaciones recientes</h3>
+              <p>Listado de asignaciones entregadas a trabajadores.</p>
             </div>
             <div class="dash-historial-filters">
               <div class="dash-historial-filter">
@@ -1959,6 +2010,8 @@
                 <th>Fecha</th>
                 <th>Trabajador</th>
                 <th>N° Doc / Vale</th>
+                <th>Banco</th>
+                <th>N° Cuenta</th>
                 <th>Observaciones</th>
                 <th class="dash-table-center">Adjunto</th>
                 <th class="dash-table-right">Monto</th>
@@ -1970,6 +2023,8 @@
                 <td class="dash-mono">{{ row.fecha }}</td>
                 <td class="dash-table-strong">{{ row.conductor }}</td>
                 <td>{{ row.doc }}</td>
+                <td>{{ row.bancoOrigen || '-' }}</td>
+                <td class="dash-mono">{{ row.numeroCuenta || '-' }}</td>
                 <td>{{ row.observaciones }}</td>
                 <td class="dash-table-center">
                   <button
@@ -2052,11 +2107,21 @@
           <form class="dash-informe-form" @submit.prevent="onAplicarFiltrosInforme">
             <div class="dash-form dash-form--three">
               <div class="dash-field">
+                <label>Centro de cobro / empresa</label>
+                <select v-model="informe.centroCobroId" @change="onInformeCcChange">
+                  <option value="">Todos los centros</option>
+                  <option v-for="cc in centrosCosto" :key="cc.id" :value="String(cc.id)">
+                    {{ cc.nombre }}
+                  </option>
+                </select>
+              </div>
+
+              <div class="dash-field">
                 <label>Caja Chica</label>
                 <select v-model="informe.caja">
                   <option value="">Todas las Cajas</option>
                   <option
-                    v-for="c in cajasActivasOpciones"
+                    v-for="c in cajasOpcionesInforme"
                     :key="c.groupKey"
                     :value="c.groupKey"
                   >
@@ -2122,7 +2187,7 @@
                 </label>
                 <label class="dash-informe-check">
                   <input v-model="informe.tipos.anticipo" type="checkbox" />
-                  <span>Anticipo / Vale</span>
+                  <span>Asignación / Vale</span>
                 </label>
                 <label class="dash-informe-check">
                   <input v-model="informe.tipos.devolucion" type="checkbox" />
@@ -2169,107 +2234,151 @@
             <span class="dash-informe-count">{{ informeResultado.total }}</span>
           </div>
 
-          <div v-if="!cartolaPorCaja.length" class="dash-cajas-empty">
+          <div v-if="!cartolaPorCcYCaja.length" class="dash-cajas-empty">
             No hay movimientos para los filtros seleccionados.
           </div>
 
           <div v-else class="dash-cc-accordion dash-cartola-accordion">
             <div
-              v-for="grupo in cartolaPorCaja"
-              :key="grupo.key"
+              v-for="ccGrupo in cartolaPorCcYCaja"
+              :key="ccGrupo.key"
               class="dash-cc-accordion-item"
             >
               <button
                 class="dash-cc-accordion-head"
                 type="button"
-                @click="toggleCartolaAccordion(grupo.key)"
+                @click="toggleCartolaAccordion(ccGrupo.key)"
               >
                 <span class="dash-cc-accordion-chevron">
-                  {{ isCartolaAccordionOpen(grupo.key) ? '▼' : '▶' }}
+                  {{ isCartolaAccordionOpen(ccGrupo.key) ? '▼' : '▶' }}
                 </span>
-                <span class="dash-cc-accordion-title">{{ grupo.titulo }}</span>
-                <span class="dash-cc-accordion-count">{{ grupo.rows.length }} mov.</span>
+                <span class="dash-cc-accordion-title">{{ ccGrupo.titulo }}</span>
+                <span class="dash-cc-accordion-count">
+                  {{ ccGrupo.movCount }} mov. · {{ ccGrupo.cajas.length }} caja(s)
+                </span>
               </button>
               <div
                 class="dash-collapse"
-                :class="{ 'dash-collapse--open': isCartolaAccordionOpen(grupo.key) }"
+                :class="{ 'dash-collapse--open': isCartolaAccordionOpen(ccGrupo.key) }"
               >
                 <div class="dash-collapse-inner">
-                  <div class="dash-table-wrap dash-cc-accordion-body">
-                    <table class="dash-table">
-                      <thead>
-                        <tr>
-                          <th>Fecha</th>
-                          <th>Rinde / Doc</th>
-                          <th>Tipo</th>
-                          <th>Detalle / Observación</th>
-                          <th>Responsable</th>
-                          <th class="dash-table-right">Abono</th>
-                          <th class="dash-table-right">Cargo</th>
-                          <th class="dash-table-center">Comprobante</th>
-                          <th class="dash-table-center">Historial</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr
-                          v-for="row in grupo.rows"
-                          :key="`${row.tipoKey}-${row.id || row.doc}-${row.fecha}`"
-                        >
-                          <td class="dash-mono">{{ row.fecha }}</td>
-                          <td class="dash-mono" :class="row.docClass">{{ row.doc }}</td>
-                          <td>
-                            <span class="dash-badge" :class="row.badgeClass">{{ row.tipo }}</span>
-                          </td>
-                          <td>{{ row.detalle }}</td>
-                          <td>{{ row.responsable }}</td>
-                          <td class="dash-table-right" :class="row.abonoClass">{{ row.abono }}</td>
-                          <td class="dash-table-right" :class="row.cargoClass">{{ row.cargo }}</td>
-                          <td class="dash-table-center">
-                            <button
-                              v-if="row.comprobanteNombre"
-                              type="button"
-                              class="dash-adjunto-btn"
-                              :title="row.comprobanteNombre"
-                              @click="openComprobanteArchivo(row.comprobanteNombre)"
-                            >
-                              📄 {{ labelAdjunto(row.comprobanteNombre) }}
-                            </button>
-                            <span v-else class="dash-adjunto-empty">-</span>
-                          </td>
-                          <td class="dash-table-center">
-                            <button
-                              v-if="rowTieneHistorial(row)"
-                              class="dash-btn-icon"
-                              type="button"
-                              title="Ver historial / devoluciones"
-                              @click="openModalHistorialCartola(row)"
-                            >
-                              <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
-                            </button>
-                            <span v-else class="dash-muted">-</span>
-                          </td>
-                        </tr>
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          <td colspan="5" class="dash-table-right dash-tfoot-label">
-                            Totales {{ grupo.titulo }}:
-                          </td>
-                          <td class="dash-table-right dash-metric-value--ok">
-                            {{ grupo.totales.abono }}
-                          </td>
-                          <td class="dash-table-right dash-rinde">{{ grupo.totales.cargo }}</td>
-                          <td colspan="2"></td>
-                        </tr>
-                      </tfoot>
-                    </table>
+                  <div class="dash-cc-accordion dash-cartola-caja-accordion">
+                    <div
+                      v-for="cajaGrupo in ccGrupo.cajas"
+                      :key="cajaGrupo.key"
+                      class="dash-cc-accordion-item dash-cartola-caja-item"
+                    >
+                      <button
+                        class="dash-cc-accordion-head dash-cartola-caja-head"
+                        type="button"
+                        @click="toggleCartolaAccordion(cajaGrupo.key)"
+                      >
+                        <span class="dash-cc-accordion-chevron">
+                          {{ isCartolaAccordionOpen(cajaGrupo.key) ? '▼' : '▶' }}
+                        </span>
+                        <span class="dash-cc-accordion-title">{{ cajaGrupo.titulo }}</span>
+                        <span class="dash-cc-accordion-count">{{ cajaGrupo.rows.length }} mov.</span>
+                      </button>
+                      <div
+                        class="dash-collapse"
+                        :class="{ 'dash-collapse--open': isCartolaAccordionOpen(cajaGrupo.key) }"
+                      >
+                        <div class="dash-collapse-inner">
+                          <div class="dash-table-wrap dash-cc-accordion-body">
+                            <table class="dash-table">
+                              <thead>
+                                <tr>
+                                  <th>Fecha</th>
+                                  <th>Rinde / Doc</th>
+                                  <th>Tipo</th>
+                                  <th>Detalle / Observación</th>
+                                  <th>Responsable</th>
+                                  <th class="dash-table-right">Abono</th>
+                                  <th class="dash-table-right">Cargo</th>
+                                  <th class="dash-table-center">Comprobante</th>
+                                  <th class="dash-table-center">Historial</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                <tr
+                                  v-for="row in cajaGrupo.rows"
+                                  :key="`${row.tipoKey}-${row.id || row.doc}-${row.fecha}`"
+                                >
+                                  <td class="dash-mono">{{ row.fecha }}</td>
+                                  <td class="dash-mono" :class="row.docClass">{{ row.doc }}</td>
+                                  <td>
+                                    <span class="dash-badge" :class="row.badgeClass">{{
+                                      row.tipo
+                                    }}</span>
+                                  </td>
+                                  <td>{{ row.detalle }}</td>
+                                  <td>{{ row.responsable }}</td>
+                                  <td class="dash-table-right" :class="row.abonoClass">
+                                    {{ row.abono }}
+                                  </td>
+                                  <td class="dash-table-right" :class="row.cargoClass">
+                                    {{ row.cargo }}
+                                  </td>
+                                  <td class="dash-table-center">
+                                    <button
+                                      v-if="row.comprobanteNombre"
+                                      type="button"
+                                      class="dash-adjunto-btn"
+                                      :title="row.comprobanteNombre"
+                                      @click="openComprobanteArchivo(row.comprobanteNombre)"
+                                    >
+                                      📄 {{ labelAdjunto(row.comprobanteNombre) }}
+                                    </button>
+                                    <span v-else class="dash-adjunto-empty">-</span>
+                                  </td>
+                                  <td class="dash-table-center">
+                                    <button
+                                      v-if="rowTieneHistorial(row)"
+                                      class="dash-btn-icon"
+                                      type="button"
+                                      title="Ver historial / devoluciones"
+                                      @click="openModalHistorialCartola(row)"
+                                    >
+                                      <i
+                                        class="fa-solid fa-clock-rotate-left"
+                                        aria-hidden="true"
+                                      ></i>
+                                    </button>
+                                    <span v-else class="dash-muted">-</span>
+                                  </td>
+                                </tr>
+                              </tbody>
+                              <tfoot>
+                                <tr>
+                                  <td colspan="5" class="dash-table-right dash-tfoot-label">
+                                    Totales {{ cajaGrupo.titulo }}:
+                                  </td>
+                                  <td class="dash-table-right dash-metric-value--ok">
+                                    {{ cajaGrupo.totales.abono }}
+                                  </td>
+                                  <td class="dash-table-right dash-rinde">
+                                    {{ cajaGrupo.totales.cargo }}
+                                  </td>
+                                  <td colspan="2"></td>
+                                </tr>
+                              </tfoot>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="dash-cartola-cc-totales">
+                    <span class="dash-tfoot-label">Totales {{ ccGrupo.titulo }}:</span>
+                    <span class="dash-metric-value--ok">Abono {{ ccGrupo.totales.abono }}</span>
+                    <span class="dash-rinde">Cargo {{ ccGrupo.totales.cargo }}</span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <div v-if="cartolaPorCaja.length" class="dash-cartola-totales-global">
+          <div v-if="cartolaPorCcYCaja.length" class="dash-cartola-totales-global">
             <span class="dash-tfoot-label">Totales acumulados:</span>
             <span class="dash-metric-value--ok">Abono {{ cartolaTotales.abono }}</span>
             <span class="dash-rinde">Cargo {{ cartolaTotales.cargo }}</span>
@@ -3574,7 +3683,7 @@ const activeModule = ref('caja')
 
 const ALL_CAJA_TABS = [
   { id: 'rendicion', label: 'Rendición de Gastos' },
-  { id: 'asignacion', label: 'Anticipo' },
+  { id: 'asignacion', label: 'Asignación' },
   { id: 'informes', label: 'Informes y Cartola' },
   { id: 'cajas', label: 'Cajas' },
   { id: 'centros-costo', label: 'Centro de cobro / empresa' }
@@ -3726,8 +3835,14 @@ const asignacion = reactive({
   doc: '',
   observaciones: '',
   monto: '',
+  numeroCuenta: '',
+  bancoOrigen: '',
   comprobanteNombre: ''
 })
+
+const bancosOrigen = ref([])
+const bancoOrigenOpen = ref(false)
+const bancoOrigenHighlight = ref(0)
 
 const letrasObservacionAnticipo = computed(
   () => String(asignacion.observaciones || '').length
@@ -3764,6 +3879,7 @@ const informeTiposDefault = () => ({
 })
 
 const informe = reactive({
+  centroCobroId: '',
   caja: '',
   mes: '2026-07',
   persona: '',
@@ -3771,6 +3887,7 @@ const informe = reactive({
 })
 
 const filtrosInforme = reactive({
+  centroCobroId: '',
   caja: '',
   mes: '2026-07',
   persona: '',
@@ -4373,6 +4490,10 @@ async function loadDashboardData() {
 
     const anticiposRaw = await safeList(api.listAnticipos)
     asignaciones.value = anticiposRaw.map(mapAnticipo)
+    const bancosRaw = await safeList(api.listBancosOrigen)
+    bancosOrigen.value = bancosRaw
+      .map((b) => String(b.nombre || b).trim().toUpperCase())
+      .filter(Boolean)
 
     const usuariosRaw = await safeList(api.listUsuarios)
     const mappedUsers = usuariosRaw.map(mapUsuario)
@@ -4686,6 +4807,9 @@ const modalParcialMes = reactive({
 const cartolaFiltrada = computed(() =>
   cartola.value.filter((row) => {
     if (filtrosInforme.mes && row.mes !== filtrosInforme.mes) return false
+    if (filtrosInforme.centroCobroId) {
+      if (String(row.centroCobroId ?? '') !== String(filtrosInforme.centroCobroId)) return false
+    }
     if (filtrosInforme.caja && row.cajaGroupKey !== filtrosInforme.caja) return false
     if (!filtrosInforme.tipos[row.tipoKey]) return false
     if (filtrosInforme.persona && row.responsable !== filtrosInforme.persona) return false
@@ -4693,37 +4817,10 @@ const cartolaFiltrada = computed(() =>
   })
 )
 
-const cartolaPorCaja = computed(() => {
-  const map = new Map()
-  for (const row of cartolaFiltrada.value) {
-    const key = row.cajaGroupKey || '__sin_caja__'
-    if (!map.has(key)) map.set(key, [])
-    map.get(key).push(row)
-  }
-  const grupos = [...map.entries()].map(([key, rows]) => {
-    let abono = 0
-    let cargo = 0
-    for (const row of rows) {
-      abono += parseMontoNumber(row.abono)
-      cargo += parseMontoNumber(row.cargo)
-    }
-    return {
-      key,
-      titulo: key === '__sin_caja__' ? 'Sin caja' : labelCajaGroup(key),
-      rows,
-      totales: {
-        abono: formatMonto(abono),
-        cargo: formatMonto(cargo)
-      }
-    }
-  })
-  return grupos.sort((a, b) => a.titulo.localeCompare(b.titulo, 'es'))
-})
-
-const cartolaTotales = computed(() => {
+function totalesFilasCartola(rows) {
   let abono = 0
   let cargo = 0
-  for (const row of cartolaFiltrada.value) {
+  for (const row of rows) {
     abono += parseMontoNumber(row.abono)
     cargo += parseMontoNumber(row.cargo)
   }
@@ -4731,7 +4828,93 @@ const cartolaTotales = computed(() => {
     abono: formatMonto(abono),
     cargo: formatMonto(cargo)
   }
+}
+
+/** Cartola agrupada: Centro de cobro → Caja */
+const cartolaPorCcYCaja = computed(() => {
+  const byCc = new Map()
+
+  for (const row of cartolaFiltrada.value) {
+    const ccId = row.centroCobroId == null ? null : Number(row.centroCobroId)
+    const ccKey = ccId == null || !Number.isFinite(ccId) ? 'cc-none' : `cc-${ccId}`
+    const ccTitulo =
+      row.centroCobroNombre ||
+      (ccId != null
+        ? centrosCosto.value.find((c) => Number(c.id) === ccId)?.nombre
+        : null) ||
+      'Sin centro de cobro / empresa'
+    const cajaKey = row.cajaGroupKey || '__sin_caja__'
+    const cajaTitulo = cajaKey === '__sin_caja__' ? 'Sin caja' : labelCajaGroup(cajaKey)
+
+    if (!byCc.has(ccKey)) {
+      byCc.set(ccKey, {
+        key: ccKey,
+        titulo: ccTitulo,
+        sortCc: ccId == null ? Number.POSITIVE_INFINITY : ccId,
+        cajasMap: new Map()
+      })
+    }
+    const ccGrupo = byCc.get(ccKey)
+    if (!ccGrupo.cajasMap.has(cajaKey)) {
+      ccGrupo.cajasMap.set(cajaKey, {
+        key: `${ccKey}__caja-${cajaKey}`,
+        titulo: cajaTitulo,
+        rows: []
+      })
+    }
+    ccGrupo.cajasMap.get(cajaKey).rows.push(row)
+  }
+
+  return [...byCc.values()]
+    .map((ccGrupo) => {
+      const cajas = [...ccGrupo.cajasMap.values()]
+        .map((cajaGrupo) => ({
+          ...cajaGrupo,
+          totales: totalesFilasCartola(cajaGrupo.rows)
+        }))
+        .sort((a, b) => a.titulo.localeCompare(b.titulo, 'es'))
+      const allRows = cajas.flatMap((c) => c.rows)
+      return {
+        key: ccGrupo.key,
+        titulo: ccGrupo.titulo,
+        sortCc: ccGrupo.sortCc,
+        cajas,
+        movCount: allRows.length,
+        totales: totalesFilasCartola(allRows)
+      }
+    })
+    .sort((a, b) => {
+      if (a.sortCc !== b.sortCc) return a.sortCc - b.sortCc
+      return a.titulo.localeCompare(b.titulo, 'es')
+    })
 })
+
+const cartolaTotales = computed(() => totalesFilasCartola(cartolaFiltrada.value))
+
+const cajasOpcionesInforme = computed(() => {
+  const ccId = informe.centroCobroId
+  const map = new Map()
+  for (const c of cajas.value) {
+    if (ccId && String(c.centroCobroId ?? '') !== String(ccId)) continue
+    if (!map.has(c.groupKey)) map.set(c.groupKey, c.displayName)
+  }
+  return [...map.entries()].map(([groupKey, displayName]) => ({
+    groupKey,
+    label: displayName
+  }))
+})
+
+function onInformeCcChange() {
+  if (!informe.caja) return
+  const ok = cajasOpcionesInforme.value.some((c) => c.groupKey === informe.caja)
+  if (!ok) informe.caja = ''
+}
+
+function labelCentroCobroInforme(ccId) {
+  if (!ccId) return 'Todos'
+  const cc = centrosCosto.value.find((c) => String(c.id) === String(ccId))
+  return cc?.nombre || `CC ${ccId}`
+}
 
 const movimientos = ref([])
 
@@ -4985,11 +5168,11 @@ function openModalParcialMes(row) {
 
   const items = [
     ...anticiposMes.map((a) => ({
-      tipo: 'Anticipo',
+      tipo: 'Asignación',
       badgeClass: 'dash-badge--info',
       doc: a.doc || '-',
       docClass: 'dash-doc-muted',
-      detalle: a.observaciones === '-' ? 'Anticipo' : a.observaciones || 'Anticipo',
+      detalle: a.observaciones === '-' ? 'Asignación' : a.observaciones || 'Asignación',
       fecha: a.fecha,
       hora: horaFromSubidoEl(a.subidoEl),
       monto: a.monto,
@@ -5265,6 +5448,10 @@ function selectModule(moduleName) {
 
 async function onSaveGasto() {
   if (letrasDescripcion.value > 500) return
+  if (!String(gasto.descripcion || '').trim()) {
+    saveError.value = 'La descripción / observación es obligatoria.'
+    return
+  }
   if (gasto.tipo === 'Factura' && !gasto.numero.trim() && !canSkipComprobanteIa.value) return
   if (!gasto.cajaGroupKey) return
   if (!gastoComprobanteFile.value) {
@@ -5318,7 +5505,7 @@ async function onSaveGasto() {
     monto: montoNum,
     origen_pago: origenFromMetodo(gasto.metodoPago),
     tarjeta_id: resolveTarjetaIdParaGasto(),
-    descripcion: gasto.descripcion || null
+    descripcion: String(gasto.descripcion || '').trim()
   }
   await ejecutarVerificacionYGuardado()
 }
@@ -5359,12 +5546,16 @@ function resetAsignacionFormFields() {
   asignacion.doc = ''
   asignacion.observaciones = ''
   asignacion.monto = ''
+  asignacion.numeroCuenta = ''
+  asignacion.bancoOrigen = ''
   asignacion.comprobanteNombre = ''
   anticipoComprobanteFile.value = null
   if (anticipoFileInputEl.value) anticipoFileInputEl.value.value = ''
   anticipoTrabajadorQuery.value = ''
   anticipoTrabajadorOpen.value = false
   anticipoTrabajadorHighlight.value = 0
+  bancoOrigenOpen.value = false
+  bancoOrigenHighlight.value = 0
   if (cajaActiva.value) asignacion.fondo = cajaActiva.value
 }
 
@@ -5389,6 +5580,16 @@ async function onSaveAsignacion() {
     saveError.value = 'El comprobante es obligatorio. Adjunta PDF, PNG o JPG.'
     return
   }
+  const cuenta = String(asignacion.numeroCuenta || '').replace(/\D/g, '')
+  const banco = normalizeBancoOrigenInput(asignacion.bancoOrigen)
+  if (!cuenta) {
+    saveError.value = 'Número de cuenta es obligatorio.'
+    return
+  }
+  if (!banco) {
+    saveError.value = 'Banco origen es obligatorio.'
+    return
+  }
 
   const cajaId =
     findCajaIdByGroupKey(asignacion.fondo) || findCajaIdForGasto(asignacion.fondo)
@@ -5411,7 +5612,9 @@ async function onSaveAsignacion() {
     fecha: asignacion.fecha,
     monto: montoNum,
     observacion: asignacion.observaciones.trim() || null,
-    codigo_vale: asignacion.doc.trim() || undefined
+    codigo_vale: asignacion.doc.trim() || undefined,
+    numero_cuenta: cuenta,
+    banco_origen: banco
   }
   await ejecutarVerificacionYGuardado()
 }
@@ -5514,13 +5717,15 @@ function seleccionarTodosTiposInforme(value) {
 }
 
 function syncInformeResultado() {
+  const ccLabel = labelCentroCobroInforme(filtrosInforme.centroCobroId)
   const cajaLabel = filtrosInforme.caja ? labelCajaGroup(filtrosInforme.caja) : 'Todas'
   informeResultado.titulo = 'Cartola Consolidada del Mes'
-  informeResultado.periodo = `Período: ${labelMesCerradoCompleto(filtrosInforme.mes)} | Caja: ${cajaLabel}`
+  informeResultado.periodo = `Período: ${labelMesCerradoCompleto(filtrosInforme.mes)} | CC: ${ccLabel} | Caja: ${cajaLabel}`
   informeResultado.total = `${cartolaFiltrada.value.length} Registros`
 }
 
 function onAplicarFiltrosInforme() {
+  filtrosInforme.centroCobroId = informe.centroCobroId
   filtrosInforme.caja = informe.caja
   filtrosInforme.mes = informe.mes
   filtrosInforme.persona = informe.persona
@@ -6228,6 +6433,67 @@ function onGastoDescripcionInput(event) {
 
 function onAnticipoObservacionInput(event) {
   asignacion.observaciones = sanitizeTextoLibre(event.target.value, 500)
+}
+
+function normalizeBancoOrigenInput(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9 ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase()
+    .slice(0, 120)
+}
+
+function onAsignacionCuentaInput(event) {
+  asignacion.numeroCuenta = String(event.target.value || '')
+    .replace(/\D/g, '')
+    .slice(0, 40)
+}
+
+const bancoOrigenSugerencias = computed(() => {
+  const q = normalizeBancoOrigenInput(asignacion.bancoOrigen)
+  const list = [...bancosOrigen.value]
+  if (!q) return list.slice(0, 12)
+  return list.filter((b) => b.includes(q)).slice(0, 12)
+})
+
+function onBancoOrigenFocus(e) {
+  bancoOrigenOpen.value = true
+  bancoOrigenHighlight.value = 0
+  e?.target?.select?.()
+}
+
+function onBancoOrigenInput(event) {
+  asignacion.bancoOrigen = normalizeBancoOrigenInput(event.target.value)
+  bancoOrigenOpen.value = true
+  bancoOrigenHighlight.value = 0
+}
+
+function highlightBancoOrigen(delta) {
+  const n = bancoOrigenSugerencias.value.length
+  if (!n) return
+  bancoOrigenOpen.value = true
+  bancoOrigenHighlight.value = (bancoOrigenHighlight.value + delta + n) % n
+}
+
+function confirmBancoOrigenHighlight() {
+  const opt = bancoOrigenSugerencias.value[bancoOrigenHighlight.value]
+  if (opt) selectBancoOrigen(opt)
+}
+
+function selectBancoOrigen(nombre) {
+  asignacion.bancoOrigen = normalizeBancoOrigenInput(nombre)
+  bancoOrigenOpen.value = false
+  bancoOrigenHighlight.value = 0
+}
+
+function onBancoOrigenBlur() {
+  setTimeout(() => {
+    bancoOrigenOpen.value = false
+    asignacion.bancoOrigen = normalizeBancoOrigenInput(asignacion.bancoOrigen)
+  }, 120)
 }
 
 function onComentarioAdminInput(event) {
