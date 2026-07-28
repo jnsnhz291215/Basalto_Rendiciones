@@ -7,7 +7,7 @@ function unwrapList(data) {
 async function jsonOrThrow(path, options = {}) {
   const { res, data } = await apiFetch(path, options)
   if (!res.ok) {
-    throw new Error(data?.error || data?.message || `Error ${res.status}`)
+    throw new Error(data?.message || data?.error || `Error ${res.status}`)
   }
   return data
 }

@@ -102,7 +102,10 @@ async function listCajas(req, res) {
     return res.json(rows.map(mapCajaRow))
   } catch (err) {
     console.error('[listCajas]', err)
-    return res.status(500).json({ error: 'Internal Server Error' })
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: err.sqlMessage || err.message || undefined
+    })
   }
 }
 
@@ -390,7 +393,10 @@ async function listCentrosCosto(req, res) {
     return res.json(rows.map(mapCcRow))
   } catch (err) {
     console.error('[listCentrosCosto]', err)
-    return res.status(500).json({ error: 'Internal Server Error' })
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: err.sqlMessage || err.message || undefined
+    })
   }
 }
 
@@ -403,7 +409,23 @@ async function createCentroCosto(req, res) {
     }
 
     try {
-      const result = await query(`INSERT INTO centros_costo (nombre) VALUES (?)`, [nombre])
+      // Compat: si quedó columna legacy `codigo`, reutilizar el mismo valor
+      let result
+      try {
+        result = await query(
+          `INSERT INTO centros_costo (nombre, codigo) VALUES (?, ?)`,
+          [nombre, nombre]
+        )
+      } catch (insertErr) {
+        if (
+          insertErr.errno === 1054 ||
+          insertErr.code === 'ER_BAD_FIELD_ERROR'
+        ) {
+          result = await query(`INSERT INTO centros_costo (nombre) VALUES (?)`, [nombre])
+        } else {
+          throw insertErr
+        }
+      }
       await registrarAuditoria(
         req.user.id,
         req.user.nombre,
@@ -424,7 +446,10 @@ async function createCentroCosto(req, res) {
     }
   } catch (err) {
     console.error('[createCentroCosto]', err)
-    return res.status(500).json({ error: 'Internal Server Error' })
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: err.sqlMessage || err.message || undefined
+    })
   }
 }
 
@@ -496,8 +521,12 @@ async function softDeleteCentroCosto(req, res) {
       })
     }
 
+    // Liberar UNIQUE(nombre) para poder recrear el mismo nombre luego
     await query(
-      `UPDATE centros_costo SET is_deleted = TRUE, deleted_at = NOW()
+      `UPDATE centros_costo
+       SET is_deleted = TRUE,
+           deleted_at = NOW(),
+           nombre = CONCAT(nombre, '_DEL_', id)
        WHERE id = ? AND is_deleted = FALSE`,
       [id]
     )
