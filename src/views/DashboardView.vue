@@ -811,6 +811,16 @@
               </p>
             </div>
             <div class="dash-toolbar-actions">
+              <button
+                v-if="isAdminSession"
+                class="dash-btn-excel dash-btn-excel--outline"
+                type="button"
+                title="Descargar plantilla Excel para importar gastos"
+                @click="descargarPlantillaGastos"
+              >
+                <span>📄</span>
+                <span>Descargar plantilla</span>
+              </button>
               <button v-if="isAdminSession" class="dash-btn-excel" type="button">
                 <span>📥</span>
                 <span>Importar Excel</span>
@@ -1724,6 +1734,15 @@
               </p>
             </div>
             <div class="dash-toolbar-actions">
+              <button
+                class="dash-btn-excel dash-btn-excel--outline"
+                type="button"
+                title="Descargar plantilla Excel para importar asignaciones"
+                @click="descargarPlantillaAsignaciones"
+              >
+                <span>📄</span>
+                <span>Descargar plantilla</span>
+              </button>
               <button class="dash-btn-excel" type="button">
                 <span>📥</span>
                 <span>Importar Excel</span>
@@ -2231,7 +2250,26 @@
               <h3>{{ informeResultado.titulo }}</h3>
               <p>{{ informeResultado.periodo }}</p>
             </div>
-            <span class="dash-informe-count">{{ informeResultado.total }}</span>
+            <div class="dash-informe-result-actions">
+              <div class="dash-historial-filter">
+                <label class="dash-sr-only" for="cartola-mes">Mes</label>
+                <select
+                  id="cartola-mes"
+                  :value="filtrosInforme.mes"
+                  class="dash-historial-select dash-historial-select--mes"
+                  @change="onCartolaMesChange"
+                >
+                  <option
+                    v-for="m in mesesCerradosOpciones"
+                    :key="m.value"
+                    :value="m.value"
+                  >
+                    {{ m.label }}
+                  </option>
+                </select>
+              </div>
+              <span class="dash-informe-count">{{ informeResultado.total }}</span>
+            </div>
           </div>
 
           <div v-if="!cartolaPorCcYCaja.length" class="dash-cajas-empty">
@@ -3399,6 +3437,10 @@ import {
   rutStatusLabel,
   validarRutChileno
 } from '../utils/rut'
+import {
+  descargarPlantillaAsignaciones,
+  descargarPlantillaGastos
+} from '../utils/excelPlantillas'
 import * as api from '../api/resources'
 import { apiUrl } from '../api/client'
 import { persistSessionProfile } from '../api/auth'
@@ -5703,6 +5745,11 @@ function toggleFormInforme() {
     closeFormInforme()
     return
   }
+  informe.centroCobroId = filtrosInforme.centroCobroId
+  informe.caja = filtrosInforme.caja
+  informe.mes = filtrosInforme.mes
+  informe.persona = filtrosInforme.persona
+  Object.assign(informe.tipos, filtrosInforme.tipos)
   informeFormOpen.value = true
 }
 
@@ -5722,6 +5769,14 @@ function syncInformeResultado() {
   informeResultado.titulo = 'Cartola Consolidada del Mes'
   informeResultado.periodo = `Período: ${labelMesCerradoCompleto(filtrosInforme.mes)} | CC: ${ccLabel} | Caja: ${cajaLabel}`
   informeResultado.total = `${cartolaFiltrada.value.length} Registros`
+}
+
+function onCartolaMesChange(event) {
+  const mes = event?.target?.value || ''
+  if (!mes) return
+  filtrosInforme.mes = mes
+  informe.mes = mes
+  syncInformeResultado()
 }
 
 function onAplicarFiltrosInforme() {

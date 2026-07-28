@@ -1645,6 +1645,18 @@ input[type='number'].dash-input-strong,
   background: #10b981;
 }
 
+.dash-btn-excel--outline {
+  background: transparent;
+  color: #34d399;
+  border: 1px solid #059669;
+  box-shadow: none;
+}
+
+.dash-btn-excel--outline:hover {
+  background: rgba(5, 150, 105, 0.15);
+  color: #6ee7b7;
+}
+
 .dash-table-strong {
   font-weight: 700;
   color: #fff;
@@ -1783,6 +1795,13 @@ input[type='number'].dash-input-strong,
   border-bottom: 1px solid #1e293b;
   padding-bottom: 0.75rem;
   margin-bottom: 1rem;
+}
+
+.dash-informe-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .dash-informe-result-head h3 {
