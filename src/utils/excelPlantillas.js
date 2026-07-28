@@ -1,6 +1,6 @@
 /**
- * Genera y descarga plantillas Excel (SpreadsheetML .xls) sin dependencias.
- * Compatible con Excel, Google Sheets y LibreOffice.
+ * Plantillas Excel reales (.xlsx) sin dependencias.
+ * Genera un ZIP OOXML válido para que Excel no muestre aviso de extensión.
  */
 
 function escapeXml(value) {
@@ -11,81 +11,235 @@ function escapeXml(value) {
     .replace(/"/g, '&quot;')
 }
 
-function cellXml(value, type = 'String') {
-  const text = escapeXml(value)
-  if (type === 'Number' && text !== '' && Number.isFinite(Number(value))) {
-    return `<Cell><Data ss:Type="Number">${Number(value)}</Data></Cell>`
+function colLetter(index0) {
+  let n = index0 + 1
+  let s = ''
+  while (n > 0) {
+    const r = (n - 1) % 26
+    s = String.fromCharCode(65 + r) + s
+    n = Math.floor((n - 1) / 26)
   }
-  return `<Cell><Data ss:Type="String">${text}</Data></Cell>`
+  return s
 }
 
-function rowXml(cells) {
-  return `<Row>${cells.join('')}</Row>`
-}
-
-function sheetXml(name, headers, rows, colWidths = []) {
-  const cols = headers
-    .map((_, i) => `<Column ss:Width="${colWidths[i] || 120}"/>`)
-    .join('')
-
-  const headerRow = rowXml(headers.map((h) => cellXml(h)))
-  const dataRows = rows.map((r) =>
-    rowXml(
+function sheetRowsXml(headers, rows) {
+  const all = [
+    headers,
+    ...rows.map((r) =>
       headers.map((h, i) => {
-        const cell = Array.isArray(r) ? r[i] : r[h]
-        const isNum = typeof cell === 'number'
-        return cellXml(cell ?? '', isNum ? 'Number' : 'String')
+        const val = Array.isArray(r) ? r[i] : r[h]
+        return val ?? ''
       })
     )
-  )
-
-  return `
-  <Worksheet ss:Name="${escapeXml(name)}">
-    <Table>
-      ${cols}
-      ${headerRow}
-      ${dataRows.join('\n      ')}
-    </Table>
-  </Worksheet>`
+  ]
+  return all
+    .map((row, rIdx) => {
+      const cells = row
+        .map((val, cIdx) => {
+          const ref = `${colLetter(cIdx)}${rIdx + 1}`
+          if (typeof val === 'number' && Number.isFinite(val)) {
+            return `<c r="${ref}"><v>${val}</v></c>`
+          }
+          const text = escapeXml(val)
+          return `<c r="${ref}" t="inlineStr"><is><t>${text}</t></is></c>`
+        })
+        .join('')
+      return `<row r="${rIdx + 1}">${cells}</row>`
+    })
+    .join('')
 }
 
-function buildWorkbookXml(sheets) {
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<?mso-application progid="Excel.Sheet"?>
-<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:o="urn:schemas-microsoft-com:office:office"
- xmlns:x="urn:schemas-microsoft-com:office:excel"
- xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
- xmlns:html="http://www.w3.org/TR/REC-html40">
-  <Styles>
-    <Style ss:ID="Default" ss:Name="Normal">
-      <Alignment ss:Vertical="Center"/>
-      <Font ss:FontName="Calibri" ss:Size="11"/>
-    </Style>
-  </Styles>
-  ${sheets.join('\n')}
-</Workbook>`
+function worksheetXml(headers, rows) {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <sheetData>${sheetRowsXml(headers, rows)}</sheetData>
+</worksheet>`
 }
 
-function downloadBlob(filename, content, mime) {
-  const blob = new Blob([content], { type: mime })
+function workbookXml(sheetNames) {
+  const sheets = sheetNames
+    .map(
+      (name, i) =>
+        `<sheet name="${escapeXml(name)}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`
+    )
+    .join('')
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets>${sheets}</sheets>
+</workbook>`
+}
+
+function workbookRelsXml(count) {
+  const rels = Array.from({ length: count }, (_, i) => {
+    const n = i + 1
+    return `<Relationship Id="rId${n}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${n}.xml"/>`
+  }).join('')
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${rels}</Relationships>`
+}
+
+function rootRelsXml() {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`
+}
+
+function contentTypesXml(sheetCount) {
+  const overrides = Array.from({ length: sheetCount }, (_, i) => {
+    const n = i + 1
+    return `<Override PartName="/xl/worksheets/sheet${n}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
+  }).join('')
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  ${overrides}
+</Types>`
+}
+
+/** CRC32 para ZIP store */
+const CRC_TABLE = (() => {
+  const table = new Uint32Array(256)
+  for (let i = 0; i < 256; i++) {
+    let c = i
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+    table[i] = c >>> 0
+  }
+  return table
+})()
+
+function crc32(bytes) {
+  let c = 0xffffffff
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8)
+  return (c ^ 0xffffffff) >>> 0
+}
+
+function u16(n) {
+  const b = new Uint8Array(2)
+  new DataView(b.buffer).setUint16(0, n, true)
+  return b
+}
+
+function u32(n) {
+  const b = new Uint8Array(4)
+  new DataView(b.buffer).setUint32(0, n, true)
+  return b
+}
+
+function concatBytes(parts) {
+  const total = parts.reduce((acc, p) => acc + p.length, 0)
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const p of parts) {
+    out.set(p, offset)
+    offset += p.length
+  }
+  return out
+}
+
+function encodeUtf8(str) {
+  return new TextEncoder().encode(str)
+}
+
+/**
+ * ZIP con método Store (sin compresión) — suficiente para xlsx válido.
+ * @param {{ name: string, data: Uint8Array }[]} files
+ */
+function zipStore(files) {
+  const localParts = []
+  const centralParts = []
+  let offset = 0
+
+  for (const file of files) {
+    const nameBytes = encodeUtf8(file.name)
+    const data = file.data
+    const crc = crc32(data)
+    const localHeader = concatBytes([
+      u32(0x04034b50),
+      u16(20),
+      u16(0),
+      u16(0),
+      u16(0),
+      u16(0),
+      u32(crc),
+      u32(data.length),
+      u32(data.length),
+      u16(nameBytes.length),
+      u16(0),
+      nameBytes
+    ])
+    localParts.push(localHeader, data)
+
+    const central = concatBytes([
+      u32(0x02014b50),
+      u16(20),
+      u16(20),
+      u16(0),
+      u16(0),
+      u16(0),
+      u16(0),
+      u32(crc),
+      u32(data.length),
+      u32(data.length),
+      u16(nameBytes.length),
+      u16(0),
+      u16(0),
+      u16(0),
+      u16(0),
+      u32(0),
+      u32(offset),
+      nameBytes
+    ])
+    centralParts.push(central)
+    offset += localHeader.length + data.length
+  }
+
+  const centralDir = concatBytes(centralParts)
+  const end = concatBytes([
+    u32(0x06054b50),
+    u16(0),
+    u16(0),
+    u16(files.length),
+    u16(files.length),
+    u32(centralDir.length),
+    u32(offset),
+    u16(0)
+  ])
+
+  return concatBytes([...localParts, centralDir, end])
+}
+
+function downloadXlsx(filename, sheets) {
+  const names = sheets.map((s) => s.name)
+  const files = [
+    { name: '[Content_Types].xml', data: encodeUtf8(contentTypesXml(sheets.length)) },
+    { name: '_rels/.rels', data: encodeUtf8(rootRelsXml()) },
+    { name: 'xl/workbook.xml', data: encodeUtf8(workbookXml(names)) },
+    { name: 'xl/_rels/workbook.xml.rels', data: encodeUtf8(workbookRelsXml(sheets.length)) }
+  ]
+
+  sheets.forEach((sheet, i) => {
+    files.push({
+      name: `xl/worksheets/sheet${i + 1}.xml`,
+      data: encodeUtf8(worksheetXml(sheet.headers, sheet.rows))
+    })
+  })
+
+  const zipBytes = zipStore(files)
+  const blob = new Blob([zipBytes], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = filename
+  a.download = filename.endsWith('.xlsx') ? filename : `${filename}.xlsx`
   document.body.appendChild(a)
   a.click()
   a.remove()
   URL.revokeObjectURL(url)
-}
-
-function downloadWorkbook(filename, sheets) {
-  const xml = buildWorkbookXml(sheets)
-  downloadBlob(
-    filename,
-    xml,
-    'application/vnd.ms-excel;charset=utf-8'
-  )
 }
 
 /** Plantilla de importación de gastos / rendiciones */
@@ -116,8 +270,8 @@ export function descargarPlantillaGastos() {
     'Detalle del gasto (obligatorio)'
   ]
 
-  const instrucciones = [
-    ['Campo', 'Obligatorio', 'Descripción'],
+  const instrHeaders = ['Campo', 'Obligatorio', 'Descripción']
+  const instrRows = [
     ['fecha', 'Sí', 'Fecha del documento. Formato DD/MM/YYYY'],
     ['trabajador_rut', 'Sí', 'RUT del trabajador (con o sin puntos)'],
     ['trabajador_nombre', 'No', 'Nombre referencial (se busca por RUT)'],
@@ -135,14 +289,9 @@ export function descargarPlantillaGastos() {
     ]
   ]
 
-  downloadWorkbook('plantilla_importacion_gastos.xls', [
-    sheetXml('Gastos', headers, [ejemplo], [90, 110, 140, 100, 110, 110, 80, 90, 100, 220]),
-    sheetXml(
-      'Instrucciones',
-      instrucciones[0],
-      instrucciones.slice(1),
-      [140, 90, 420]
-    )
+  downloadXlsx('plantilla_importacion_gastos.xlsx', [
+    { name: 'Gastos', headers, rows: [ejemplo] },
+    { name: 'Instrucciones', headers: instrHeaders, rows: instrRows }
   ])
 }
 
@@ -172,8 +321,8 @@ export function descargarPlantillaAsignaciones() {
     'Motivo de la asignación (máx. 500)'
   ]
 
-  const instrucciones = [
-    ['Campo', 'Obligatorio', 'Descripción'],
+  const instrHeaders = ['Campo', 'Obligatorio', 'Descripción']
+  const instrRows = [
     ['fecha', 'Sí', 'Fecha de la asignación. Formato DD/MM/YYYY'],
     ['trabajador_rut', 'Sí', 'RUT del trabajador (con o sin puntos)'],
     ['trabajador_nombre', 'No', 'Nombre referencial (se busca por RUT)'],
@@ -190,18 +339,8 @@ export function descargarPlantillaAsignaciones() {
     ]
   ]
 
-  downloadWorkbook('plantilla_importacion_asignaciones.xls', [
-    sheetXml(
-      'Asignaciones',
-      headers,
-      [ejemplo],
-      [90, 110, 140, 100, 90, 80, 120, 140, 220]
-    ),
-    sheetXml(
-      'Instrucciones',
-      instrucciones[0],
-      instrucciones.slice(1),
-      [140, 90, 420]
-    )
+  downloadXlsx('plantilla_importacion_asignaciones.xlsx', [
+    { name: 'Asignaciones', headers, rows: [ejemplo] },
+    { name: 'Instrucciones', headers: instrHeaders, rows: instrRows }
   ])
 }
