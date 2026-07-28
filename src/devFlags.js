@@ -19,7 +19,7 @@ export const DEV_FLAGS = {
   HARD_DELETE_ENABLED: true,
 
   /**
-   * Super Admin - Dev: al rendir, salta la IA de comprobante
+   * Super Admin - Dev: al rendir o registrar anticipo, salta la IA de comprobante
    * (no valida coincidencia de monto ni N° de documento).
    * Sigue siendo obligatorio adjuntar el archivo.
    */

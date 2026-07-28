@@ -1404,8 +1404,28 @@ a:hover {
   color: #fff;
 }
 
-.dash-adjunto-empty {
-  color: #64748b;
+.dash-cartola-accordion {
+  margin-top: 0.75rem;
+}
+
+.dash-cartola-totales-global {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: flex-end;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #334155;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.dash-historial-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 0.5rem 0 1rem;
 }
 
 .dash-assign-title {
@@ -1440,6 +1460,25 @@ a:hover {
 
 .dash-input-strong {
   font-weight: 700;
+}
+
+.dash-input-monto {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ocultar spinners nativos por si queda algún type=number */
+input[type='number'].dash-input-strong::-webkit-outer-spin-button,
+input[type='number'].dash-input-strong::-webkit-inner-spin-button,
+.dash-input-monto::-webkit-outer-spin-button,
+.dash-input-monto::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type='number'].dash-input-strong,
+.dash-field input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
 }
 
 .dash-btn-block {
@@ -1874,12 +1913,6 @@ a:hover {
   min-width: 1rem;
   text-align: center;
   font-variant-numeric: tabular-nums;
-}
-
-.dash-modal-personal-caja {
-  margin: 0.5rem 0 1rem;
-  max-height: 50vh;
-  overflow: auto;
 }
 
 .dash-cajas-gestion {
@@ -2328,6 +2361,13 @@ a:hover {
   border: 1px solid #334155;
 }
 
+.dash-status--info {
+  background: rgba(59, 130, 246, 0.12);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.28);
+  cursor: default;
+}
+
 .dash-btn-edit {
   background: #1e293b;
   color: #cbd5e1;
@@ -2637,6 +2677,10 @@ a:hover {
   grid-column: span 1;
 }
 
+.dash-gasto-span-3 {
+  grid-column: span 1;
+}
+
 .dash-form--six {
   grid-template-columns: 1fr;
 }
@@ -2826,6 +2870,39 @@ a:hover {
 
 .dash-modal--wide {
   max-width: 42rem;
+}
+
+.dash-modal--compact {
+  max-width: 22rem;
+}
+
+.dash-modal-personal-caja {
+  margin: 0.25rem 0 1rem;
+  max-height: 50vh;
+  overflow: auto;
+  border: 1px solid #334155;
+  border-radius: 0.75rem;
+}
+
+.dash-table--compact {
+  min-width: 0;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.dash-table--compact th,
+.dash-table--compact td {
+  padding: 0.55rem 0.75rem;
+}
+
+.dash-table--compact th:first-child,
+.dash-table--compact td:first-child {
+  width: 58%;
+}
+
+.dash-table--compact th:last-child,
+.dash-table--compact td:last-child {
+  width: 42%;
 }
 
 .dash-modal-head {
@@ -3186,6 +3263,10 @@ a:hover {
 
   .dash-gasto-grid-4 .dash-gasto-span-2 {
     grid-column: span 2;
+  }
+
+  .dash-gasto-grid-4 .dash-gasto-span-3 {
+    grid-column: span 3;
   }
 
   .dash-form--five {

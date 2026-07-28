@@ -50,9 +50,17 @@ export function formatMontoApi(value) {
   return `$ ${n.toLocaleString('es-CL')}`
 }
 
+/** Solo dígitos → entero (ignora puntos/separadores de miles). */
 export function parseMontoInput(value) {
   const n = Number(String(value || '').replace(/\D/g, ''))
   return Number.isFinite(n) ? n : 0
+}
+
+/** Formato de entrada moneda CL: 20000 → 20.000 */
+export function formatMontoInputCl(value) {
+  const digits = String(value || '').replace(/\D/g, '')
+  if (!digits) return ''
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 }
 
 /** YYYY-MM-DD or Date → DD/MM/YYYY */
@@ -149,6 +157,7 @@ export function mapTrabajador(row) {
 
 /** Ficha trabajador + acceso USER_RENDIDOR opcional (módulo Personal). */
 export function mapPersonal(row) {
+  const esAdmin = Boolean(row.es_admin)
   const acceso = row.acceso_sistema
   let accesoLabel = 'Solo Ficha'
   let accesoKind = 'none'
@@ -158,6 +167,9 @@ export function mapPersonal(row) {
   } else if (acceso === 'inactivo') {
     accesoLabel = 'Inactivo'
     accesoKind = 'inactivo'
+  } else if (esAdmin) {
+    accesoLabel = 'Admin'
+    accesoKind = 'admin'
   }
   return {
     id: row.id,
@@ -172,7 +184,11 @@ export function mapPersonal(row) {
     accesoSistema: acceso,
     accesoLabel,
     accesoKind,
-    tieneUsuario: Boolean(row.usuario_id)
+    esAdmin,
+    adminRol: row.admin_rol || null,
+    tieneUsuario: Boolean(row.usuario_id),
+    /** Puede crear USER_RENDIDOR solo si no es admin del sistema */
+    puedeCrearUsuarioNormal: !esAdmin && !row.usuario_id
   }
 }
 
@@ -342,6 +358,7 @@ export function buildCartola({ cajas, movimientos, asignaciones }) {
     if (m.legacy) continue
     const mes = mesFromDDMMYYYY(m.fecha)
     rows.push({
+      id: m.id,
       fecha: m.fecha,
       mes,
       cajaGroupKey: m.cajaGroupKey,
@@ -355,13 +372,22 @@ export function buildCartola({ cajas, movimientos, asignaciones }) {
       abono: '-',
       abonoClass: 'dash-muted',
       cargo: m.monto,
-      cargoClass: 'dash-table-amount'
+      cargoClass: 'dash-table-amount',
+      comprobanteNombre: m.comprobanteNombre || '',
+      estado: m.estado || '',
+      estadoClass: m.estadoClass || '',
+      intento: m.intento || 1,
+      observacionAdmin: m.observacionAdmin || '',
+      pago: m.pago || '',
+      docto: m.docto || '',
+      subidoEl: m.subidoEl || ''
     })
   }
 
   for (const a of asignaciones) {
     const mes = mesFromDDMMYYYY(a.fecha)
     rows.push({
+      id: a.id,
       fecha: a.fecha,
       mes,
       cajaGroupKey: a.cajaGroupKey,
@@ -375,7 +401,15 @@ export function buildCartola({ cajas, movimientos, asignaciones }) {
       abono: '-',
       abonoClass: 'dash-muted',
       cargo: a.monto,
-      cargoClass: 'dash-rinde'
+      cargoClass: 'dash-rinde',
+      comprobanteNombre: a.comprobanteNombre || '',
+      estado: '',
+      estadoClass: '',
+      intento: 1,
+      observacionAdmin: '',
+      pago: '',
+      docto: '',
+      subidoEl: ''
     })
   }
 

@@ -54,6 +54,12 @@ async function createAnticipo(req, res) {
       return res.status(400).json({ error: 'caja_id, trabajador_id, fecha y monto son requeridos' })
     }
 
+    if (!String(comprobante_url || '').trim()) {
+      return res.status(400).json({
+        error: 'El comprobante es obligatorio. Ningún anticipo puede guardarse sin documento.'
+      })
+    }
+
     let codigo = codigo_vale?.trim()
     if (!codigo) {
       const maxRows = await query(

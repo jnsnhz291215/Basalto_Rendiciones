@@ -8,7 +8,7 @@ Flags de prueba para Super Admin Dev. **Apagarlos antes de dejar reglas de produ
 |------|---------------------------|---------------------|--------|
 | Bypass RUT `211919116` | `RUT_BYPASS_ENABLED` | `DEV_RUT_BYPASS` (`0` = off) | Acepta el RUT incompleto / sin DV antes del módulo 11 |
 | Hard delete Dev | `HARD_DELETE_ENABLED` | `DEV_HARD_DELETE` (`0` = off) | `SUPER_ADMIN_DEV` puede borrar de verdad rendiciones, anticipos, cajas/CC (también con datos) |
-| Bypass IA comprobante | `COMPROBANTE_VERIFY_BYPASS` | `DEV_COMPROBANTE_VERIFY_BYPASS` (`0` = off) | `SUPER_ADMIN_DEV` salta validación IA de **monto** y **N° documento** (sigue obligatorio adjuntar archivo) |
+| Bypass IA comprobante | `COMPROBANTE_VERIFY_BYPASS` | `DEV_COMPROBANTE_VERIFY_BYPASS` (`0` = off) | `SUPER_ADMIN_DEV` salta validación IA de **monto** y **N° documento** en rendición y anticipo (sigue obligatorio adjuntar archivo) |
 
 **Restaurar comportamiento estricto**
 

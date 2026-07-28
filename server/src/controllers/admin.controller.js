@@ -55,6 +55,7 @@ async function replaceTrabajadorCajas(connOrNull, trabajadorId, claves) {
  * Personal = fichas de trabajadores + LEFT JOIN solo usuarios USER_RENDIDOR
  * (roles admin se gestionan en pestaña Admins; no mezclar aquí).
  * Preferencia de match: trabajador_id, fallback RUT normalizado.
+ * `es_admin` indica ficha ligada a cuenta admin (mismo trabajador_id o RUT).
  */
 async function buildPersonalList() {
   const trabajadores = await query(
@@ -66,6 +67,12 @@ async function buildPersonalList() {
      WHERE is_deleted = FALSE AND rol = ?`,
     [ROLES.USER_RENDIDOR]
   )
+  const admins = await query(
+    `SELECT id, trabajador_id, rut, rol
+     FROM usuarios
+     WHERE is_deleted = FALSE AND rol IN (?, ?, ?)`,
+    [ROLES.SUPER_ADMIN_DEV, ROLES.SUPER_ADMIN, ROLES.ADMIN_CAJA]
+  )
   const byTrabId = new Map()
   const byRut = new Map()
   for (const u of usuarios) {
@@ -73,10 +80,20 @@ async function buildPersonalList() {
     const r = cleanRutValue(u.rut)
     if (r && !byRut.has(r)) byRut.set(r, u)
   }
+  const adminByTrabId = new Map()
+  const adminByRut = new Map()
+  for (const a of admins) {
+    if (a.trabajador_id != null) adminByTrabId.set(Number(a.trabajador_id), a.rol)
+    const r = cleanRutValue(a.rut)
+    if (r && !adminByRut.has(r)) adminByRut.set(r, a.rol)
+  }
   const byTrabCajas = await loadCajasByTrabajador()
 
   return trabajadores.map((t) => {
     const u = byTrabId.get(Number(t.id)) || byRut.get(cleanRutValue(t.rut)) || null
+    const rutClean = cleanRutValue(t.rut)
+    const adminRol = adminByTrabId.get(Number(t.id)) || adminByRut.get(rutClean) || null
+    const esAdmin = Boolean(adminRol)
     return {
       id: t.id,
       rut: t.rut,
@@ -89,9 +106,31 @@ async function buildPersonalList() {
       usuario_rol: u?.rol ?? null,
       usuario_estado: u?.estado ?? null,
       // Acceso sistema: activo | inactivo | null (sin usuario rendidor)
-      acceso_sistema: u ? (u.estado === 'inactivo' ? 'inactivo' : 'activo') : null
+      acceso_sistema: u ? (u.estado === 'inactivo' ? 'inactivo' : 'activo') : null,
+      es_admin: esAdmin,
+      admin_rol: adminRol
     }
   })
+}
+
+async function findAdminForTrabajador(trabajador) {
+  const byId = await query(
+    `SELECT id, rol FROM usuarios
+     WHERE is_deleted = FALSE AND rol IN (?, ?, ?) AND trabajador_id = ?
+     LIMIT 1`,
+    [ROLES.SUPER_ADMIN_DEV, ROLES.SUPER_ADMIN, ROLES.ADMIN_CAJA, trabajador.id]
+  )
+  if (byId[0]) return byId[0]
+  const rutClean = cleanRutValue(trabajador.rut)
+  if (!rutClean) return null
+  const byRut = await query(
+    `SELECT id, rol FROM usuarios
+     WHERE is_deleted = FALSE AND rol IN (?, ?, ?)
+       AND REPLACE(REPLACE(UPPER(rut), '.', ''), '-', '') = ?
+     LIMIT 1`,
+    [ROLES.SUPER_ADMIN_DEV, ROLES.SUPER_ADMIN, ROLES.ADMIN_CAJA, rutClean]
+  )
+  return byRut[0] || null
 }
 
 async function getPersonalByTrabajadorId(id) {
@@ -644,8 +683,8 @@ async function createPersonal(req, res) {
   try {
     const body = req.body || {}
     const rutClean = cleanRutValue(body.rut)
-    const nombre = String(body.nombre_completo || body.nombre || '').trim()
-    const cargo = body.cargo != null ? String(body.cargo).trim() || null : null
+    const nombre = sanitizeTextoLibre(body.nombre_completo || body.nombre) || ''
+    const cargo = sanitizeTextoLibre(body.cargo)
     const crearUsuario = Boolean(body.crear_usuario)
     const cajaClaves = parseCajaClaves(body)
 
@@ -670,6 +709,13 @@ async function createPersonal(req, res) {
       }
       if (rolUsuario !== ROLES.USER_RENDIDOR) {
         return res.status(400).json({ error: 'Rol no permitido en Personal' })
+      }
+      const adminExistente = await findAdminForTrabajador({ id: null, rut: rutClean })
+      if (adminExistente) {
+        return res.status(400).json({
+          error:
+            'Esta persona ya tiene cuenta de administrador; el acceso se gestiona en Admins'
+        })
       }
       passwordPlain = String(password)
     }
@@ -795,11 +841,11 @@ async function updatePersonal(req, res) {
       body.rut !== undefined ? cleanRutValue(body.rut) || existing.rut : cleanRutValue(existing.rut)
     const nextNombre =
       body.nombre_completo !== undefined || body.nombre !== undefined
-        ? String(body.nombre_completo || body.nombre || '').trim()
+        ? sanitizeTextoLibre(body.nombre_completo || body.nombre) || ''
         : existing.nombre_completo
     const nextCargo =
       body.cargo !== undefined
-        ? String(body.cargo || '').trim() || null
+        ? sanitizeTextoLibre(body.cargo)
         : existing.cargo
     const cajaClaves = parseCajaClaves(body)
     const crearUsuario = Boolean(body.crear_usuario)
@@ -830,6 +876,14 @@ async function updatePersonal(req, res) {
     let passwordPlain = null
 
     if (!linkedUser && crearUsuario) {
+      const adminExistente = await findAdminForTrabajador({ ...existing, rut: nextRut })
+      if (adminExistente) {
+        await conn.rollback()
+        return res.status(400).json({
+          error:
+            'Esta persona ya tiene cuenta de administrador; el acceso se gestiona en Admins'
+        })
+      }
       const correo = String(body.correo || '').trim()
       const password = body.password
       if (!correo || !password) {
@@ -918,6 +972,20 @@ function todayLocalISO() {
   return `${y}-${m}-${day}`
 }
 
+/** Texto libre: letras, números, espacios, / y - ; máx. 100. */
+function sanitizeTextoLibre(value) {
+  if (value == null) return null
+  const cleaned = String(value)
+    .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ0-9 /\-]/g, '')
+    .slice(0, 100)
+    .trim()
+  return cleaned || null
+}
+
+function sanitizeTitularNombre(value) {
+  return sanitizeTextoLibre(value)
+}
+
 async function listTarjetas(req, res) {
   try {
     await ensureTarjetaFechaDesactivacion()
@@ -951,7 +1019,7 @@ async function createTarjeta(req, res) {
         tipo,
         String(ultimos_digitos).slice(-4),
         banco || null,
-        titular_nombre || null,
+        sanitizeTitularNombre(titular_nombre),
         nextEstado,
         fechaDesactivacion
       ]
@@ -1015,7 +1083,9 @@ async function updateTarjeta(req, res) {
           ? String(ultimos_digitos).slice(-4)
           : prev.ultimos_digitos,
         banco !== undefined ? banco : prev.banco,
-        titular_nombre !== undefined ? titular_nombre : prev.titular_nombre,
+        titular_nombre !== undefined
+          ? sanitizeTitularNombre(titular_nombre)
+          : prev.titular_nombre,
         nextEstado,
         fechaDesactivacion,
         id

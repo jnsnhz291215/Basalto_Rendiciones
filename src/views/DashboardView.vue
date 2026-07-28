@@ -109,7 +109,12 @@
       class="dash-modal-backdrop"
       @click.self="closeModalPersonalCaja"
     >
-      <div class="dash-modal" role="dialog" aria-modal="true" aria-labelledby="modal-personal-caja-title">
+      <div
+        class="dash-modal dash-modal--compact"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-personal-caja-title"
+      >
         <div class="dash-modal-head">
           <div>
             <h3 id="modal-personal-caja-title">Personal asignado</h3>
@@ -127,8 +132,8 @@
         <div v-if="!modalPersonalCaja.lista.length" class="dash-cajas-empty">
           Nadie asignado actualmente a esta caja.
         </div>
-        <div v-else class="dash-table-wrap dash-modal-personal-caja">
-          <table class="dash-table">
+        <div v-else class="dash-modal-personal-caja">
+          <table class="dash-table dash-table--compact">
             <thead>
               <tr>
                 <th>Nombre</th>
@@ -138,7 +143,7 @@
             <tbody>
               <tr v-for="p in modalPersonalCaja.lista" :key="p.id">
                 <td class="dash-table-strong">{{ p.nombre }}</td>
-                <td class="dash-mono">{{ formatRut(p.rut) }}</td>
+                <td class="dash-mono dash-nowrap">{{ formatRut(p.rut) }}</td>
               </tr>
             </tbody>
           </table>
@@ -193,18 +198,22 @@
             <div class="dash-field">
               <label>Nombre</label>
               <input
-                v-model="modalPersonal.nombre"
+                :value="modalPersonal.nombre"
                 type="text"
                 required
+                maxlength="100"
                 placeholder="Mario Silva"
+                @input="onPersonalNombreInput"
               />
             </div>
             <div class="dash-field">
               <label>Cargo</label>
               <input
-                v-model="modalPersonal.cargo"
+                :value="modalPersonal.cargo"
                 type="text"
+                maxlength="100"
                 placeholder="Conductor Camión Riego"
+                @input="onPersonalCargoInput"
               />
             </div>
           </div>
@@ -228,7 +237,10 @@
             </div>
           </div>
 
-          <div class="dash-personal-access-toggle dash-admin-form-section">
+          <div
+            v-if="!modalPersonal.esAdmin"
+            class="dash-personal-access-toggle dash-admin-form-section"
+          >
             <label class="dash-switch">
               <input v-model="modalPersonal.crearUsuario" type="checkbox" />
               <span class="dash-switch-ui" aria-hidden="true"></span>
@@ -241,8 +253,12 @@
               </span>
             </label>
           </div>
+          <p v-else class="dash-hint dash-admin-form-section">
+            Acceso de administrador: se gestiona en la pestaña Admin Users (no se crea usuario
+            rendidor).
+          </p>
 
-          <template v-if="modalPersonal.crearUsuario">
+          <template v-if="modalPersonal.crearUsuario && !modalPersonal.esAdmin">
             <h4 class="dash-modal-section-title">Acceso de usuario</h4>
             <div class="dash-caja-grid-2">
               <div class="dash-field">
@@ -307,6 +323,114 @@
             <button class="dash-btn-primary" type="submit">Guardar</button>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- Modal historial cartola -->
+    <div
+      v-if="modalHistorialCartola.open"
+      class="dash-modal-backdrop"
+      @click.self="closeModalHistorialCartola"
+    >
+      <div
+        class="dash-modal dash-modal--wide"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-historial-cartola-title"
+      >
+        <div class="dash-modal-head">
+          <div>
+            <h3 id="modal-historial-cartola-title">
+              Historial
+              <span v-if="modalHistorialCartola.doc" class="dash-rinde">
+                {{ modalHistorialCartola.doc }}
+              </span>
+            </h3>
+            <p class="dash-hint">
+              Detalle del movimiento y seguimiento de devoluciones / correcciones.
+            </p>
+          </div>
+          <button
+            class="dash-modal-close"
+            type="button"
+            aria-label="Cerrar"
+            @click="closeModalHistorialCartola"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="dash-historial-modal-body">
+          <div class="dash-intento-prev-grid">
+            <div>
+              <span class="dash-intento-prev-key">Tipo:</span>
+              <span>{{ modalHistorialCartola.tipo }}</span>
+            </div>
+            <div>
+              <span class="dash-intento-prev-key">Fecha:</span>
+              <span>{{ modalHistorialCartola.fecha }}</span>
+            </div>
+            <div>
+              <span class="dash-intento-prev-key">Responsable:</span>
+              <span>{{ modalHistorialCartola.responsable }}</span>
+            </div>
+            <div>
+              <span class="dash-intento-prev-key">Monto:</span>
+              <span>{{ modalHistorialCartola.monto }}</span>
+            </div>
+            <div v-if="modalHistorialCartola.pago">
+              <span class="dash-intento-prev-key">Pago / Docto:</span>
+              <span>
+                {{ modalHistorialCartola.pago }}
+                <template v-if="modalHistorialCartola.docto">
+                  · {{ modalHistorialCartola.docto }}
+                </template>
+              </span>
+            </div>
+            <div v-if="modalHistorialCartola.estado">
+              <span class="dash-intento-prev-key">Estado:</span>
+              <span class="dash-status" :class="modalHistorialCartola.estadoClass">
+                {{ modalHistorialCartola.estado }}
+              </span>
+            </div>
+            <div v-if="modalHistorialCartola.intento > 1">
+              <span class="dash-intento-prev-key">Intentos:</span>
+              <span>#{{ modalHistorialCartola.intento }}</span>
+            </div>
+          </div>
+
+          <div v-if="modalHistorialCartola.detalle" class="dash-intento-prev-desc">
+            <span class="dash-intento-prev-key">Detalle / observación:</span>
+            <p>{{ modalHistorialCartola.detalle }}</p>
+          </div>
+
+          <div
+            v-if="modalHistorialCartola.observacionAdmin"
+            class="dash-obs-admin dash-admin-form-section"
+          >
+            <span class="dash-obs-admin-label">Observación del Administrador</span>
+            <p class="dash-obs-admin-text">“{{ modalHistorialCartola.observacionAdmin }}”</p>
+          </div>
+
+          <div class="dash-admin-form-section">
+            <span class="dash-intento-prev-key">Comprobante:</span>
+            <button
+              v-if="modalHistorialCartola.comprobanteNombre"
+              type="button"
+              class="dash-adjunto-btn"
+              @click="openComprobanteArchivo(modalHistorialCartola.comprobanteNombre)"
+            >
+              📄 {{ labelAdjunto(modalHistorialCartola.comprobanteNombre) }}
+            </button>
+            <span v-else class="dash-muted">Sin comprobante adjunto</span>
+          </div>
+        </div>
+
+        <div class="dash-modal-actions">
+          <button class="dash-btn-secondary" type="button" @click="closeModalHistorialCartola">
+            Cerrar
+          </button>
+        </div>
       </div>
     </div>
 
@@ -555,7 +679,7 @@
 
             <div class="dash-metric-card">
               <div>
-                <p class="dash-metric-label">Anticipos Conductores</p>
+                <p class="dash-metric-label">Anticipos</p>
                 <p class="dash-metric-value dash-metric-value--accent">
                   {{ formatMonto(resumenCaja.anticipos_pendientes.total) }}
                 </p>
@@ -713,10 +837,13 @@
                 <div class="dash-field">
                   <label>Monto Total ($)</label>
                   <input
-                    v-model="gasto.monto"
-                    type="number"
+                    :value="gasto.monto"
+                    type="text"
+                    inputmode="numeric"
                     placeholder="0"
-                    class="dash-input-strong"
+                    class="dash-input-strong dash-input-monto"
+                    autocomplete="off"
+                    @input="onGastoMontoInput"
                   />
                 </div>
               </div>
@@ -794,6 +921,10 @@
                   <span v-if="gasto.comprobanteNombre" class="dash-field-hint">
                     Archivo: {{ gasto.comprobanteNombre }}
                   </span>
+                  <p v-if="canSkipComprobanteIa" class="dash-field-hint dash-hint--ok">
+                    Bypass Dev activo: se omite la validación IA de monto / N° documento (sigue
+                    obligatorio adjuntar archivo).
+                  </p>
                 </div>
               </div>
 
@@ -802,15 +933,15 @@
                   <label class="dash-field-label">Descripción / Observación</label>
                   <span
                     class="dash-word-count"
-                    :class="{ 'dash-word-count--over': palabrasDescripcion > 500 }"
+                    :class="{ 'dash-word-count--over': letrasDescripcion > 500 }"
                   >
-                    {{ palabrasDescripcion }} / 500 palabras
+                    {{ letrasDescripcion }} / 500 letras
                   </span>
                 </div>
                 <textarea
                   v-model="gasto.descripcion"
                   rows="3"
-                  maxlength="3000"
+                  maxlength="500"
                   placeholder="Detalle amplio del gasto..."
                   class="dash-textarea"
                 ></textarea>
@@ -1049,9 +1180,20 @@
               <div>
                 <h3 id="modal-verificar-title">Confirmando carga de documento</h3>
                 <p class="dash-hint">
-                  La IA revisa que el monto
-                  <template v-if="gasto.tipo === 'Factura'"> y el N° de factura</template>
-                  sean legibles y coincidan.
+                  <template v-if="canSkipComprobanteIa">
+                    Bypass Super Admin Dev: se guarda el comprobante sin validar monto
+                    <template v-if="pendingVerifyKind === 'gasto' && gasto.tipo === 'Factura'">
+                      ni N° de factura
+                    </template>
+                    con IA.
+                  </template>
+                  <template v-else>
+                    La IA revisa que el monto
+                    <template v-if="pendingVerifyKind === 'gasto' && gasto.tipo === 'Factura'">
+                      y el N° de factura
+                    </template>
+                    sean legibles y coincidan con lo declarado.
+                  </template>
                 </p>
               </div>
               <button
@@ -1066,8 +1208,20 @@
 
             <div v-if="modalVerificar.phase === 'loading'" class="dash-verify-body">
               <div class="dash-verify-spinner" aria-hidden="true"></div>
-              <p class="dash-verify-status">Analizando comprobante…</p>
-              <p class="dash-field-hint">Esto puede tomar unos segundos.</p>
+              <p class="dash-verify-status">
+                {{
+                  canSkipComprobanteIa
+                    ? 'Guardando comprobante (bypass IA)…'
+                    : 'Analizando comprobante…'
+                }}
+              </p>
+              <p class="dash-field-hint">
+                {{
+                  canSkipComprobanteIa
+                    ? 'Modo Super Admin Dev: sin validación de monto.'
+                    : 'Esto puede tomar unos segundos.'
+                }}
+              </p>
             </div>
 
             <div v-else-if="modalVerificar.phase === 'error'" class="dash-verify-body">
@@ -1085,8 +1239,8 @@
                   class="dash-file"
                   @change="onVerificarReplaceFile"
                 />
-                <span v-if="gasto.comprobanteNombre" class="dash-field-hint">
-                  Actual: {{ gasto.comprobanteNombre }}
+                <span v-if="verifyComprobanteNombre" class="dash-field-hint">
+                  Actual: {{ verifyComprobanteNombre }}
                 </span>
               </div>
               <div class="dash-modal-actions">
@@ -1096,7 +1250,7 @@
                 <button
                   class="dash-btn-primary"
                   type="button"
-                  :disabled="!gastoComprobanteFile"
+                  :disabled="!verifyComprobanteFile"
                   @click="retryVerificarYGuardar"
                 >
                   Reintentar verificación
@@ -1105,7 +1259,10 @@
             </div>
 
             <div v-else-if="modalVerificar.phase === 'ok'" class="dash-verify-body">
-              <p class="dash-verify-ok">Documento validado. Guardando rendición…</p>
+              <p class="dash-verify-ok">
+                Documento validado. Guardando
+                {{ pendingVerifyKind === 'anticipo' ? 'anticipo' : 'rendición' }}…
+              </p>
             </div>
           </div>
         </div>
@@ -1203,9 +1360,9 @@
                   </label>
                   <span
                     class="dash-word-count"
-                    :class="{ 'dash-word-count--over': palabrasComentarioAdmin > 500 }"
+                    :class="{ 'dash-word-count--over': letrasComentarioAdmin > 500 }"
                   >
-                    {{ palabrasComentarioAdmin }} / 500 palabras
+                    {{ letrasComentarioAdmin }} / 500 letras
                   </span>
                 </div>
 
@@ -1232,7 +1389,7 @@
                 <textarea
                   v-model="modalResponder.comentario"
                   rows="3"
-                  maxlength="3000"
+                  maxlength="500"
                   placeholder="Ej: Factura ilegible, favor subir foto donde se aprecie claramente el RUT y monto..."
                   class="dash-textarea"
                   :required="comentarioRequeridoAdmin"
@@ -1357,9 +1514,12 @@
                 <div v-if="modalCorregir.campos.monto" class="dash-field">
                   <label>Monto Corregido ($)</label>
                   <input
-                    v-model="modalCorregir.monto"
-                    type="number"
-                    class="dash-input-strong"
+                    :value="modalCorregir.monto"
+                    type="text"
+                    inputmode="numeric"
+                    class="dash-input-strong dash-input-monto"
+                    autocomplete="off"
+                    @input="onCorregirMontoInput"
                   />
                 </div>
                 <div v-if="modalCorregir.campos.origen_pago" class="dash-field">
@@ -1437,16 +1597,14 @@
         </div>
       </template>
 
-      <!-- Asignación a Conductor -->
+      <!-- Anticipo -->
       <div v-else-if="activeTab === 'asignacion' && isAdminSession" class="dash-assign">
         <div class="dash-rendicion-gestion">
           <div class="dash-cajas-toolbar">
             <div>
-              <h3 class="dash-cajas-toolbar-title">
-                Asignación a Conductor (Anticipos / Fondos)
-              </h3>
+              <h3 class="dash-cajas-toolbar-title">Anticipo</h3>
               <p class="dash-cajas-toolbar-hint">
-                Registro de habilitaciones y anticipos entregados a conductores o trabajadores.
+                Registro de anticipos entregados a trabajadores.
               </p>
             </div>
             <div class="dash-toolbar-actions">
@@ -1461,7 +1619,7 @@
               >
                 <span>{{ anticipoFormOpen ? '▲' : '＋' }}</span>
                 <span>
-                  {{ anticipoFormOpen ? 'Ocultar Formulario' : 'Registrar Anticipo / Fondo' }}
+                  {{ anticipoFormOpen ? 'Ocultar Formulario' : 'Registrar Anticipo' }}
                 </span>
               </button>
             </div>
@@ -1476,10 +1634,10 @@
             <div class="dash-caja-form-head">
               <div>
                 <h2 class="dash-assign-title dash-assign-title--flush">
-                  Nuevo Registro de Anticipo
+                  Nuevo Anticipo
                 </h2>
                 <p class="dash-hint">
-                  Completa los datos de la asignación o fondo entregado.
+                  Completa los datos del anticipo entregado.
                 </p>
               </div>
               <button
@@ -1511,13 +1669,47 @@
                   <input v-model="asignacion.fecha" type="date" />
                 </div>
                 <div class="dash-field">
-                  <label>Conductor / Trabajador</label>
-                  <select v-model="asignacion.conductorId">
-                    <option value="">Seleccionar Conductor...</option>
-                    <option v-for="t in trabajadores" :key="t.id" :value="String(t.id)">
-                      {{ t.nombre }}
-                    </option>
-                  </select>
+                  <label>Trabajador</label>
+                  <div class="dash-combobox">
+                    <input
+                      v-model="anticipoTrabajadorQuery"
+                      type="text"
+                      class="dash-combobox-input"
+                      placeholder="Buscar por nombre o RUT…"
+                      autocomplete="off"
+                      @focus="onAnticipoTrabajadorFocus"
+                      @input="onAnticipoTrabajadorQueryInput"
+                      @keydown.down.prevent="highlightAnticipoTrabajador(1)"
+                      @keydown.up.prevent="highlightAnticipoTrabajador(-1)"
+                      @keydown.enter.prevent="confirmAnticipoTrabajadorHighlight"
+                      @keydown.escape="anticipoTrabajadorOpen = false"
+                      @blur="onAnticipoTrabajadorBlur"
+                    />
+                    <ul
+                      v-if="anticipoTrabajadorOpen && anticipoTrabajadorOpciones.length"
+                      class="dash-combobox-list"
+                      role="listbox"
+                    >
+                      <li
+                        v-for="(opt, idx) in anticipoTrabajadorOpciones"
+                        :key="opt.id"
+                        class="dash-combobox-option"
+                        :class="{
+                          'dash-combobox-option--active': idx === anticipoTrabajadorHighlight
+                        }"
+                        role="option"
+                        @mousedown.prevent="selectAnticipoTrabajador(opt)"
+                      >
+                        {{ opt.label }}
+                      </li>
+                    </ul>
+                    <p
+                      v-else-if="anticipoTrabajadorOpen && anticipoTrabajadorQuery.trim()"
+                      class="dash-field-hint"
+                    >
+                      Sin coincidencias.
+                    </p>
+                  </div>
                 </div>
                 <div class="dash-field">
                   <label>N° Doc / Vale</label>
@@ -1533,29 +1725,52 @@
                 <div class="dash-field">
                   <label>Monto ($)</label>
                   <input
-                    v-model="asignacion.monto"
-                    type="number"
-                    placeholder="0"
-                    class="dash-input-strong"
-                  />
-                </div>
-                <div class="dash-field">
-                  <label>Observaciones / Motivo</label>
-                  <input
-                    v-model="asignacion.observaciones"
+                    :value="asignacion.monto"
                     type="text"
-                    placeholder="Motivo o faena..."
+                    inputmode="numeric"
+                    placeholder="0"
+                    class="dash-input-strong dash-input-monto"
+                    autocomplete="off"
+                    @input="onAsignacionMontoInput"
                   />
                 </div>
-                <div class="dash-field dash-gasto-span-2">
-                  <label>Adjuntar Comprobante / Vale (opcional)</label>
+                <div class="dash-field dash-gasto-span-3">
+                  <label>Comprobante *</label>
                   <input
+                    ref="anticipoFileInputEl"
                     type="file"
                     accept=".pdf,image/png,image/jpeg"
                     class="dash-file"
+                    required
                     @change="onAsignacionFile"
                   />
+                  <span v-if="asignacion.comprobanteNombre" class="dash-field-hint">
+                    Archivo: {{ asignacion.comprobanteNombre }}
+                  </span>
+                  <p v-if="canSkipComprobanteIa" class="dash-field-hint dash-hint--ok">
+                    Bypass Dev activo: se omite la validación IA de monto (sigue obligatorio adjuntar
+                    archivo).
+                  </p>
                 </div>
+              </div>
+
+              <div class="dash-form--section">
+                <div class="dash-desc-head">
+                  <label class="dash-field-label">Observaciones / Motivo</label>
+                  <span
+                    class="dash-word-count"
+                    :class="{ 'dash-word-count--over': letrasObservacionAnticipo > 500 }"
+                  >
+                    {{ letrasObservacionAnticipo }} / 500 letras
+                  </span>
+                </div>
+                <textarea
+                  v-model="asignacion.observaciones"
+                  rows="3"
+                  maxlength="500"
+                  placeholder="Detalle amplio del anticipo..."
+                  class="dash-textarea"
+                ></textarea>
               </div>
 
               <div class="dash-caja-form-actions">
@@ -1563,7 +1778,7 @@
                   Cancelar
                 </button>
                 <button class="dash-btn-primary" type="submit">
-                  <span>Guardar Asignación</span>
+                  <span>Guardar Anticipo</span>
                 </button>
               </div>
             </form>
@@ -1575,8 +1790,8 @@
         <div class="dash-table-wrap">
           <div class="dash-panel-head dash-cajas-head">
             <div>
-              <h3>Habilitaciones y Asignaciones Recientes</h3>
-              <p>Listado de anticipos y fondos entregados a conductores.</p>
+              <h3>Anticipos recientes</h3>
+              <p>Listado de anticipos entregados a trabajadores.</p>
             </div>
             <div class="dash-historial-filters">
               <div class="dash-historial-filter">
@@ -1610,12 +1825,12 @@
                 </select>
               </div>
               <div class="dash-historial-search">
-                <label class="dash-sr-only" for="anticipo-buscar">Buscar conductor</label>
+                <label class="dash-sr-only" for="anticipo-buscar">Buscar trabajador</label>
                 <input
                   id="anticipo-buscar"
                   v-model="anticipoBusqueda"
                   type="search"
-                  placeholder="Buscar por conductor..."
+                  placeholder="Buscar por nombre o RUT..."
                   class="dash-search-input"
                 />
               </div>
@@ -1626,7 +1841,7 @@
             <thead>
               <tr>
                 <th>Fecha</th>
-                <th>Conductor</th>
+                <th>Trabajador</th>
                 <th>N° Doc / Vale</th>
                 <th>Observaciones</th>
                 <th class="dash-table-center">Adjunto</th>
@@ -1646,6 +1861,7 @@
                     type="button"
                     class="dash-adjunto-btn"
                     :title="row.comprobanteNombre"
+                    @click="openComprobanteArchivo(row.comprobanteNombre)"
                   >
                     📄 {{ labelAdjunto(row.comprobanteNombre) }}
                   </button>
@@ -1747,7 +1963,7 @@
               </div>
 
               <div class="dash-field">
-                <label>Trabajador / Conductor</label>
+                <label>Trabajador</label>
                 <select v-model="informe.persona">
                   <option value="">** Todos los Trabajadores **</option>
                   <option v-for="t in trabajadores" :key="t.id" :value="t.nombre">
@@ -1837,44 +2053,110 @@
             <span class="dash-informe-count">{{ informeResultado.total }}</span>
           </div>
 
-          <div class="dash-table-scroll">
-            <table class="dash-table">
-              <thead>
-                <tr>
-                  <th>Fecha</th>
-                  <th>Rinde / Doc</th>
-                  <th>Tipo</th>
-                  <th>Detalle / Observación</th>
-                  <th>Responsable</th>
-                  <th class="dash-table-right">Abono</th>
-                  <th class="dash-table-right">Cargo</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in cartolaFiltrada" :key="row.doc + row.fecha">
-                  <td class="dash-mono">{{ row.fecha }}</td>
-                  <td class="dash-mono" :class="row.docClass">{{ row.doc }}</td>
-                  <td>
-                    <span class="dash-badge" :class="row.badgeClass">{{ row.tipo }}</span>
-                  </td>
-                  <td>{{ row.detalle }}</td>
-                  <td>{{ row.responsable }}</td>
-                  <td class="dash-table-right" :class="row.abonoClass">{{ row.abono }}</td>
-                  <td class="dash-table-right" :class="row.cargoClass">{{ row.cargo }}</td>
-                </tr>
-              </tbody>
-              <tfoot>
-                <tr>
-                  <td colspan="5" class="dash-table-right dash-tfoot-label">
-                    Totales acumulados:
-                  </td>
-                  <td class="dash-table-right dash-metric-value--ok">
-                    {{ cartolaTotales.abono }}
-                  </td>
-                  <td class="dash-table-right dash-rinde">{{ cartolaTotales.cargo }}</td>
-                </tr>
-              </tfoot>
-            </table>
+          <div v-if="!cartolaPorCaja.length" class="dash-cajas-empty">
+            No hay movimientos para los filtros seleccionados.
+          </div>
+
+          <div v-else class="dash-cc-accordion dash-cartola-accordion">
+            <div
+              v-for="grupo in cartolaPorCaja"
+              :key="grupo.key"
+              class="dash-cc-accordion-item"
+            >
+              <button
+                class="dash-cc-accordion-head"
+                type="button"
+                @click="toggleCartolaAccordion(grupo.key)"
+              >
+                <span class="dash-cc-accordion-chevron">
+                  {{ isCartolaAccordionOpen(grupo.key) ? '▼' : '▶' }}
+                </span>
+                <span class="dash-cc-accordion-title">{{ grupo.titulo }}</span>
+                <span class="dash-cc-accordion-count">{{ grupo.rows.length }} mov.</span>
+              </button>
+              <div
+                class="dash-collapse"
+                :class="{ 'dash-collapse--open': isCartolaAccordionOpen(grupo.key) }"
+              >
+                <div class="dash-collapse-inner">
+                  <div class="dash-table-wrap dash-cc-accordion-body">
+                    <table class="dash-table">
+                      <thead>
+                        <tr>
+                          <th>Fecha</th>
+                          <th>Rinde / Doc</th>
+                          <th>Tipo</th>
+                          <th>Detalle / Observación</th>
+                          <th>Responsable</th>
+                          <th class="dash-table-right">Abono</th>
+                          <th class="dash-table-right">Cargo</th>
+                          <th class="dash-table-center">Comprobante</th>
+                          <th class="dash-table-center">Historial</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="row in grupo.rows"
+                          :key="`${row.tipoKey}-${row.id || row.doc}-${row.fecha}`"
+                        >
+                          <td class="dash-mono">{{ row.fecha }}</td>
+                          <td class="dash-mono" :class="row.docClass">{{ row.doc }}</td>
+                          <td>
+                            <span class="dash-badge" :class="row.badgeClass">{{ row.tipo }}</span>
+                          </td>
+                          <td>{{ row.detalle }}</td>
+                          <td>{{ row.responsable }}</td>
+                          <td class="dash-table-right" :class="row.abonoClass">{{ row.abono }}</td>
+                          <td class="dash-table-right" :class="row.cargoClass">{{ row.cargo }}</td>
+                          <td class="dash-table-center">
+                            <button
+                              v-if="row.comprobanteNombre"
+                              type="button"
+                              class="dash-adjunto-btn"
+                              :title="row.comprobanteNombre"
+                              @click="openComprobanteArchivo(row.comprobanteNombre)"
+                            >
+                              📄 {{ labelAdjunto(row.comprobanteNombre) }}
+                            </button>
+                            <span v-else class="dash-adjunto-empty">-</span>
+                          </td>
+                          <td class="dash-table-center">
+                            <button
+                              v-if="rowTieneHistorial(row)"
+                              class="dash-btn-icon"
+                              type="button"
+                              title="Ver historial / devoluciones"
+                              @click="openModalHistorialCartola(row)"
+                            >
+                              <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+                            </button>
+                            <span v-else class="dash-muted">-</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colspan="5" class="dash-table-right dash-tfoot-label">
+                            Totales {{ grupo.titulo }}:
+                          </td>
+                          <td class="dash-table-right dash-metric-value--ok">
+                            {{ grupo.totales.abono }}
+                          </td>
+                          <td class="dash-table-right dash-rinde">{{ grupo.totales.cargo }}</td>
+                          <td colspan="2"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="cartolaPorCaja.length" class="dash-cartola-totales-global">
+            <span class="dash-tfoot-label">Totales acumulados:</span>
+            <span class="dash-metric-value--ok">Abono {{ cartolaTotales.abono }}</span>
+            <span class="dash-rinde">Cargo {{ cartolaTotales.cargo }}</span>
           </div>
         </div>
       </div>
@@ -2469,7 +2751,7 @@
                     <td>{{ p.correo || '-' }}</td>
                     <td class="dash-table-center">
                       <button
-                        v-if="p.accesoKind !== 'none' && canTogglePersonalAcceso && p.usuarioId"
+                        v-if="p.accesoKind !== 'none' && p.accesoKind !== 'admin' && canTogglePersonalAcceso && p.usuarioId"
                         type="button"
                         class="dash-status dash-status--toggle"
                         :class="
@@ -2488,7 +2770,7 @@
                         {{ p.accesoLabel }}
                       </button>
                       <button
-                        v-else-if="p.accesoKind === 'none' && canEditPersonal"
+                        v-else-if="p.accesoKind === 'none' && p.puedeCrearUsuarioNormal && canEditPersonal"
                         type="button"
                         class="dash-status dash-status--off dash-status--toggle"
                         title="Crear acceso de usuario"
@@ -2502,7 +2784,8 @@
                         :class="{
                           'dash-status--ok': p.accesoKind === 'activo',
                           'dash-status--danger': p.accesoKind === 'inactivo',
-                          'dash-status--off': p.accesoKind === 'none'
+                          'dash-status--off': p.accesoKind === 'none',
+                          'dash-status--info': p.accesoKind === 'admin'
                         }"
                       >
                         {{ p.accesoLabel }}
@@ -2519,7 +2802,7 @@
                         <i class="fa-solid fa-pen" aria-hidden="true"></i>
                       </button>
                       <button
-                        v-if="canEditPersonal && !p.tieneUsuario"
+                        v-if="canEditPersonal && p.puedeCrearUsuarioNormal"
                         class="dash-btn-icon"
                         type="button"
                         title="Crear usuario"
@@ -2691,9 +2974,11 @@
                   <div class="dash-field">
                     <label>Asignada A (Titular)</label>
                     <input
-                      v-model="tarjetaForm.titular"
+                      :value="tarjetaForm.titular"
                       type="text"
+                      maxlength="100"
                       placeholder="Ej: Juan Sanhueza / Caja Chica"
+                      @input="onTarjetaTitularInput"
                     />
                   </div>
                 </div>
@@ -2890,6 +3175,7 @@ import {
   validarRutChileno
 } from '../utils/rut'
 import * as api from '../api/resources'
+import { apiUrl } from '../api/client'
 import { persistSessionProfile } from '../api/auth'
 import {
   buildCartola,
@@ -2906,6 +3192,7 @@ import {
   mapUsuario,
   origenFromMetodo,
   parseMontoInput,
+  formatMontoInputCl,
   rolApiFromUi,
   rolUiFromApi
 } from '../api/mappers'
@@ -2938,6 +3225,7 @@ const modalPersonal = reactive({
   open: false,
   id: null,
   usuarioId: null,
+  esAdmin: false,
   rut: '',
   nombre: '',
   cargo: '',
@@ -3170,7 +3458,7 @@ const activeModule = ref('caja')
 
 const ALL_CAJA_TABS = [
   { id: 'rendicion', label: 'Rendición de Gastos' },
-  { id: 'asignacion', label: 'Asignación a Conductor' },
+  { id: 'asignacion', label: 'Anticipo' },
   { id: 'informes', label: 'Informes y Cartola' },
   { id: 'cajas', label: 'Cajas' },
   { id: 'centros-costo', label: 'Centro de cobro / empresa' }
@@ -3212,13 +3500,23 @@ const gasto = reactive({
 
 const gastoComprobanteFile = ref(null)
 const gastoFileInputEl = ref(null)
+const anticipoComprobanteFile = ref(null)
+const anticipoFileInputEl = ref(null)
 const modalVerificar = reactive({
   open: false,
   phase: 'loading', // loading | error | ok
   error: '',
   errores: []
 })
+const pendingVerifyKind = ref(null)
 let pendingGastoSave = null
+let pendingAnticipoSave = null
+
+const verifyComprobanteFile = computed(() =>
+  pendingVerifyKind.value === 'anticipo'
+    ? anticipoComprobanteFile.value
+    : gastoComprobanteFile.value
+)
 
 const gastoTrabajadorQuery = ref('')
 const gastoTrabajadorOpen = ref(false)
@@ -3233,14 +3531,14 @@ const anticipoFormOpen = ref(false)
 const anticipoBusqueda = ref('')
 const anticipoFiltroCaja = ref('')
 const anticipoFiltroMes = ref('')
+const anticipoTrabajadorQuery = ref('')
+const anticipoTrabajadorOpen = ref(false)
+const anticipoTrabajadorHighlight = ref(0)
 
 const adminFormOpen = ref(false)
 const tarjetaFormOpen = ref(false)
 
-const palabrasDescripcion = computed(() => {
-  const palabras = gasto.descripcion.trim().split(/\s+/).filter((w) => w.length > 0)
-  return gasto.descripcion.trim() ? palabras.length : 0
-})
+const letrasDescripcion = computed(() => String(gasto.descripcion || '').length)
 
 const nombreSesion = computed(() => user.value?.nombre || 'Usuario Demo')
 
@@ -3290,11 +3588,7 @@ const fuerzaVisibilidadTodos = computed(
 
 const comentarioRequeridoAdmin = computed(() => fuerzaVisibilidadTodos.value)
 
-const palabrasComentarioAdmin = computed(() => {
-  const texto = modalResponder.comentario.trim()
-  if (!texto) return 0
-  return texto.split(/\s+/).filter((w) => w.length > 0).length
-})
+const letrasComentarioAdmin = computed(() => String(modalResponder.comentario || '').length)
 
 watch(
   () => modalResponder.estado,
@@ -3312,12 +3606,22 @@ watch(
 const asignacion = reactive({
   fondo: '',
   fecha: new Date().toISOString().slice(0, 10),
-  conductorId: '',
+  trabajadorId: '',
   doc: '',
   observaciones: '',
   monto: '',
   comprobanteNombre: ''
 })
+
+const letrasObservacionAnticipo = computed(
+  () => String(asignacion.observaciones || '').length
+)
+
+const verifyComprobanteNombre = computed(() =>
+  pendingVerifyKind.value === 'anticipo'
+    ? asignacion.comprobanteNombre
+    : gasto.comprobanteNombre
+)
 
 const modalAsignarCajas = reactive({
   open: false,
@@ -3585,6 +3889,97 @@ function onGastoTrabajadorBlur() {
       } else {
         syncGastoTrabajadorQueryFromSelection()
       }
+    }
+  }, 120)
+}
+
+function labelAnticipoTrabajador(t) {
+  const rut = formatRut(t.rut || '')
+  return rut ? `${t.nombre} · ${rut}` : t.nombre
+}
+
+const anticipoTrabajadorOpciones = computed(() => {
+  const q = anticipoTrabajadorQuery.value
+  const opts = []
+  const seen = new Set()
+  for (const t of trabajadores.value) {
+    const id = String(t.id)
+    if (seen.has(id)) continue
+    seen.add(id)
+    opts.push({
+      id,
+      nombre: t.nombre,
+      rut: t.rut || '',
+      label: labelAnticipoTrabajador(t)
+    })
+  }
+  if (!String(q || '').trim()) return opts
+  return opts.filter((o) => coincideNombreORut(o, q))
+})
+
+function onAnticipoTrabajadorFocus(e) {
+  anticipoTrabajadorOpen.value = true
+  anticipoTrabajadorHighlight.value = 0
+  e?.target?.select?.()
+}
+
+function onAnticipoTrabajadorQueryInput() {
+  anticipoTrabajadorOpen.value = true
+  anticipoTrabajadorHighlight.value = 0
+  if (!anticipoTrabajadorQuery.value.trim()) {
+    asignacion.trabajadorId = ''
+  }
+}
+
+function highlightAnticipoTrabajador(delta) {
+  const n = anticipoTrabajadorOpciones.value.length
+  if (!n) return
+  anticipoTrabajadorOpen.value = true
+  anticipoTrabajadorHighlight.value = (anticipoTrabajadorHighlight.value + delta + n) % n
+}
+
+function confirmAnticipoTrabajadorHighlight() {
+  const opt = anticipoTrabajadorOpciones.value[anticipoTrabajadorHighlight.value]
+  if (opt) selectAnticipoTrabajador(opt)
+}
+
+function selectAnticipoTrabajador(opt) {
+  if (!opt) return
+  asignacion.trabajadorId = opt.id
+  anticipoTrabajadorQuery.value = opt.label
+  anticipoTrabajadorOpen.value = false
+  anticipoTrabajadorHighlight.value = 0
+}
+
+function syncAnticipoTrabajadorQueryFromSelection() {
+  const t = trabajadores.value.find((x) => String(x.id) === String(asignacion.trabajadorId))
+  anticipoTrabajadorQuery.value = t ? labelAnticipoTrabajador(t) : ''
+}
+
+function onAnticipoTrabajadorBlur() {
+  setTimeout(() => {
+    anticipoTrabajadorOpen.value = false
+    if (!asignacion.trabajadorId) {
+      anticipoTrabajadorQuery.value = ''
+      return
+    }
+    const selected = trabajadores.value.find(
+      (x) => String(x.id) === String(asignacion.trabajadorId)
+    )
+    if (!selected) {
+      asignacion.trabajadorId = ''
+      anticipoTrabajadorQuery.value = ''
+      return
+    }
+    const selectedLabel = labelAnticipoTrabajador(selected)
+    if (anticipoTrabajadorQuery.value.trim().toLowerCase() !== selectedLabel.toLowerCase()) {
+      const match = anticipoTrabajadorOpciones.value.find(
+        (o) =>
+          o.nombre.toLowerCase() === anticipoTrabajadorQuery.value.trim().toLowerCase() ||
+          o.label.toLowerCase() === anticipoTrabajadorQuery.value.trim().toLowerCase()
+      )
+      if (match) selectAnticipoTrabajador(match)
+      else syncAnticipoTrabajadorQueryFromSelection()
     }
   }, 120)
 }
@@ -4079,9 +4474,9 @@ const movimientosFiltrados = computed(() =>
   )
 )
 
-function matchAnticipoFiltros({ nombre, cajaGroupKey, fecha }) {
-  const q = anticipoBusqueda.value.trim().toLowerCase()
-  if (q && !String(nombre || '').toLowerCase().includes(q)) return false
+function matchAnticipoFiltros({ nombre, rut, cajaGroupKey, fecha }) {
+  const q = anticipoBusqueda.value.trim()
+  if (q && !coincideNombreORut({ nombre, rut }, q)) return false
   if (anticipoFiltroCaja.value) {
     if (!cajaGroupKey || cajaGroupKey !== anticipoFiltroCaja.value) return false
   }
@@ -4092,13 +4487,15 @@ function matchAnticipoFiltros({ nombre, cajaGroupKey, fecha }) {
 }
 
 const asignacionesFiltradas = computed(() =>
-  asignaciones.value.filter((a) =>
-    matchAnticipoFiltros({
+  asignaciones.value.filter((a) => {
+    const trab = trabajadores.value.find((t) => String(t.id) === String(a.trabajadorId))
+    return matchAnticipoFiltros({
       nombre: a.conductor,
+      rut: trab?.rut || '',
       cajaGroupKey: a.cajaGroupKey || a.fondo,
       fecha: a.fecha
     })
-  )
+  })
 )
 
 function parseMontoNumber(montoStr) {
@@ -4138,6 +4535,24 @@ const informeResultado = reactive({
 })
 
 const cartola = ref([])
+const cartolaAccordionOpen = reactive({})
+
+const modalHistorialCartola = reactive({
+  open: false,
+  doc: '',
+  tipo: '',
+  fecha: '',
+  responsable: '',
+  monto: '',
+  pago: '',
+  docto: '',
+  estado: '',
+  estadoClass: '',
+  intento: 1,
+  detalle: '',
+  observacionAdmin: '',
+  comprobanteNombre: ''
+})
 
 const cartolaFiltrada = computed(() =>
   cartola.value.filter((row) => {
@@ -4148,6 +4563,33 @@ const cartolaFiltrada = computed(() =>
     return true
   })
 )
+
+const cartolaPorCaja = computed(() => {
+  const map = new Map()
+  for (const row of cartolaFiltrada.value) {
+    const key = row.cajaGroupKey || '__sin_caja__'
+    if (!map.has(key)) map.set(key, [])
+    map.get(key).push(row)
+  }
+  const grupos = [...map.entries()].map(([key, rows]) => {
+    let abono = 0
+    let cargo = 0
+    for (const row of rows) {
+      abono += parseMontoNumber(row.abono)
+      cargo += parseMontoNumber(row.cargo)
+    }
+    return {
+      key,
+      titulo: key === '__sin_caja__' ? 'Sin caja' : labelCajaGroup(key),
+      rows,
+      totales: {
+        abono: formatMonto(abono),
+        cargo: formatMonto(cargo)
+      }
+    }
+  })
+  return grupos.sort((a, b) => a.titulo.localeCompare(b.titulo, 'es'))
+})
 
 const cartolaTotales = computed(() => {
   let abono = 0
@@ -4191,10 +4633,21 @@ function onGastoFile(event) {
   gasto.comprobanteNombre = file ? file.name : ''
 }
 
+function onAsignacionFile(event) {
+  const file = event.target.files?.[0] || null
+  anticipoComprobanteFile.value = file
+  asignacion.comprobanteNombre = file ? file.name : ''
+}
+
 function onVerificarReplaceFile(event) {
   const file = event.target.files?.[0] || null
-  gastoComprobanteFile.value = file
-  gasto.comprobanteNombre = file ? file.name : ''
+  if (pendingVerifyKind.value === 'anticipo') {
+    anticipoComprobanteFile.value = file
+    asignacion.comprobanteNombre = file ? file.name : ''
+  } else {
+    gastoComprobanteFile.value = file
+    gasto.comprobanteNombre = file ? file.name : ''
+  }
 }
 
 function sleep(ms) {
@@ -4207,21 +4660,30 @@ function onCloseModalVerificar() {
   modalVerificar.phase = 'loading'
   modalVerificar.error = ''
   modalVerificar.errores = []
+  pendingVerifyKind.value = null
   pendingGastoSave = null
+  pendingAnticipoSave = null
 }
 
 async function verificarComprobanteConIa() {
-  if (!gastoComprobanteFile.value) {
+  const file = verifyComprobanteFile.value
+  if (!file) {
     throw Object.assign(new Error('Debes adjuntar un comprobante (PDF, PNG o JPG).'), {
       errores: ['Debes adjuntar un comprobante (PDF, PNG o JPG).']
     })
   }
   const fd = new FormData()
-  fd.append('comprobante', gastoComprobanteFile.value)
-  fd.append('monto', String(parseMontoInput(gasto.monto) || gasto.monto || ''))
-  fd.append('tipo_documento', gasto.tipo)
-  if (gasto.tipo === 'Factura') {
-    fd.append('numero_documento', gasto.numero.trim())
+  fd.append('comprobante', file)
+
+  if (pendingVerifyKind.value === 'anticipo') {
+    fd.append('monto', String(parseMontoInput(asignacion.monto) || asignacion.monto || ''))
+    fd.append('tipo_documento', 'Vale')
+  } else {
+    fd.append('monto', String(parseMontoInput(gasto.monto) || gasto.monto || ''))
+    fd.append('tipo_documento', gasto.tipo)
+    if (gasto.tipo === 'Factura') {
+      fd.append('numero_documento', gasto.numero.trim())
+    }
   }
   return api.verificarComprobante(fd)
 }
@@ -4246,15 +4708,29 @@ async function ejecutarVerificacionYGuardado() {
     }
 
     modalVerificar.phase = 'ok'
-    const payload = {
-      ...pendingGastoSave,
-      comprobante_url: verifyResult.comprobante_url
+    if (pendingVerifyKind.value === 'anticipo') {
+      if (!pendingAnticipoSave) throw new Error('No hay anticipo pendiente de guardar')
+      await api.createAnticipo({
+        ...pendingAnticipoSave,
+        comprobante_url: verifyResult.comprobante_url
+      })
+      await loadDashboardData()
+      modalVerificar.open = false
+      pendingVerifyKind.value = null
+      pendingAnticipoSave = null
+      closeFormAnticipo()
+    } else {
+      if (!pendingGastoSave) throw new Error('No hay rendición pendiente de guardar')
+      await api.createRendicion({
+        ...pendingGastoSave,
+        comprobante_url: verifyResult.comprobante_url
+      })
+      await loadDashboardData()
+      modalVerificar.open = false
+      pendingVerifyKind.value = null
+      pendingGastoSave = null
+      closeFormGasto()
     }
-    await api.createRendicion(payload)
-    await loadDashboardData()
-    modalVerificar.open = false
-    pendingGastoSave = null
-    closeFormGasto()
   } catch (err) {
     modalVerificar.phase = 'error'
     modalVerificar.error =
@@ -4264,22 +4740,65 @@ async function ejecutarVerificacionYGuardado() {
 }
 
 async function retryVerificarYGuardar() {
-  if (!gastoComprobanteFile.value || !pendingGastoSave) return
+  if (!verifyComprobanteFile.value) return
+  if (pendingVerifyKind.value === 'anticipo' && !pendingAnticipoSave) return
+  if (pendingVerifyKind.value !== 'anticipo' && !pendingGastoSave) return
   await ejecutarVerificacionYGuardado()
-}
-
-function onAsignacionFile(event) {
-  const file = event.target.files?.[0]
-  asignacion.comprobanteNombre = file ? file.name : ''
 }
 
 function labelAdjunto(nombre) {
   const name = String(nombre || '')
-  const ext = name.split('.').pop()?.toUpperCase() || ''
+  const base = name.split('/').pop() || name
+  const ext = base.split('.').pop()?.toUpperCase() || ''
   if (ext === 'PDF') return 'PDF'
   if (ext === 'PNG' || ext === 'JPG' || ext === 'JPEG') return ext === 'JPEG' ? 'JPG' : ext
-  if (name.length <= 14) return name
-  return `${name.slice(0, 10)}…`
+  if (base.length <= 14) return base
+  return `${base.slice(0, 10)}…`
+}
+
+function openComprobanteArchivo(pathOrName) {
+  const raw = String(pathOrName || '').trim()
+  if (!raw) return
+  const rel = raw.replace(/^\/+/, '')
+  const url = apiUrl(`/api/files/${rel}`)
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+function rowTieneHistorial(row) {
+  if (!row || row.tipoKey !== 'rendicion') return false
+  if (row.observacionAdmin) return true
+  if (Number(row.intento) > 1) return true
+  return ['Devuelto', 'Por Corregir', 'Aprobado', 'Rechazado'].includes(row.estado)
+}
+
+function isCartolaAccordionOpen(key) {
+  return cartolaAccordionOpen[key] !== false
+}
+
+function toggleCartolaAccordion(key) {
+  cartolaAccordionOpen[key] = !isCartolaAccordionOpen(key)
+}
+
+function openModalHistorialCartola(row) {
+  if (!row) return
+  modalHistorialCartola.open = true
+  modalHistorialCartola.doc = row.doc || ''
+  modalHistorialCartola.tipo = row.tipo || ''
+  modalHistorialCartola.fecha = row.fecha || ''
+  modalHistorialCartola.responsable = row.responsable || ''
+  modalHistorialCartola.monto = row.cargo || row.abono || ''
+  modalHistorialCartola.pago = row.pago || ''
+  modalHistorialCartola.docto = row.docto || ''
+  modalHistorialCartola.estado = row.estado || ''
+  modalHistorialCartola.estadoClass = row.estadoClass || ''
+  modalHistorialCartola.intento = Number(row.intento) || 1
+  modalHistorialCartola.detalle = row.detalle || ''
+  modalHistorialCartola.observacionAdmin = row.observacionAdmin || ''
+  modalHistorialCartola.comprobanteNombre = row.comprobanteNombre || ''
+}
+
+function closeModalHistorialCartola() {
+  modalHistorialCartola.open = false
 }
 
 function openModalResponder(row) {
@@ -4356,7 +4875,7 @@ function openModalCorregir(row) {
   modalCorregir.prevMonto = row.monto
   modalCorregir.prevDescripcion = row.descripcion || '-'
   modalCorregir.tipo = tipoBase
-  modalCorregir.monto = montoNum || ''
+  modalCorregir.monto = formatMontoInputCl(montoNum || '')
   modalCorregir.metodoPago = row.metodoPago || 'efectivo'
   modalCorregir.tarjetaUltimos4 = ''
   modalCorregir.descripcion = row.descripcion || ''
@@ -4372,6 +4891,24 @@ function closeModalCorregir() {
 function onCorreccionFile(event) {
   const file = event.target.files?.[0]
   modalCorregir.comprobanteNombre = file ? file.name : ''
+}
+
+function onGastoMontoInput(event) {
+  const formatted = formatMontoInputCl(event.target.value)
+  gasto.monto = formatted
+  event.target.value = formatted
+}
+
+function onCorregirMontoInput(event) {
+  const formatted = formatMontoInputCl(event.target.value)
+  modalCorregir.monto = formatted
+  event.target.value = formatted
+}
+
+function onAsignacionMontoInput(event) {
+  const formatted = formatMontoInputCl(event.target.value)
+  asignacion.monto = formatted
+  event.target.value = formatted
 }
 
 function formatMontoCl(value) {
@@ -4460,7 +4997,7 @@ function selectModule(moduleName) {
 }
 
 async function onSaveGasto() {
-  if (palabrasDescripcion.value > 500) return
+  if (letrasDescripcion.value > 500) return
   if (gasto.tipo === 'Factura' && !gasto.numero.trim() && !canSkipComprobanteIa.value) return
   if (!gasto.cajaGroupKey) return
   if (!gastoComprobanteFile.value) {
@@ -4504,6 +5041,7 @@ async function onSaveGasto() {
   }
 
   saveError.value = ''
+  pendingVerifyKind.value = 'gasto'
   pendingGastoSave = {
     caja_id: cajaId,
     trabajador_id: trabajadorId,
@@ -4550,11 +5088,16 @@ function closeFormGasto() {
 }
 
 function resetAsignacionFormFields() {
-  asignacion.conductorId = ''
+  asignacion.trabajadorId = ''
   asignacion.doc = ''
   asignacion.observaciones = ''
   asignacion.monto = ''
   asignacion.comprobanteNombre = ''
+  anticipoComprobanteFile.value = null
+  if (anticipoFileInputEl.value) anticipoFileInputEl.value.value = ''
+  anticipoTrabajadorQuery.value = ''
+  anticipoTrabajadorOpen.value = false
+  anticipoTrabajadorHighlight.value = 0
   if (cajaActiva.value) asignacion.fondo = cajaActiva.value
 }
 
@@ -4573,7 +5116,12 @@ function closeFormAnticipo() {
 }
 
 async function onSaveAsignacion() {
-  if (!asignacion.conductorId || !asignacion.monto) return
+  if (!asignacion.trabajadorId || !asignacion.monto) return
+  if (letrasObservacionAnticipo.value > 500) return
+  if (!anticipoComprobanteFile.value) {
+    saveError.value = 'El comprobante es obligatorio. Adjunta PDF, PNG o JPG.'
+    return
+  }
 
   const cajaId =
     findCajaIdByGroupKey(asignacion.fondo) || findCajaIdForGasto(asignacion.fondo)
@@ -4582,22 +5130,23 @@ async function onSaveAsignacion() {
     return
   }
 
-  try {
-    saveError.value = ''
-    await api.createAnticipo({
-      caja_id: cajaId,
-      trabajador_id: Number(asignacion.conductorId),
-      fecha: asignacion.fecha,
-      monto: parseMontoInput(asignacion.monto),
-      observacion: asignacion.observaciones.trim() || null,
-      comprobante_url: asignacion.comprobanteNombre || null,
-      codigo_vale: asignacion.doc.trim() || undefined
-    })
-    await loadDashboardData()
-    closeFormAnticipo()
-  } catch (err) {
-    saveError.value = err?.message || 'No se pudo guardar el anticipo'
+  const montoNum = parseMontoInput(asignacion.monto)
+  if (!Number.isFinite(montoNum) || montoNum <= 0) {
+    saveError.value = 'Ingresa un monto válido.'
+    return
   }
+
+  saveError.value = ''
+  pendingVerifyKind.value = 'anticipo'
+  pendingAnticipoSave = {
+    caja_id: cajaId,
+    trabajador_id: Number(asignacion.trabajadorId),
+    fecha: asignacion.fecha,
+    monto: montoNum,
+    observacion: asignacion.observaciones.trim() || null,
+    codigo_vale: asignacion.doc.trim() || undefined
+  }
+  await ejecutarVerificacionYGuardado()
 }
 
 function openModalAsignarCajas(t) {
@@ -4924,6 +5473,7 @@ function resetPersonalModal() {
   modalPersonal.open = false
   modalPersonal.id = null
   modalPersonal.usuarioId = null
+  modalPersonal.esAdmin = false
   modalPersonal.rut = ''
   modalPersonal.nombre = ''
   modalPersonal.cargo = ''
@@ -4953,11 +5503,12 @@ function openModalPersonalEdit(p) {
   modalPersonal.open = true
   modalPersonal.id = p.id
   modalPersonal.usuarioId = p.usuarioId || null
+  modalPersonal.esAdmin = Boolean(p.esAdmin)
   modalPersonal.rut = formatRut(p.rut || '')
-  modalPersonal.nombre = p.nombre || ''
-  modalPersonal.cargo = p.cargo === '-' ? '' : p.cargo || ''
+  modalPersonal.nombre = sanitizeTextoLibre(p.nombre || '')
+  modalPersonal.cargo = sanitizeTextoLibre(p.cargo === '-' ? '' : p.cargo || '')
   modalPersonal.cajas = [...(p.cajasAsignadas || [])]
-  modalPersonal.crearUsuario = Boolean(p.usuarioId)
+  modalPersonal.crearUsuario = Boolean(p.usuarioId) && !p.esAdmin
   modalPersonal.correo = p.correo || ''
   modalPersonal.rol = p.usuarioRol || 'USER_RENDIDOR'
   modalPersonal.estado =
@@ -4968,7 +5519,7 @@ function openModalPersonalEdit(p) {
 }
 
 function openModalPersonalCrearUsuario(p) {
-  if (!canEditPersonal.value || !p?.id) return
+  if (!canEditPersonal.value || !p?.id || p.esAdmin || !p.puedeCrearUsuarioNormal) return
   openModalPersonalEdit(p)
   modalPersonal.crearUsuario = true
   modalPersonal.passType = 'rut'
@@ -4983,7 +5534,7 @@ async function onSavePersonal() {
     return
   }
 
-  const crearUsuario = Boolean(modalPersonal.crearUsuario)
+  const crearUsuario = Boolean(modalPersonal.crearUsuario) && !modalPersonal.esAdmin
   let passwordTemporal = null
   if (crearUsuario) {
     if (!modalPersonal.correo.trim()) {
@@ -5009,8 +5560,8 @@ async function onSavePersonal() {
 
   const payload = {
     rut: rutLimpio,
-    nombre_completo: modalPersonal.nombre.trim(),
-    cargo: modalPersonal.cargo.trim() || null,
+    nombre_completo: sanitizeTextoLibre(modalPersonal.nombre).trim(),
+    cargo: sanitizeTextoLibre(modalPersonal.cargo).trim() || null,
     caja_ids: [...modalPersonal.cajas],
     crear_usuario: crearUsuario && !modalPersonal.usuarioId
   }
@@ -5304,7 +5855,7 @@ function onEditTarjeta(t) {
   tarjetaForm.tipo = t.tipo === 'Débito' || t.tipo === 'Debito' ? 'Débito' : 'Crédito'
   tarjetaForm.ultimos4 = t.ultimos4 || ''
   tarjetaForm.banco = t.banco === '-' ? '' : t.banco || ''
-  tarjetaForm.titular = t.titular === '-' ? '' : t.titular || ''
+  tarjetaForm.titular = sanitizeTextoLibre(t.titular === '-' ? '' : t.titular || '')
   tarjetaFormOpen.value = true
 }
 
@@ -5397,16 +5948,36 @@ async function onSaveAdmin() {
   }
 }
 
+/** Letras, números, espacios, / y - ; máx. 100. */
+function sanitizeTextoLibre(value) {
+  return String(value || '')
+    .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ0-9 /\-]/g, '')
+    .slice(0, 100)
+}
+
+function onPersonalNombreInput(event) {
+  modalPersonal.nombre = sanitizeTextoLibre(event.target.value)
+}
+
+function onPersonalCargoInput(event) {
+  modalPersonal.cargo = sanitizeTextoLibre(event.target.value)
+}
+
+function onTarjetaTitularInput(event) {
+  tarjetaForm.titular = sanitizeTextoLibre(event.target.value)
+}
+
 async function onSaveTarjeta() {
   if (!tarjetaForm.alias.trim() || !tarjetaForm.ultimos4.trim()) return
   try {
     saveError.value = ''
+    const titular = sanitizeTextoLibre(tarjetaForm.titular).trim()
     const payload = {
       alias: tarjetaForm.alias.trim(),
       tipo: tarjetaForm.tipo === 'Débito' ? 'Debito' : 'Credito',
       ultimos_digitos: tarjetaForm.ultimos4.trim(),
       banco: tarjetaForm.banco.trim() || null,
-      titular_nombre: tarjetaForm.titular.trim() || null,
+      titular_nombre: titular || null,
       estado: 'activa'
     }
     if (tarjetaForm.editId) {
