@@ -19,15 +19,62 @@ async function assertCajaAsignadaATrabajador(trabajadorId, cajaId) {
   return Boolean(rows[0])
 }
 
+async function resolveMetaComprobante({ caja_id, trabajador_id, fecha }) {
+  let caja = ''
+  let centroCobro = 'sin_cc'
+  let trabajador = ''
+  let mes = fecha || ''
+
+  if (caja_id) {
+    const rows = await query(
+      `SELECT c.clave_interna, c.nombre_exterior,
+              COALESCE(cc.nombre, 'sin_cc') AS centro_cobro_nombre
+       FROM cajas_chicas c
+       LEFT JOIN centros_costo cc ON cc.id = c.centro_cobro_id AND cc.is_deleted = FALSE
+       WHERE c.id = ? AND c.is_deleted = FALSE
+       LIMIT 1`,
+      [Number(caja_id)]
+    )
+    if (rows[0]) {
+      caja = rows[0].clave_interna || rows[0].nombre_exterior || ''
+      centroCobro = rows[0].centro_cobro_nombre || 'sin_cc'
+    }
+  }
+
+  if (trabajador_id) {
+    const rows = await query(
+      `SELECT COALESCE(NULLIF(TRIM(nombre_completo), ''), CONCAT('Trabajador_', id)) AS nombre
+       FROM trabajadores
+       WHERE id = ?
+       LIMIT 1`,
+      [Number(trabajador_id)]
+    )
+    if (rows[0]) trabajador = rows[0].nombre || ''
+  }
+
+  return { caja, centroCobro, trabajador, mes }
+}
+
 async function verificarComprobanteHandler(req, res) {
   try {
     const body = req.body || {}
+    const meta = await resolveMetaComprobante({
+      caja_id: body.caja_id,
+      trabajador_id: body.trabajador_id,
+      fecha: body.fecha || body.fecha_documento
+    })
+
     const result = await guardarYVerificarComprobante({
       file: req.file,
       montoEsperado: body.monto,
       tipoDocumento: body.tipo_documento,
       numeroDocumento: body.numero_documento,
-      skipIaVerify: canSkipComprobanteVerify(req.user)
+      skipIaVerify: canSkipComprobanteVerify(req.user),
+      tipoMovimiento: body.tipo_movimiento || 'gasto',
+      mes: meta.mes || body.mes,
+      centroCobro: body.centro_cobro || meta.centroCobro,
+      caja: body.caja || meta.caja,
+      trabajador: body.trabajador || meta.trabajador
     })
 
     if (!result.ok) {

@@ -1,9 +1,13 @@
 'use strict'
 
-const fs = require('fs')
 const path = require('path')
-const { storagePath } = require('../config/storage')
 const { procesarDocumentoConGemini } = require('./geminiClient')
+const {
+  buildComprobanteRelPath,
+  writeComprobanteFile,
+  removeComprobanteFile,
+  normalizeTipoMovimiento
+} = require('./comprobanteStorage')
 
 const ALLOWED_MIME = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'])
 
@@ -34,14 +38,6 @@ function numerosCoinciden(esperado, detectado) {
   return a === b || a.replace(/^0+/, '') === b.replace(/^0+/, '')
 }
 
-function safeFilename(originalName) {
-  const base = path
-    .basename(String(originalName || 'comprobante'))
-    .replace(/[^a-zA-Z0-9._-]/g, '_')
-    .slice(0, 80)
-  return `${Date.now()}_${base || 'comprobante'}`
-}
-
 function resolveMime(file) {
   const mime = String(file?.mimetype || '').toLowerCase()
   if (ALLOWED_MIME.has(mime)) return mime === 'image/jpg' ? 'image/jpeg' : mime
@@ -54,7 +50,7 @@ function resolveMime(file) {
 
 function buildPrompt({ tipoDocumento, montoEsperado, numeroEsperado }) {
   const esFactura = String(tipoDocumento || '') === 'Factura'
-  return `Eres un validador de comprobantes chilenos (boleta, factura, ticket de peaje u otro).
+  return `Eres un validador de comprobantes chilenos (boleta, factura, peaje, guía de despacho u otro).
 Analiza el documento adjunto y responde SOLO un JSON con esta forma exacta:
 {
   "monto_total": number|null,
@@ -77,17 +73,20 @@ ${esFactura ? `- Número de factura declarado: ${numeroEsperado || '(vacío)'}.`
 }
 
 /**
- * Guarda el archivo en storage/comprobantes y valida con IA.
- * @param {object} opts
- * @param {boolean} [opts.skipIaVerify] - Dev: solo guarda, no valida monto/N° con Gemini
- * @returns {{ ok: boolean, comprobante_url?: string, errores: string[], detalle: object }}
+ * Guarda el archivo en storage/{mes}/{cc}/{caja}/{gasto|asignacion|devolucion}/
+ * con nombre caja_trabajador_{mov}_{docto}_{stamp}.ext y valida con IA (salvo bypass).
  */
 async function guardarYVerificarComprobante({
   file,
   montoEsperado,
   tipoDocumento,
   numeroDocumento,
-  skipIaVerify = false
+  skipIaVerify = false,
+  tipoMovimiento = 'gasto',
+  mes = '',
+  centroCobro = '',
+  caja = '',
+  trabajador = ''
 }) {
   const errores = []
   if (!file?.buffer?.length) {
@@ -107,6 +106,7 @@ async function guardarYVerificarComprobante({
     }
   }
 
+  const mov = normalizeTipoMovimiento(tipoMovimiento)
   const montoNorm = normalizeMonto(montoEsperado)
   if (montoNorm == null || montoNorm <= 0) {
     return {
@@ -118,7 +118,7 @@ async function guardarYVerificarComprobante({
 
   const esFactura = String(tipoDocumento || '') === 'Factura'
   const numeroEsperado = String(numeroDocumento || '').trim()
-  if (esFactura && !numeroEsperado && !skipIaVerify) {
+  if (esFactura && !numeroEsperado && !skipIaVerify && mov === 'gasto') {
     return {
       ok: false,
       errores: ['Para Factura debes ingresar el N° de documento.'],
@@ -126,22 +126,32 @@ async function guardarYVerificarComprobante({
     }
   }
 
-  const filename = safeFilename(file.originalname)
-  const relPath = path.join('comprobantes', filename)
-  const absPath = storagePath('comprobantes', filename)
-  fs.writeFileSync(absPath, file.buffer)
+  const { relPath } = buildComprobanteRelPath({
+    mes,
+    centroCobro,
+    caja,
+    trabajador,
+    tipoMovimiento: mov,
+    tipoDocumento,
+    file
+  })
+  writeComprobanteFile(relPath, file.buffer)
 
-  // Flag Dev: guardar archivo sin validar monto / N° con IA
-  if (skipIaVerify) {
+  // Flag Dev o devolución: guardar sin validar monto / N° con IA
+  const skipIa = skipIaVerify || mov === 'devolucion'
+  if (skipIa) {
     return {
       ok: true,
-      comprobante_url: relPath.replace(/\\/g, '/'),
+      comprobante_url: relPath,
       errores: [],
       detalle: {
-        bypass_ia: true,
+        bypass_ia: Boolean(skipIaVerify) || mov === 'devolucion',
         monto_detectado: null,
         numero_detectado: null,
-        notas: 'Verificación IA omitida (flag Dev COMPROBANTE_VERIFY_BYPASS).'
+        notas:
+          mov === 'devolucion'
+            ? 'Comprobante de devolución guardado sin validación IA de monto.'
+            : 'Verificación IA omitida (flag Dev COMPROBANTE_VERIFY_BYPASS).'
       }
     }
   }
@@ -160,11 +170,7 @@ async function guardarYVerificarComprobante({
     })
     parsed = result.parsed || {}
   } catch (err) {
-    try {
-      fs.unlinkSync(absPath)
-    } catch (_) {
-      /* ignore */
-    }
+    removeComprobanteFile(relPath)
     return {
       ok: false,
       errores: [
@@ -203,11 +209,7 @@ async function guardarYVerificarComprobante({
   }
 
   if (errores.length) {
-    try {
-      fs.unlinkSync(absPath)
-    } catch (_) {
-      /* ignore */
-    }
+    removeComprobanteFile(relPath)
     return {
       ok: false,
       errores,
@@ -221,7 +223,7 @@ async function guardarYVerificarComprobante({
 
   return {
     ok: true,
-    comprobante_url: relPath.replace(/\\/g, '/'),
+    comprobante_url: relPath,
     errores: [],
     detalle: {
       monto_detectado: montoDetectado,

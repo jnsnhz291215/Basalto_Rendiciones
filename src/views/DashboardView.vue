@@ -2087,9 +2087,14 @@
             </p>
           </div>
           <div class="dash-toolbar-actions">
-            <button class="dash-btn-excel" type="button">
-              <span>📥</span>
-              <span>Importar Excel</span>
+            <button
+              class="dash-btn-excel"
+              type="button"
+              title="Exporta a Excel solo lo filtrado / visible en pantalla"
+              @click="onExportarCartolaExcel"
+            >
+              <span>📤</span>
+              <span>Exportar Excel</span>
             </button>
             <button
               class="dash-btn-primary dash-btn-toggle-caja"
@@ -2252,25 +2257,69 @@
               <h3>{{ informeResultado.titulo }}</h3>
               <p>{{ informeResultado.periodo }}</p>
             </div>
-            <div class="dash-informe-result-actions">
-              <div class="dash-historial-filter">
-                <label class="dash-sr-only" for="cartola-mes">Mes</label>
-                <select
-                  id="cartola-mes"
-                  :value="filtrosInforme.mes"
-                  class="dash-historial-select dash-historial-select--mes"
-                  @change="onCartolaMesChange"
+            <span class="dash-informe-count">{{ informeResultado.total }}</span>
+          </div>
+
+          <div class="dash-cartola-filters">
+            <div class="dash-historial-filter">
+              <label class="dash-sr-only" for="cartola-cc">Centro de cobro</label>
+              <select
+                id="cartola-cc"
+                :value="filtrosInforme.centroCobroId"
+                class="dash-historial-select"
+                @change="onCartolaCcChange"
+              >
+                <option value="">Todos los CC</option>
+                <option v-for="cc in centrosCosto" :key="cc.id" :value="String(cc.id)">
+                  {{ cc.nombre }}
+                </option>
+              </select>
+            </div>
+            <div class="dash-historial-filter">
+              <label class="dash-sr-only" for="cartola-caja">Caja</label>
+              <select
+                id="cartola-caja"
+                :value="filtrosInforme.caja"
+                class="dash-historial-select"
+                @change="onCartolaCajaChange"
+              >
+                <option value="">Todas las cajas</option>
+                <option
+                  v-for="c in cajasOpcionesCartola"
+                  :key="c.groupKey"
+                  :value="c.groupKey"
                 >
-                  <option
-                    v-for="m in mesesCerradosOpciones"
-                    :key="m.value"
-                    :value="m.value"
-                  >
-                    {{ m.label }}
-                  </option>
-                </select>
-              </div>
-              <span class="dash-informe-count">{{ informeResultado.total }}</span>
+                  {{ c.label }}
+                </option>
+              </select>
+            </div>
+            <div class="dash-historial-filter">
+              <label class="dash-sr-only" for="cartola-mes">Mes</label>
+              <select
+                id="cartola-mes"
+                :value="filtrosInforme.mes"
+                class="dash-historial-select dash-historial-select--mes"
+                @change="onCartolaMesChange"
+              >
+                <option
+                  v-for="m in mesesCerradosOpciones"
+                  :key="m.value"
+                  :value="m.value"
+                >
+                  {{ m.label }}
+                </option>
+              </select>
+            </div>
+            <div class="dash-historial-search dash-cartola-search">
+              <label class="dash-sr-only" for="cartola-buscar">Buscar trabajador o RUT</label>
+              <input
+                id="cartola-buscar"
+                :value="filtrosInforme.busqueda"
+                type="search"
+                placeholder="Buscar trabajador o RUT…"
+                class="dash-search-input"
+                @input="onCartolaBusquedaInput"
+              />
             </div>
           </div>
 
@@ -3441,7 +3490,8 @@ import {
 } from '../utils/rut'
 import {
   descargarPlantillaAsignaciones,
-  descargarPlantillaGastos
+  descargarPlantillaGastos,
+  exportarCartolaVisible
 } from '../utils/excelPlantillas'
 import * as api from '../api/resources'
 import { apiUrl } from '../api/client'
@@ -3826,6 +3876,7 @@ const modalResponder = reactive({
   comentario: '',
   visibilidad: 'todos',
   comprobanteNombre: '',
+  comprobanteFile: null,
   campos: camposCorregirDefault()
 })
 
@@ -3848,6 +3899,7 @@ const modalCorregir = reactive({
   descripcion: '',
   respuesta: '',
   comprobanteNombre: '',
+  comprobanteFile: null,
   campos: camposCorregirDefault()
 })
 
@@ -3865,6 +3917,7 @@ watch(
     if (val === 'corregir' || val === 'rechazado') {
       modalResponder.visibilidad = 'todos'
       modalResponder.comprobanteNombre = ''
+      modalResponder.comprobanteFile = null
     }
     if (val !== 'corregir') {
       Object.assign(modalResponder.campos, camposCorregirDefault())
@@ -3927,6 +3980,7 @@ const informe = reactive({
   caja: '',
   mes: '2026-07',
   persona: '',
+  busqueda: '',
   tipos: informeTiposDefault()
 })
 
@@ -3935,6 +3989,7 @@ const filtrosInforme = reactive({
   caja: '',
   mes: '2026-07',
   persona: '',
+  busqueda: '',
   tipos: informeTiposDefault()
 })
 
@@ -4848,8 +4903,11 @@ const modalParcialMes = reactive({
   quien: '' // trabajador | empresa | ''
 })
 
-const cartolaFiltrada = computed(() =>
-  cartola.value.filter((row) => {
+const cartolaFiltrada = computed(() => {
+  const q = String(filtrosInforme.busqueda || '').trim().toLowerCase()
+  const rutQ = cleanRut(filtrosInforme.busqueda || '')
+
+  return cartola.value.filter((row) => {
     if (filtrosInforme.mes && row.mes !== filtrosInforme.mes) return false
     if (filtrosInforme.centroCobroId) {
       if (String(row.centroCobroId ?? '') !== String(filtrosInforme.centroCobroId)) return false
@@ -4857,9 +4915,25 @@ const cartolaFiltrada = computed(() =>
     if (filtrosInforme.caja && row.cajaGroupKey !== filtrosInforme.caja) return false
     if (!filtrosInforme.tipos[row.tipoKey]) return false
     if (filtrosInforme.persona && row.responsable !== filtrosInforme.persona) return false
+    if (q) {
+      const nombre = String(row.responsable || '').toLowerCase()
+      const rut = rutTrabajadorCartola(row.trabajadorId)
+      const matchNombre = nombre.includes(q)
+      const matchRut = rutQ.length >= 2 && rut.includes(rutQ)
+      if (!matchNombre && !matchRut) return false
+    }
     return true
   })
-)
+})
+
+function rutTrabajadorCartola(trabajadorId) {
+  if (trabajadorId == null || trabajadorId === '') return ''
+  const id = Number(trabajadorId)
+  const fromTrab = trabajadores.value.find((t) => Number(t.id) === id)
+  if (fromTrab?.rut) return cleanRut(fromTrab.rut)
+  const fromPersonal = personal.value.find((p) => Number(p.id) === id)
+  return cleanRut(fromPersonal?.rut || '')
+}
 
 function totalesFilasCartola(rows) {
   let abono = 0
@@ -4937,6 +5011,20 @@ const cartolaTotales = computed(() => totalesFilasCartola(cartolaFiltrada.value)
 
 const cajasOpcionesInforme = computed(() => {
   const ccId = informe.centroCobroId
+  const map = new Map()
+  for (const c of cajas.value) {
+    if (ccId && String(c.centroCobroId ?? '') !== String(ccId)) continue
+    if (!map.has(c.groupKey)) map.set(c.groupKey, c.displayName)
+  }
+  return [...map.entries()].map(([groupKey, displayName]) => ({
+    groupKey,
+    label: displayName
+  }))
+})
+
+/** Cajas del filtro rápido de cartola (según CC seleccionado en filtrosInforme) */
+const cajasOpcionesCartola = computed(() => {
+  const ccId = filtrosInforme.centroCobroId
   const map = new Map()
   for (const c of cajas.value) {
     if (ccId && String(c.centroCobroId ?? '') !== String(ccId)) continue
@@ -5032,11 +5120,21 @@ async function verificarComprobanteConIa() {
   fd.append('comprobante', file)
 
   if (pendingVerifyKind.value === 'anticipo') {
-    fd.append('monto', String(parseMontoInput(asignacion.monto) || asignacion.monto || ''))
+    const payload = pendingAnticipoSave || {}
+    fd.append('monto', String(payload.monto || parseMontoInput(asignacion.monto) || ''))
     fd.append('tipo_documento', 'Vale')
+    fd.append('tipo_movimiento', 'asignacion')
+    if (payload.caja_id) fd.append('caja_id', String(payload.caja_id))
+    if (payload.trabajador_id) fd.append('trabajador_id', String(payload.trabajador_id))
+    if (payload.fecha) fd.append('fecha', String(payload.fecha))
   } else {
-    fd.append('monto', String(parseMontoInput(gasto.monto) || gasto.monto || ''))
+    const payload = pendingGastoSave || {}
+    fd.append('monto', String(payload.monto || parseMontoInput(gasto.monto) || ''))
     fd.append('tipo_documento', gasto.tipo)
+    fd.append('tipo_movimiento', 'gasto')
+    if (payload.caja_id) fd.append('caja_id', String(payload.caja_id))
+    if (payload.trabajador_id) fd.append('trabajador_id', String(payload.trabajador_id))
+    if (payload.fecha_documento) fd.append('fecha', String(payload.fecha_documento))
     if (gasto.tipo === 'Factura') {
       fd.append('numero_documento', gasto.numero.trim())
     }
@@ -5301,6 +5399,7 @@ function openModalResponder(row) {
   modalResponder.comentario = ''
   modalResponder.visibilidad = 'todos'
   modalResponder.comprobanteNombre = ''
+  modalResponder.comprobanteFile = null
   Object.assign(modalResponder.campos, camposCorregirDefault())
 }
 
@@ -5309,7 +5408,8 @@ function closeModalResponder() {
 }
 
 function onRespuestaFile(event) {
-  const file = event.target.files?.[0]
+  const file = event.target.files?.[0] || null
+  modalResponder.comprobanteFile = file
   modalResponder.comprobanteNombre = file ? file.name : ''
 }
 
@@ -5329,11 +5429,29 @@ async function onSaveRespuesta() {
   let estado = 'Aprobado'
   if (modalResponder.estado === 'corregir') estado = 'Por Corregir'
   else if (modalResponder.estado === 'rechazado') estado = 'Rechazado'
-  else if (modalResponder.comprobanteNombre) estado = 'Devuelto'
+  else if (modalResponder.comprobanteFile) estado = 'Devuelto'
 
   const payload = { estado }
-  if (modalResponder.comprobanteNombre) {
-    payload.comprobante_url = modalResponder.comprobanteNombre
+  if (modalResponder.comprobanteFile) {
+    try {
+      const fd = new FormData()
+      fd.append('comprobante', modalResponder.comprobanteFile)
+      fd.append('monto', String(parseMontoNumber(row.monto) || 1))
+      fd.append('tipo_movimiento', 'devolucion')
+      fd.append('tipo_documento', 'Comprobante')
+      if (row.cajaId) fd.append('caja_id', String(row.cajaId))
+      if (row.trabajadorId) fd.append('trabajador_id', String(row.trabajadorId))
+      if (row.fechaSort) fd.append('fecha', String(row.fechaSort))
+      else if (row.fecha) fd.append('fecha', String(row.fecha))
+      const verifyResult = await api.verificarComprobante(fd)
+      if (!verifyResult?.ok || !verifyResult?.comprobante_url) {
+        throw new Error('No se pudo guardar el comprobante de devolución')
+      }
+      payload.comprobante_url = verifyResult.comprobante_url
+    } catch (err) {
+      saveError.value = err?.message || 'No se pudo subir el comprobante de devolución'
+      return
+    }
   }
   // Persistimos el comentario admin en descripción solo si no hay una (columna dedicada aún no existe)
   if (modalResponder.comentario.trim() && !row.descripcion) {
@@ -5376,6 +5494,7 @@ function openModalCorregir(row) {
   modalCorregir.descripcion = row.descripcion || ''
   modalCorregir.respuesta = ''
   modalCorregir.comprobanteNombre = ''
+  modalCorregir.comprobanteFile = null
   Object.assign(modalCorregir.campos, campos)
 }
 
@@ -5384,7 +5503,8 @@ function closeModalCorregir() {
 }
 
 function onCorreccionFile(event) {
-  const file = event.target.files?.[0]
+  const file = event.target.files?.[0] || null
+  modalCorregir.comprobanteFile = file
   modalCorregir.comprobanteNombre = file ? file.name : ''
 }
 
@@ -5459,8 +5579,32 @@ async function onSaveCorreccion() {
   if (campos.descripcion) {
     payload.descripcion = modalCorregir.descripcion.trim()
   }
-  if (campos.comprobante && modalCorregir.comprobanteNombre) {
-    payload.comprobante_url = modalCorregir.comprobanteNombre
+  if (campos.comprobante && modalCorregir.comprobanteFile) {
+    try {
+      const fd = new FormData()
+      fd.append('comprobante', modalCorregir.comprobanteFile)
+      fd.append(
+        'monto',
+        String(payload.monto || parseMontoNumber(row.monto) || parseMontoInput(modalCorregir.monto) || 1)
+      )
+      fd.append('tipo_movimiento', 'gasto')
+      fd.append('tipo_documento', modalCorregir.tipo || row.docto || 'Boleta')
+      if (modalCorregir.tipo === 'Factura' && modalCorregir.numeroLocked) {
+        fd.append('numero_documento', String(modalCorregir.numeroLocked))
+      }
+      if (row.cajaId) fd.append('caja_id', String(row.cajaId))
+      if (row.trabajadorId) fd.append('trabajador_id', String(row.trabajadorId))
+      if (row.fechaSort) fd.append('fecha', String(row.fechaSort))
+      else if (row.fecha) fd.append('fecha', String(row.fecha))
+      const verifyResult = await api.verificarComprobante(fd)
+      if (!verifyResult?.ok || !verifyResult?.comprobante_url) {
+        throw new Error('No se pudo guardar el comprobante corregido')
+      }
+      payload.comprobante_url = verifyResult.comprobante_url
+    } catch (err) {
+      saveError.value = err?.message || 'No se pudo subir el comprobante'
+      return
+    }
   }
 
   try {
@@ -5752,6 +5896,7 @@ function toggleFormInforme() {
   informe.caja = filtrosInforme.caja
   informe.mes = filtrosInforme.mes
   informe.persona = filtrosInforme.persona
+  informe.busqueda = filtrosInforme.busqueda
   Object.assign(informe.tipos, filtrosInforme.tipos)
   informeFormOpen.value = true
 }
@@ -5769,8 +5914,10 @@ function seleccionarTodosTiposInforme(value) {
 function syncInformeResultado() {
   const ccLabel = labelCentroCobroInforme(filtrosInforme.centroCobroId)
   const cajaLabel = filtrosInforme.caja ? labelCajaGroup(filtrosInforme.caja) : 'Todas'
+  const q = String(filtrosInforme.busqueda || '').trim()
+  const busquedaLabel = q ? ` | Buscar: ${q}` : ''
   informeResultado.titulo = 'Cartola Consolidada del Mes'
-  informeResultado.periodo = `Período: ${labelMesCerradoCompleto(filtrosInforme.mes)} | CC: ${ccLabel} | Caja: ${cajaLabel}`
+  informeResultado.periodo = `Período: ${labelMesCerradoCompleto(filtrosInforme.mes)} | CC: ${ccLabel} | Caja: ${cajaLabel}${busquedaLabel}`
   informeResultado.total = `${cartolaFiltrada.value.length} Registros`
 }
 
@@ -5782,11 +5929,58 @@ function onCartolaMesChange(event) {
   syncInformeResultado()
 }
 
+function onCartolaCcChange(event) {
+  const ccId = event?.target?.value || ''
+  filtrosInforme.centroCobroId = ccId
+  informe.centroCobroId = ccId
+  const ok = cajasOpcionesCartola.value.some((c) => c.groupKey === filtrosInforme.caja)
+  if (!ok) {
+    filtrosInforme.caja = ''
+    informe.caja = ''
+  }
+  syncInformeResultado()
+}
+
+function onCartolaCajaChange(event) {
+  const caja = event?.target?.value || ''
+  filtrosInforme.caja = caja
+  informe.caja = caja
+  syncInformeResultado()
+}
+
+function onCartolaBusquedaInput(event) {
+  const q = event?.target?.value || ''
+  filtrosInforme.busqueda = q
+  informe.busqueda = q
+  syncInformeResultado()
+}
+
+function onExportarCartolaExcel() {
+  const rows = cartolaFiltrada.value
+  if (!rows.length) {
+    saveError.value = 'No hay registros visibles para exportar con los filtros actuales.'
+    return
+  }
+  saveError.value = ''
+  const mes = String(filtrosInforme.mes || '').replace(/-/g, '') || 'mes'
+  const exportRows = rows.map((row) => ({
+    ...row,
+    cajaGroupKey: labelCajaGroup(row.cajaGroupKey) || row.cajaGroupKey || '',
+    centroCobroNombre:
+      row.centroCobroNombre || labelCentroCobroInforme(row.centroCobroId) || ''
+  }))
+  exportarCartolaVisible(exportRows, {
+    periodo: informeResultado.periodo,
+    filename: `cartola_${mes}_${rows.length}reg.xlsx`
+  })
+}
+
 function onAplicarFiltrosInforme() {
   filtrosInforme.centroCobroId = informe.centroCobroId
   filtrosInforme.caja = informe.caja
   filtrosInforme.mes = informe.mes
   filtrosInforme.persona = informe.persona
+  filtrosInforme.busqueda = informe.busqueda
   Object.assign(filtrosInforme.tipos, informe.tipos)
   syncInformeResultado()
   closeFormInforme()

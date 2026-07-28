@@ -24,6 +24,12 @@ const STORAGE_ROOT = resolveStorageRoot()
 
 const SUBDIRS = ['comprobantes', 'anticipos', 'exports', 'tmp']
 
+/**
+ * Storage dinámico por mes/cc/caja/tipo:
+ *   {YYYY-MM}/{cc}/{caja}/{gasto|asignacion|devolucion}/archivo
+ * Las carpetas legacy (comprobantes/, anticipos/) se mantienen por compatibilidad.
+ */
+
 function ensureStorageDirs() {
   fs.mkdirSync(STORAGE_ROOT, { recursive: true })
   for (const name of SUBDIRS) {

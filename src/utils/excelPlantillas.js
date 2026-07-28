@@ -477,3 +477,77 @@ export function descargarPlantillaAsignaciones() {
     }
   ])
 }
+
+/**
+ * Exporta a Excel las filas visibles de la cartola (ya filtradas en pantalla).
+ * @param {object[]} rows
+ * @param {{ periodo?: string, filename?: string }} [meta]
+ */
+export function exportarCartolaVisible(rows, meta = {}) {
+  const headers = [
+    'fecha',
+    'cc',
+    'caja',
+    'rinde_doc',
+    'tipo',
+    'detalle',
+    'responsable',
+    'abono',
+    'cargo',
+    'estado',
+    'comprobante'
+  ]
+
+  const dataRows = (rows || []).map((row) => [
+    row.fecha || '',
+    row.centroCobroNombre || '',
+    row.cajaGroupKey || '',
+    row.doc || '',
+    row.tipo || '',
+    row.detalle || '',
+    row.responsable || '',
+    row.abono === '-' ? '' : row.abono || '',
+    row.cargo === '-' ? '' : row.cargo || '',
+    row.estado || '',
+    row.comprobanteNombre || ''
+  ])
+
+  const table = [headers, ...dataRows]
+  const cells = tableCells(1, 0, table)
+
+  const filtroRows = [
+    ['Filtro', 'Valor'],
+    ['Período / filtros', meta.periodo || ''],
+    ['Registros exportados', dataRows.length],
+    ['NOTA', 'Solo incluye lo visible con los filtros actuales de la cartola.']
+  ]
+
+  const stamp = new Date().toISOString().slice(0, 10)
+  const filename = meta.filename || `cartola_filtrada_${stamp}.xlsx`
+
+  downloadXlsx(filename, [
+    {
+      name: 'Cartola',
+      xml: worksheetFromCells(cells, [
+        { width: 12 },
+        { width: 18 },
+        { width: 14 },
+        { width: 12 },
+        { width: 16 },
+        { width: 28 },
+        { width: 18 },
+        { width: 12 },
+        { width: 12 },
+        { width: 14 },
+        { width: 28 }
+      ])
+    },
+    {
+      name: 'Filtros',
+      xml: worksheetFromCells(tableCells(1, 0, filtroRows), [
+        { width: 22 },
+        { width: 60 }
+      ])
+    }
+  ])
+}
