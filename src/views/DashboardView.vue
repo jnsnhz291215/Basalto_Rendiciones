@@ -696,14 +696,44 @@
 
                 <div class="dash-field">
                   <label>Origen de Pago</label>
-                  <select v-model="gasto.metodoPago">
+                  <select v-model="gasto.metodoPago" @change="onGastoMetodoPagoChange">
                     <option value="efectivo">Efectivo</option>
                     <option value="debito">Débito</option>
                     <option value="credito">Crédito</option>
                   </select>
                 </div>
 
-                <div class="dash-field dash-gasto-span-2">
+                <div
+                  v-if="gastoRequiereTarjetaDigits"
+                  class="dash-field"
+                >
+                  <label>Últimos 4 dígitos *</label>
+                  <input
+                    v-model="gasto.tarjetaUltimos4"
+                    type="text"
+                    inputmode="numeric"
+                    maxlength="4"
+                    pattern="[0-9]{4}"
+                    placeholder="1234"
+                    autocomplete="off"
+                    required
+                    @input="onGastoTarjetaDigitsInput"
+                  />
+                  <p v-if="tarjetaGastoMatch" class="dash-field-hint dash-hint--ok">
+                    Tarjeta empresa: {{ tarjetaGastoMatch.alias }}
+                  </p>
+                  <p
+                    v-else-if="gasto.tarjetaUltimos4.length === 4"
+                    class="dash-field-hint"
+                  >
+                    Sin coincidencia en tarjetas empresa (se registra como pago con esa tarjeta).
+                  </p>
+                </div>
+
+                <div
+                  class="dash-field"
+                  :class="{ 'dash-gasto-span-2': !gastoRequiereTarjetaDigits }"
+                >
                   <label>Adjuntar Comprobante (PDF / PNG / JPG) *</label>
                   <input
                     ref="gastoFileInputEl"
@@ -1291,6 +1321,29 @@
                     <option value="debito">Débito</option>
                     <option value="credito">Crédito</option>
                   </select>
+                </div>
+                <div
+                  v-if="
+                    modalCorregir.campos.origen_pago &&
+                    (modalCorregir.metodoPago === 'debito' || modalCorregir.metodoPago === 'credito')
+                  "
+                  class="dash-field"
+                >
+                  <label>Últimos 4 dígitos *</label>
+                  <input
+                    v-model="modalCorregir.tarjetaUltimos4"
+                    type="text"
+                    inputmode="numeric"
+                    maxlength="4"
+                    placeholder="1234"
+                    autocomplete="off"
+                    required
+                    @input="
+                      modalCorregir.tarjetaUltimos4 = String($event.target.value || '')
+                        .replace(/\D/g, '')
+                        .slice(0, 4)
+                    "
+                  />
                 </div>
                 <div v-if="modalCorregir.campos.comprobante" class="dash-field">
                   <label>Nuevo Comprobante</label>
@@ -3089,6 +3142,7 @@ const gasto = reactive({
   monto: '',
   cajaGroupKey: '',
   metodoPago: 'efectivo',
+  tarjetaUltimos4: '',
   comprobanteNombre: '',
   descripcion: ''
 })
@@ -3160,6 +3214,7 @@ const modalCorregir = reactive({
   tipo: 'Boleta',
   monto: '',
   metodoPago: 'efectivo',
+  tarjetaUltimos4: '',
   descripcion: '',
   respuesta: '',
   comprobanteNombre: '',
@@ -3601,6 +3656,41 @@ const personalModalRutStatus = computed(() => rutStatusLabel(modalPersonal.rut))
 
 const tarjetasEmpresa = ref([])
 
+const gastoRequiereTarjetaDigits = computed(
+  () => gasto.metodoPago === 'debito' || gasto.metodoPago === 'credito'
+)
+
+const tarjetasParaGasto = computed(() => {
+  const tipoWanted = gasto.metodoPago === 'debito' ? 'Débito' : 'Crédito'
+  return tarjetasEmpresa.value.filter((t) => t.tipo === tipoWanted)
+})
+
+const tarjetaGastoMatch = computed(() => {
+  if (!gastoRequiereTarjetaDigits.value) return null
+  const digits = String(gasto.tarjetaUltimos4 || '').replace(/\D/g, '')
+  if (digits.length !== 4) return null
+  return (
+    tarjetasParaGasto.value.find((t) => String(t.ultimos4) === digits) || null
+  )
+})
+
+function onGastoMetodoPagoChange() {
+  if (!gastoRequiereTarjetaDigits.value) {
+    gasto.tarjetaUltimos4 = ''
+  }
+}
+
+function onGastoTarjetaDigitsInput(event) {
+  const only = String(event.target.value || '')
+    .replace(/\D/g, '')
+    .slice(0, 4)
+  gasto.tarjetaUltimos4 = only
+  event.target.value = only
+}
+
+function resolveTarjetaIdParaGasto() {
+  return tarjetaGastoMatch.value?.id || null
+}
 const auditoriaFiltro = reactive({
   modulo: '**Todos los Módulos**',
   accion: '**Todas las Acciones**',
@@ -4192,6 +4282,7 @@ function openModalCorregir(row) {
   modalCorregir.tipo = tipoBase
   modalCorregir.monto = montoNum || ''
   modalCorregir.metodoPago = row.metodoPago || 'efectivo'
+  modalCorregir.tarjetaUltimos4 = ''
   modalCorregir.descripcion = row.descripcion || ''
   modalCorregir.respuesta = ''
   modalCorregir.comprobanteNombre = ''
@@ -4239,6 +4330,23 @@ async function onSaveCorreccion() {
   }
   if (campos.origen_pago) {
     payload.origen_pago = origenFromMetodo(modalCorregir.metodoPago)
+    if (
+      modalCorregir.metodoPago === 'debito' ||
+      modalCorregir.metodoPago === 'credito'
+    ) {
+      const digits = String(modalCorregir.tarjetaUltimos4 || '').replace(/\D/g, '')
+      if (digits.length !== 4) {
+        saveError.value = 'Ingresa los últimos 4 dígitos de la tarjeta.'
+        return
+      }
+      const tipoWanted = modalCorregir.metodoPago === 'debito' ? 'Débito' : 'Crédito'
+      const match = tarjetasEmpresa.value.find(
+        (t) => t.tipo === tipoWanted && String(t.ultimos4) === digits
+      )
+      payload.tarjeta_id = match?.id || null
+    } else {
+      payload.tarjeta_id = null
+    }
   }
   if (campos.descripcion) {
     payload.descripcion = modalCorregir.descripcion.trim()
@@ -4283,6 +4391,13 @@ async function onSaveGasto() {
     saveError.value = 'El comprobante es obligatorio. Adjunta PDF, PNG o JPG.'
     return
   }
+  if (gastoRequiereTarjetaDigits.value) {
+    const digits = String(gasto.tarjetaUltimos4 || '').replace(/\D/g, '')
+    if (digits.length !== 4) {
+      saveError.value = 'Ingresa los últimos 4 dígitos de la tarjeta.'
+      return
+    }
+  }
   const montoNum = parseMontoInput(gasto.monto)
   if (!Number.isFinite(montoNum) || montoNum <= 0) {
     saveError.value = 'Ingresa un monto total válido.'
@@ -4321,6 +4436,7 @@ async function onSaveGasto() {
     numero_documento: gasto.tipo === 'Factura' ? gasto.numero.trim() : null,
     monto: montoNum,
     origen_pago: origenFromMetodo(gasto.metodoPago),
+    tarjeta_id: resolveTarjetaIdParaGasto(),
     descripcion: gasto.descripcion || null
   }
   await ejecutarVerificacionYGuardado()
@@ -4331,6 +4447,7 @@ function resetGastoFormFields() {
   gasto.numero = ''
   gasto.monto = ''
   gasto.metodoPago = 'efectivo'
+  gasto.tarjetaUltimos4 = ''
   gasto.descripcion = ''
   gasto.comprobanteNombre = ''
   gastoComprobanteFile.value = null
