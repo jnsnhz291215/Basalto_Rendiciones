@@ -78,13 +78,16 @@ ${esFactura ? `- Número de factura declarado: ${numeroEsperado || '(vacío)'}.`
 
 /**
  * Guarda el archivo en storage/comprobantes y valida con IA.
+ * @param {object} opts
+ * @param {boolean} [opts.skipIaVerify] - Dev: solo guarda, no valida monto/N° con Gemini
  * @returns {{ ok: boolean, comprobante_url?: string, errores: string[], detalle: object }}
  */
 async function guardarYVerificarComprobante({
   file,
   montoEsperado,
   tipoDocumento,
-  numeroDocumento
+  numeroDocumento,
+  skipIaVerify = false
 }) {
   const errores = []
   if (!file?.buffer?.length) {
@@ -115,7 +118,7 @@ async function guardarYVerificarComprobante({
 
   const esFactura = String(tipoDocumento || '') === 'Factura'
   const numeroEsperado = String(numeroDocumento || '').trim()
-  if (esFactura && !numeroEsperado) {
+  if (esFactura && !numeroEsperado && !skipIaVerify) {
     return {
       ok: false,
       errores: ['Para Factura debes ingresar el N° de documento.'],
@@ -127,6 +130,21 @@ async function guardarYVerificarComprobante({
   const relPath = path.join('comprobantes', filename)
   const absPath = storagePath('comprobantes', filename)
   fs.writeFileSync(absPath, file.buffer)
+
+  // Flag Dev: guardar archivo sin validar monto / N° con IA
+  if (skipIaVerify) {
+    return {
+      ok: true,
+      comprobante_url: relPath.replace(/\\/g, '/'),
+      errores: [],
+      detalle: {
+        bypass_ia: true,
+        monto_detectado: null,
+        numero_detectado: null,
+        notas: 'Verificación IA omitida (flag Dev COMPROBANTE_VERIFY_BYPASS).'
+      }
+    }
+  }
 
   const base64Data = file.buffer.toString('base64')
   let parsed

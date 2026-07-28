@@ -4,6 +4,7 @@ const { calcularArrastreMes, nextCodigo, mesActualYYYYMM } = require('../utils/h
 const { ROLES, ADMINS } = require('../middlewares/role.middleware')
 const { assertTarjetaPermitePago } = require('../utils/tarjetaPago')
 const { guardarYVerificarComprobante } = require('../utils/verificarComprobante')
+const { canDevHardDelete, canSkipComprobanteVerify } = require('../config/devFlags')
 
 async function assertCajaAsignadaATrabajador(trabajadorId, cajaId) {
   const rows = await query(
@@ -25,7 +26,8 @@ async function verificarComprobanteHandler(req, res) {
       file: req.file,
       montoEsperado: body.monto,
       tipoDocumento: body.tipo_documento,
-      numeroDocumento: body.numero_documento
+      numeroDocumento: body.numero_documento,
+      skipIaVerify: canSkipComprobanteVerify(req.user)
     })
 
     if (!result.ok) {
@@ -40,7 +42,8 @@ async function verificarComprobanteHandler(req, res) {
     return res.json({
       ok: true,
       comprobante_url: result.comprobante_url,
-      detalle: result.detalle || {}
+      detalle: result.detalle || {},
+      bypass_ia: Boolean(result.detalle?.bypass_ia)
     })
   } catch (err) {
     console.error('[verificarComprobante]', err)
@@ -125,7 +128,11 @@ async function createRendicion(req, res) {
       })
     }
 
-    if (tipo_documento === 'Factura' && !String(numero_documento || '').trim()) {
+    if (
+      tipo_documento === 'Factura' &&
+      !String(numero_documento || '').trim() &&
+      !canSkipComprobanteVerify(req.user)
+    ) {
       return res.status(400).json({ error: 'numero_documento es obligatorio para Factura' })
     }
 
@@ -388,13 +395,15 @@ async function updateRendicion(req, res) {
 
 async function softDeleteRendicion(req, res) {
   try {
-    // Usuario normal: nunca puede borrar (ni las propias)
-    if (req.user.rol === ROLES.USER_RENDIDOR) {
+    const allowHard = canDevHardDelete(req.user)
+
+    // Usuario normal: nunca puede borrar (ni las propias), salvo flag Dev
+    if (req.user.rol === ROLES.USER_RENDIDOR && !allowHard) {
       return res.status(403).json({
         error: 'No se puede editar ni borrar una rendición ya enviada'
       })
     }
-    if (!ADMINS.includes(req.user.rol)) {
+    if (!ADMINS.includes(req.user.rol) && !allowHard) {
       return res.status(403).json({ error: 'Forbidden' })
     }
 
@@ -404,6 +413,18 @@ async function softDeleteRendicion(req, res) {
       [id]
     )
     if (!existing[0]) return res.status(404).json({ error: 'Rendición no encontrada' })
+
+    if (allowHard) {
+      await query(`DELETE FROM rendiciones_gastos WHERE id = ?`, [id])
+      await registrarAuditoria(
+        req.user.id,
+        req.user.nombre,
+        'ELIMINAR',
+        'Gastos',
+        `HARD delete rendición ${existing[0].codigo_rinde}`
+      )
+      return res.json({ ok: true, hard: true })
+    }
 
     await query(
       `UPDATE rendiciones_gastos

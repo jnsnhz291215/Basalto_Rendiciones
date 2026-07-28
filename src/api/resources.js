@@ -12,8 +12,12 @@ async function jsonOrThrow(path, options = {}) {
   return data
 }
 
-export async function listCajas() {
-  return unwrapList(await jsonOrThrow('/api/cajas'))
+export async function listCajas(params = {}) {
+  const qs = new URLSearchParams()
+  if (params.mes) qs.set('mes', params.mes)
+  if (params.anio) qs.set('anio', String(params.anio))
+  const q = qs.toString()
+  return unwrapList(await jsonOrThrow(`/api/cajas${q ? `?${q}` : ''}`))
 }
 
 /** Resumen métricas: { clave_interna, mes } */

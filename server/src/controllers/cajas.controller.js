@@ -1,7 +1,8 @@
 const { query } = require('../config/db')
 const { registrarAuditoria } = require('../utils/audit')
 const { ensureCajasSchema } = require('../utils/ensureCajasSchema')
-const { ROLES } = require('../middlewares/role.middleware')
+const { ROLES, ADMINS } = require('../middlewares/role.middleware')
+const { canDevHardDelete } = require('../config/devFlags')
 
 function normalizeNombreInterior(value) {
   return String(value || '')
@@ -48,6 +49,8 @@ function mapCajaRow(row) {
     centro_cobro_id: row.centro_cobro_id ?? null,
     centro_cobro_nombre: row.centro_cobro_nombre || null,
     tiene_datos: Boolean(row.tiene_datos),
+    total_mes: Number(row.total_mes) || 0,
+    total_anio: Number(row.total_anio) || 0,
     created_at: row.created_at,
     updated_at: row.updated_at
   }
@@ -67,6 +70,17 @@ function mapCcRow(row) {
 async function listCajas(req, res) {
   try {
     await ensureCajasSchema()
+
+    // Mes/año desde el cliente (PC host); fallback a fecha del servidor
+    const now = new Date()
+    const mesParam = String(req.query.mes || '').trim()
+    const anioParam = String(req.query.anio || '').trim()
+    const mes =
+      /^\d{4}-\d{2}$/.test(mesParam)
+        ? mesParam
+        : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+    const anio = /^\d{4}$/.test(anioParam) ? anioParam : String(Number(mes.slice(0, 4)) || now.getFullYear())
+
     let sql = `
       SELECT c.id, c.clave_interna, c.nombre_exterior, c.centro_cobro_id,
               c.created_at, c.updated_at,
@@ -80,11 +94,27 @@ async function listCajas(req, res) {
                   SELECT 1 FROM anticipos a
                   WHERE a.caja_id = c.id AND a.is_deleted = FALSE
                 )
-              ) AS tiene_datos
+              ) AS tiene_datos,
+              (
+                SELECT COALESCE(SUM(r.monto), 0)
+                FROM rendiciones_gastos r
+                WHERE r.caja_id = c.id
+                  AND r.is_deleted = FALSE
+                  AND r.estado <> 'Rechazado'
+                  AND DATE_FORMAT(r.fecha_documento, '%Y-%m') = ?
+              ) AS total_mes,
+              (
+                SELECT COALESCE(SUM(r.monto), 0)
+                FROM rendiciones_gastos r
+                WHERE r.caja_id = c.id
+                  AND r.is_deleted = FALSE
+                  AND r.estado <> 'Rechazado'
+                  AND YEAR(r.fecha_documento) = ?
+              ) AS total_anio
        FROM cajas_chicas c
        LEFT JOIN centros_costo cc ON cc.id = c.centro_cobro_id AND cc.is_deleted = FALSE
        WHERE c.is_deleted = FALSE`
-    const params = []
+    const params = [mes, Number(anio)]
 
     // Usuario normal: solo cajas asignadas en Personal / Usuarios
     if (req.user?.rol === ROLES.USER_RENDIDOR) {
@@ -295,7 +325,8 @@ async function updateCaja(req, res) {
     )
     if (!existing[0]) return res.status(404).json({ error: 'Caja no encontrada' })
 
-    if (await cajaTieneDatos(id)) {
+    const allowHard = canDevHardDelete(req.user)
+    if (!allowHard && (await cajaTieneDatos(id))) {
       return res.status(400).json({
         error: 'No se puede editar: la caja ya tiene datos asociados'
       })
@@ -349,10 +380,26 @@ async function softDeleteCaja(req, res) {
     )
     if (!existing[0]) return res.status(404).json({ error: 'Caja no encontrada' })
 
-    if (await cajaTieneDatos(id)) {
+    const allowHard = canDevHardDelete(req.user)
+
+    if (!allowHard && (await cajaTieneDatos(id))) {
       return res.status(400).json({
         error: 'No se puede eliminar: la caja ya tiene datos asociados'
       })
+    }
+
+    if (allowHard) {
+      await query(`DELETE FROM rendiciones_gastos WHERE caja_id = ?`, [id])
+      await query(`DELETE FROM anticipos WHERE caja_id = ?`, [id])
+      await query(`DELETE FROM cajas_chicas WHERE id = ?`, [id])
+      await registrarAuditoria(
+        req.user.id,
+        req.user.nombre,
+        'ELIMINAR',
+        'Cajas',
+        `HARD delete caja id=${id}`
+      )
+      return res.json({ ok: true, hard: true })
     }
 
     await query(
@@ -465,7 +512,8 @@ async function updateCentroCosto(req, res) {
       return res.status(404).json({ error: 'Centro de cobro / empresa no encontrado' })
     }
 
-    if (await centroTieneDatos(id)) {
+    const allowHard = canDevHardDelete(req.user)
+    if (!allowHard && (await centroTieneDatos(id))) {
       return res.status(400).json({
         error: 'No se puede editar: el centro de cobro ya tiene cajas o datos asociados'
       })
@@ -515,10 +563,32 @@ async function softDeleteCentroCosto(req, res) {
       return res.status(404).json({ error: 'Centro de cobro / empresa no encontrado' })
     }
 
-    if (await centroTieneDatos(id)) {
+    const allowHard = canDevHardDelete(req.user)
+    if (!allowHard && (await centroTieneDatos(id))) {
       return res.status(400).json({
         error: 'No se puede eliminar: el centro de cobro ya tiene cajas o datos asociados'
       })
+    }
+
+    if (allowHard) {
+      const cajas = await query(
+        `SELECT id FROM cajas_chicas WHERE centro_cobro_id = ?`,
+        [id]
+      )
+      for (const c of cajas) {
+        await query(`DELETE FROM rendiciones_gastos WHERE caja_id = ?`, [c.id])
+        await query(`DELETE FROM anticipos WHERE caja_id = ?`, [c.id])
+        await query(`DELETE FROM cajas_chicas WHERE id = ?`, [c.id])
+      }
+      await query(`DELETE FROM centros_costo WHERE id = ?`, [id])
+      await registrarAuditoria(
+        req.user.id,
+        req.user.nombre,
+        'ELIMINAR',
+        'CentrosCobro',
+        `HARD delete centro de cobro id=${id}`
+      )
+      return res.json({ ok: true, hard: true })
     }
 
     // Liberar UNIQUE(nombre) para poder recrear el mismo nombre luego

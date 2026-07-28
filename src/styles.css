@@ -1780,8 +1780,8 @@ a:hover {
 }
 
 .dash-cc-accordion-item {
-  border: 1px solid #1e293b;
-  border-radius: 8px;
+  border: 1px solid #334155;
+  border-radius: 0.75rem;
   background: #0f172a;
   overflow: hidden;
 }
@@ -1794,6 +1794,7 @@ a:hover {
   padding: 0.75rem 1rem;
   background: #111827;
   border: none;
+  border-radius: 0;
   color: #e2e8f0;
   cursor: pointer;
   text-align: left;
@@ -1822,7 +1823,33 @@ a:hover {
 }
 
 .dash-cc-accordion-body {
-  padding: 0 0.5rem 0.5rem;
+  padding: 0;
+}
+
+/* Evita doble borde/radio dentro del acordeón */
+.dash-cc-accordion .dash-table-wrap.dash-cc-accordion-body {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.dash-cc-accordion .dash-table {
+  min-width: 0;
+}
+
+.dash-cc-accordion .dash-table thead th:first-child {
+  padding-left: 1rem;
+}
+
+.dash-cc-accordion .dash-table thead th:last-child,
+.dash-cc-accordion .dash-table tbody td:last-child {
+  padding-right: 1rem;
+}
+
+.dash-cc-accordion .dash-table tbody td:first-child {
+  padding-left: 1rem;
 }
 
 .dash-cc-accordion-empty {

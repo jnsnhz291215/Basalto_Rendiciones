@@ -1,6 +1,7 @@
 const { query } = require('../config/db')
 const { registrarAuditoria } = require('../utils/audit')
 const { nextCodigo } = require('../utils/helpers')
+const { canDevHardDelete } = require('../config/devFlags')
 
 async function listAnticipos(req, res) {
   try {
@@ -151,6 +152,19 @@ async function softDeleteAnticipo(req, res) {
       [id]
     )
     if (!existing[0]) return res.status(404).json({ error: 'Anticipo no encontrado' })
+
+    const allowHard = canDevHardDelete(req.user)
+    if (allowHard) {
+      await query(`DELETE FROM anticipos WHERE id = ?`, [id])
+      await registrarAuditoria(
+        req.user.id,
+        req.user.nombre,
+        'ELIMINAR',
+        'Anticipos',
+        `HARD delete anticipo ${existing[0].codigo_vale}`
+      )
+      return res.json({ ok: true, hard: true })
+    }
 
     await query(
       `UPDATE anticipos SET is_deleted = TRUE, deleted_at = NOW()

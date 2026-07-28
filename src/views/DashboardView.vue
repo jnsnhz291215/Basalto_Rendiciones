@@ -918,6 +918,15 @@
                       >
                         Admin
                       </button>
+                      <button
+                        v-if="canDevForceDelete && !row.legacy && row.id"
+                        class="dash-btn-icon dash-btn-icon--danger"
+                        type="button"
+                        title="Hard delete (Dev)"
+                        @click="onHardDeleteRendicion(row)"
+                      >
+                        <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                      </button>
                     </template>
                     <template v-else>
                       <button
@@ -928,7 +937,16 @@
                       >
                         Corregir Rendición
                       </button>
-                      <span v-else class="dash-muted">-</span>
+                      <button
+                        v-if="canDevForceDelete && !row.legacy && row.id"
+                        class="dash-btn-icon dash-btn-icon--danger"
+                        type="button"
+                        title="Hard delete (Dev)"
+                        @click="onHardDeleteRendicion(row)"
+                      >
+                        <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                      </button>
+                      <span v-else-if="!(row.estado === 'Por Corregir' && !row.legacy)" class="dash-muted">-</span>
                     </template>
                   </div>
                 </td>
@@ -1512,6 +1530,7 @@
                 <th>Observaciones</th>
                 <th class="dash-table-center">Adjunto</th>
                 <th class="dash-table-right">Monto</th>
+                <th v-if="canDevForceDelete" class="dash-table-center">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -1532,6 +1551,17 @@
                   <span v-else class="dash-adjunto-empty">-</span>
                 </td>
                 <td class="dash-table-right dash-rinde">{{ row.monto }}</td>
+                <td v-if="canDevForceDelete" class="dash-table-center dash-table-actions">
+                  <button
+                    v-if="row.id"
+                    class="dash-btn-icon dash-btn-icon--danger"
+                    type="button"
+                    title="Hard delete (Dev)"
+                    @click="onHardDeleteAnticipo(row)"
+                  >
+                    <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                  </button>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -1865,14 +1895,18 @@
                     <thead>
                       <tr>
                         <th>Nombre Exterior</th>
+                        <th class="dash-table-right">Total Mes</th>
+                        <th class="dash-table-right">Total Año</th>
                         <th class="dash-table-center">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr v-for="caja in grupo.cajas" :key="caja.id || caja.groupKey">
                         <td class="dash-table-strong">{{ caja.displayName }}</td>
+                        <td class="dash-table-right dash-table-amount">{{ formatMonto(caja.totalMes) }}</td>
+                        <td class="dash-table-right dash-table-amount">{{ formatMonto(caja.totalAnio) }}</td>
                         <td class="dash-table-center dash-table-actions">
-                          <template v-if="caja.tieneDatos">
+                          <template v-if="caja.tieneDatos && !canDevForceDelete">
                             <span class="dash-field-hint" title="Ya tiene datos asociados">
                               Bloqueada
                             </span>
@@ -1888,7 +1922,7 @@
                             <button
                               class="dash-btn-icon dash-btn-icon--danger"
                               type="button"
-                              title="Eliminar"
+                              :title="canDevForceDelete ? 'Hard delete (Dev)' : 'Eliminar'"
                               @click="onDeleteCaja(caja)"
                             >
                               <i class="fa-solid fa-trash" aria-hidden="true"></i>
@@ -1989,7 +2023,7 @@
                 <td class="dash-mono">{{ cc.id }}</td>
                 <td>{{ cc.nombre || '-' }}</td>
                 <td class="dash-table-center dash-table-actions">
-                  <template v-if="cc.tieneDatos">
+                  <template v-if="cc.tieneDatos && !canDevForceDelete">
                     <span class="dash-field-hint" title="Ya tiene cajas o datos asociados">
                       Bloqueada
                     </span>
@@ -2006,7 +2040,7 @@
                     <button
                       class="dash-btn-icon dash-btn-icon--danger"
                       type="button"
-                      title="Eliminar"
+                      :title="canDevForceDelete ? 'Hard delete (Dev)' : 'Eliminar'"
                       @click="onDeleteCentroCosto(cc)"
                     >
                       <i class="fa-solid fa-trash" aria-hidden="true"></i>
@@ -2730,6 +2764,7 @@ import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from
 import { useAuth } from '../composables/useAuth'
 // TEMP_AUTH_BYPASS - revertir antes de commit
 import { TEMP_AUTH_BYPASS } from '../TEMP_AUTH_BYPASS'
+import { canDevHardDelete, canSkipComprobanteVerify } from '../devFlags'
 import {
   cleanRut,
   formatRut,
@@ -3306,6 +3341,16 @@ const canTogglePersonalAcceso = canCreateUsuarios
 const canEditTrabajadores = canEditPersonal
 /** Soft/hard delete (papelera): solo Super Admin / Super Admin Dev */
 const canHardDelete = canCreateAdmins
+/** Flag temporal: Super Admin Dev puede hard-delete gastos/anticipos/cajas con datos */
+const canDevForceDelete = computed(
+  () => canDevHardDelete(user.value?.rol) || canDevHardDelete(sessionAdminNivel.value)
+)
+/** Flag temporal: salta IA monto / N° documento al subir comprobante */
+const canSkipComprobanteIa = computed(
+  () =>
+    canSkipComprobanteVerify(user.value?.rol) ||
+    canSkipComprobanteVerify(sessionAdminNivel.value)
+)
 /** Reiniciar contraseña de usuarios: solo Super Admin / Super Admin Dev */
 const canResetPassword = canCreateAdmins
 const togglingEstadoId = ref(null)
@@ -3623,8 +3668,12 @@ async function loadDashboardData() {
   dataError.value = ''
   saveError.value = ''
   try {
+    const hostNow = new Date()
+    const hostMes = `${hostNow.getFullYear()}-${String(hostNow.getMonth() + 1).padStart(2, '0')}`
+    const hostAnio = String(hostNow.getFullYear())
+
     const [cajasRaw, rendRaw, trabRaw, legRaw, personalRaw, ccRaw] = await Promise.all([
-      safeList(api.listCajas),
+      safeList(() => api.listCajas({ mes: hostMes, anio: hostAnio })),
       safeList(api.listRendiciones),
       safeList(api.listTrabajadores),
       safeList(api.listLegacy),
@@ -4018,9 +4067,10 @@ async function ejecutarVerificacionYGuardado() {
   modalVerificar.errores = []
 
   try {
+    const waitMs = canSkipComprobanteIa.value ? 400 : 5000
     const [verifyResult] = await Promise.all([
       verificarComprobanteConIa(),
-      sleep(5000)
+      sleep(waitMs)
     ])
 
     if (!verifyResult?.ok || !verifyResult?.comprobante_url) {
@@ -4227,7 +4277,7 @@ function selectModule(moduleName) {
 
 async function onSaveGasto() {
   if (palabrasDescripcion.value > 500) return
-  if (gasto.tipo === 'Factura' && !gasto.numero.trim()) return
+  if (gasto.tipo === 'Factura' && !gasto.numero.trim() && !canSkipComprobanteIa.value) return
   if (!gasto.cajaGroupKey) return
   if (!gastoComprobanteFile.value) {
     saveError.value = 'El comprobante es obligatorio. Adjunta PDF, PNG o JPG.'
@@ -4455,7 +4505,7 @@ function openFormCajaForEdit() {
 }
 
 function onEditCaja(caja) {
-  if (!caja || caja.tieneDatos) return
+  if (!caja || (caja.tieneDatos && !canDevForceDelete.value)) return
   const realIndex = cajas.value.findIndex((c) => c.id === caja.id)
   if (realIndex < 0) return
 
@@ -4498,8 +4548,9 @@ async function onSaveCaja() {
 }
 
 async function onDeleteCaja(caja) {
-  if (!caja?.id || caja.tieneDatos) return
-  if (!confirm(`¿Eliminar la caja "${caja.displayName}"?`)) return
+  if (!caja?.id || (caja.tieneDatos && !canDevForceDelete.value)) return
+  const hardHint = canDevForceDelete.value ? ' (hard delete Dev)' : ''
+  if (!confirm(`¿Eliminar la caja "${caja.displayName}"?${hardHint}`)) return
   try {
     saveError.value = ''
     await api.deleteCaja(caja.id)
@@ -4529,7 +4580,7 @@ function toggleFormCc() {
 }
 
 function onEditCentroCosto(cc) {
-  if (!cc || cc.tieneDatos) return
+  if (!cc || (cc.tieneDatos && !canDevForceDelete.value)) return
   ccForm.editId = cc.id
   ccForm.nombre = cc.nombre || ''
   ccFormOpen.value = true
@@ -4554,14 +4605,51 @@ async function onSaveCentroCosto() {
 }
 
 async function onDeleteCentroCosto(cc) {
-  if (!cc?.id || cc.tieneDatos) return
-  if (!confirm(`¿Eliminar el centro de cobro / empresa "${cc.nombre}"?`)) return
+  if (!cc?.id || (cc.tieneDatos && !canDevForceDelete.value)) return
+  const hardHint = canDevForceDelete.value
+    ? ' (hard delete Dev — también borra cajas/gastos asociados)'
+    : ''
+  if (!confirm(`¿Eliminar el centro de cobro / empresa "${cc.nombre}"?${hardHint}`)) return
   try {
     saveError.value = ''
     await api.deleteCentroCosto(cc.id)
     await loadDashboardData()
   } catch (err) {
     saveError.value = err?.message || 'No se pudo eliminar el centro de cobro / empresa'
+  }
+}
+
+async function onHardDeleteRendicion(row) {
+  if (!canDevForceDelete.value || !row?.id || row.legacy) return
+  if (
+    !confirm(
+      `¿HARD DELETE de la rendición ${row.rinde}? Esta acción no se puede deshacer.`
+    )
+  ) {
+    return
+  }
+  try {
+    saveError.value = ''
+    await api.deleteRendicion(row.id)
+    await loadDashboardData()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo eliminar la rendición'
+  }
+}
+
+async function onHardDeleteAnticipo(row) {
+  if (!canDevForceDelete.value || !row?.id) return
+  if (
+    !confirm(`¿HARD DELETE del anticipo ${row.doc}? Esta acción no se puede deshacer.`)
+  ) {
+    return
+  }
+  try {
+    saveError.value = ''
+    await api.deleteAnticipo(row.id)
+    await loadDashboardData()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo eliminar el anticipo'
   }
 }
 

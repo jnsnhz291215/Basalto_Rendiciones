@@ -1,5 +1,35 @@
 # Deploy — Basalto Rendiciones
 
+## Flags temporales Dev (leer primero)
+
+Flags de prueba para Super Admin Dev. **Apagarlos antes de dejar reglas de producción estrictas.**
+
+| Flag | Front (`src/devFlags.js`) | API (`server/.env`) | Efecto |
+|------|---------------------------|---------------------|--------|
+| Bypass RUT `211919116` | `RUT_BYPASS_ENABLED` | `DEV_RUT_BYPASS` (`0` = off) | Acepta el RUT incompleto / sin DV antes del módulo 11 |
+| Hard delete Dev | `HARD_DELETE_ENABLED` | `DEV_HARD_DELETE` (`0` = off) | `SUPER_ADMIN_DEV` puede borrar de verdad rendiciones, anticipos, cajas/CC (también con datos) |
+| Bypass IA comprobante | `COMPROBANTE_VERIFY_BYPASS` | `DEV_COMPROBANTE_VERIFY_BYPASS` (`0` = off) | `SUPER_ADMIN_DEV` salta validación IA de **monto** y **N° documento** (sigue obligatorio adjuntar archivo) |
+
+**Restaurar comportamiento estricto**
+
+1. Front — en `src/devFlags.js`:
+   ```js
+   RUT_BYPASS_ENABLED: false,
+   HARD_DELETE_ENABLED: false,
+   COMPROBANTE_VERIFY_BYPASS: false,
+   ```
+2. API — en `server/.env`:
+   ```env
+   DEV_RUT_BYPASS=0
+   DEV_HARD_DELETE=0
+   DEV_COMPROBANTE_VERIFY_BYPASS=0
+   ```
+3. Rebuild front + reiniciar API (ver secciones abajo).
+
+Buscar en el repo: `DEV_FLAGS`, `devFlags.js`, `server/src/config/devFlags.js`.
+
+---
+
 App con **dos procesos**: front Vue/Vite (raíz) + API Express (`/server`).
 
 Desde la carpeta del proyecto:

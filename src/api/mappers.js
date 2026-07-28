@@ -121,7 +121,9 @@ export function mapCaja(row) {
     nombreInterior: interior,
     centroCobroId: row.centro_cobro_id ?? null,
     centroCobroNombre: row.centro_cobro_nombre || null,
-    tieneDatos: Boolean(row.tiene_datos)
+    tieneDatos: Boolean(row.tiene_datos),
+    totalMes: Number(row.total_mes) || 0,
+    totalAnio: Number(row.total_anio) || 0
   }
 }
 

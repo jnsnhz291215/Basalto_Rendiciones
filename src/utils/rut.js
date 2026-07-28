@@ -1,6 +1,7 @@
 /**
  * Validador / formateo de RUT chileno (Módulo 11).
  */
+import { isDevRutBypass, normalizeDevRut } from '../devFlags.js'
 
 export function cleanRut(rut) {
   return String(rut || '').replace(/[^0-9kK]/g, '').toUpperCase()
@@ -9,6 +10,10 @@ export function cleanRut(rut) {
 /** Visual: 211919116 → 21.191.911-6 */
 export function formatRut(rut) {
   let cleaned = cleanRut(rut)
+  // Bypass Dev: completar DV si viene solo el cuerpo
+  const normalized = normalizeDevRut(cleaned)
+  if (normalized) cleaned = normalized
+
   if (cleaned.length > 9) cleaned = cleaned.slice(0, 9)
   if (!cleaned) return ''
   if (cleaned.length === 1) return cleaned
@@ -24,11 +29,18 @@ export function formatRut(rut) {
  * retorna limpio (API) y display (puntos + guión).
  */
 export function fromRutInput(value) {
-  const clean = cleanRut(value).slice(0, 9)
+  let clean = cleanRut(value).slice(0, 9)
+  const normalized = normalizeDevRut(clean)
+  if (normalized && (clean === normalized.slice(0, -1) || clean === normalized)) {
+    clean = normalized
+  }
   return { clean, display: formatRut(clean) }
 }
 
 export function validarRutChileno(rut) {
+  // Antes de la validación endurecida (módulo 11)
+  if (isDevRutBypass(rut)) return true
+
   const cleaned = cleanRut(rut)
   if (cleaned.length < 8 || cleaned.length > 9) return false
 
@@ -52,7 +64,7 @@ export function validarRutChileno(rut) {
 
 /** Contraseña temporal derivada del cuerpo del RUT (sin DV). */
 export function passwordFromRut(rut) {
-  const cleaned = cleanRut(rut)
+  const cleaned = normalizeDevRut(rut) || cleanRut(rut)
   if (cleaned.length < 8) return ''
   return cleaned.slice(0, -1)
 }
