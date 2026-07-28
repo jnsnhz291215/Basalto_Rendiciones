@@ -51,6 +51,7 @@ function mapCajaRow(row) {
     tiene_datos: Boolean(row.tiene_datos),
     total_mes: Number(row.total_mes) || 0,
     total_anio: Number(row.total_anio) || 0,
+    personal_asignado: Number(row.personal_asignado) || 0,
     created_at: row.created_at,
     updated_at: row.updated_at
   }
@@ -110,7 +111,14 @@ async function listCajas(req, res) {
                   AND r.is_deleted = FALSE
                   AND r.estado <> 'Rechazado'
                   AND YEAR(r.fecha_documento) = ?
-              ) AS total_anio
+              ) AS total_anio,
+              (
+                SELECT COUNT(DISTINCT tc.trabajador_id)
+                FROM trabajador_cajas tc
+                INNER JOIN trabajadores t
+                  ON t.id = tc.trabajador_id AND t.is_deleted = FALSE
+                WHERE tc.clave_interna = c.clave_interna
+              ) AS personal_asignado
        FROM cajas_chicas c
        LEFT JOIN centros_costo cc ON cc.id = c.centro_cobro_id AND cc.is_deleted = FALSE
        WHERE c.is_deleted = FALSE`

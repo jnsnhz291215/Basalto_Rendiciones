@@ -123,7 +123,8 @@ export function mapCaja(row) {
     centroCobroNombre: row.centro_cobro_nombre || null,
     tieneDatos: Boolean(row.tiene_datos),
     totalMes: Number(row.total_mes) || 0,
-    totalAnio: Number(row.total_anio) || 0
+    totalAnio: Number(row.total_anio) || 0,
+    personalAsignado: Number(row.personal_asignado) || 0
   }
 }
 

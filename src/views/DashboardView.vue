@@ -103,6 +103,54 @@
       </div>
     </div>
 
+    <!-- Modal personal asignado a una caja -->
+    <div
+      v-if="modalPersonalCaja.open"
+      class="dash-modal-backdrop"
+      @click.self="closeModalPersonalCaja"
+    >
+      <div class="dash-modal" role="dialog" aria-modal="true" aria-labelledby="modal-personal-caja-title">
+        <div class="dash-modal-head">
+          <div>
+            <h3 id="modal-personal-caja-title">Personal asignado</h3>
+            <p class="dash-hint">{{ modalPersonalCaja.cajaNombre }}</p>
+          </div>
+          <button
+            class="dash-modal-close"
+            type="button"
+            aria-label="Cerrar"
+            @click="closeModalPersonalCaja"
+          >
+            ×
+          </button>
+        </div>
+        <div v-if="!modalPersonalCaja.lista.length" class="dash-cajas-empty">
+          Nadie asignado actualmente a esta caja.
+        </div>
+        <div v-else class="dash-table-wrap dash-modal-personal-caja">
+          <table class="dash-table">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>RUT</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="p in modalPersonalCaja.lista" :key="p.id">
+                <td class="dash-table-strong">{{ p.nombre }}</td>
+                <td class="dash-mono">{{ formatRut(p.rut) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="dash-modal-actions">
+          <button class="dash-btn-secondary" type="button" @click="closeModalPersonalCaja">
+            Cerrar
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Modal Personal / Usuarios (crear o editar) -->
     <div
       v-if="modalPersonal.open"
@@ -1948,6 +1996,7 @@
                     <thead>
                       <tr>
                         <th>Nombre Exterior</th>
+                        <th class="dash-table-center">Personal</th>
                         <th class="dash-table-right">Total Mes</th>
                         <th class="dash-table-right">Total Año</th>
                         <th class="dash-table-center">Acciones</th>
@@ -1956,6 +2005,18 @@
                     <tbody>
                       <tr v-for="caja in grupo.cajas" :key="caja.id || caja.groupKey">
                         <td class="dash-table-strong">{{ caja.displayName }}</td>
+                        <td class="dash-table-center dash-table-actions dash-caja-personal-cell">
+                          <span class="dash-caja-personal-count">{{ countPersonalCaja(caja) }}</span>
+                          <button
+                            class="dash-btn-icon"
+                            type="button"
+                            title="Ver personal asignado"
+                            :disabled="countPersonalCaja(caja) === 0"
+                            @click="openModalPersonalCaja(caja)"
+                          >
+                            <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                          </button>
+                        </td>
                         <td class="dash-table-right dash-table-amount">{{ formatMonto(caja.totalMes) }}</td>
                         <td class="dash-table-right dash-table-amount">{{ formatMonto(caja.totalAnio) }}</td>
                         <td class="dash-table-center dash-table-actions">
@@ -3263,6 +3324,13 @@ const modalAsignarCajas = reactive({
   seleccionadas: []
 })
 
+const modalPersonalCaja = reactive({
+  open: false,
+  cajaNombre: '',
+  cajaClave: '',
+  lista: []
+})
+
 const informeFormOpen = ref(false)
 
 const informeTiposDefault = () => ({
@@ -4536,6 +4604,57 @@ function closeModalAsignarCajas() {
   modalAsignarCajas.trabajadorId = null
   modalAsignarCajas.nombre = ''
   modalAsignarCajas.seleccionadas = []
+}
+
+/** Personal actualmente asignado a la caja (N:M), sin duplicados. */
+function listPersonalAsignadoACaja(caja) {
+  const clave = caja?.groupKey || caja?.nombreInterior || ''
+  if (!clave) return []
+  const byId = new Map()
+
+  for (const p of personal.value) {
+    if (!(p.cajasAsignadas || []).includes(clave)) continue
+    if (p.id == null || byId.has(Number(p.id))) continue
+    byId.set(Number(p.id), {
+      id: p.id,
+      nombre: p.nombre || '-',
+      rut: p.rut || ''
+    })
+  }
+  for (const t of trabajadores.value) {
+    if (!(t.cajasAsignadas || []).includes(clave)) continue
+    if (t.id == null || byId.has(Number(t.id))) continue
+    byId.set(Number(t.id), {
+      id: t.id,
+      nombre: t.nombre || '-',
+      rut: t.rut || ''
+    })
+  }
+
+  return [...byId.values()].sort((a, b) =>
+    String(a.nombre).localeCompare(String(b.nombre), 'es')
+  )
+}
+
+function countPersonalCaja(caja) {
+  const fromList = listPersonalAsignadoACaja(caja).length
+  if (fromList > 0) return fromList
+  return Number(caja?.personalAsignado) || 0
+}
+
+function openModalPersonalCaja(caja) {
+  if (!caja) return
+  modalPersonalCaja.open = true
+  modalPersonalCaja.cajaNombre = caja.displayName || caja.groupKey || 'Caja'
+  modalPersonalCaja.cajaClave = caja.groupKey || ''
+  modalPersonalCaja.lista = listPersonalAsignadoACaja(caja)
+}
+
+function closeModalPersonalCaja() {
+  modalPersonalCaja.open = false
+  modalPersonalCaja.cajaNombre = ''
+  modalPersonalCaja.cajaClave = ''
+  modalPersonalCaja.lista = []
 }
 
 async function onSaveAsignarCajas() {

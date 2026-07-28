@@ -10,10 +10,13 @@ async function listAnticipos(req, res) {
     let sql = `
       SELECT a.*,
              c.clave_interna, c.nombre_exterior,
-             t.nombre_completo AS trabajador_nombre
+             COALESCE(
+               NULLIF(TRIM(t.nombre_completo), ''),
+               CONCAT('Trabajador #', a.trabajador_id)
+             ) AS trabajador_nombre
       FROM anticipos a
       INNER JOIN cajas_chicas c ON c.id = a.caja_id AND c.is_deleted = FALSE
-      INNER JOIN trabajadores t ON t.id = a.trabajador_id AND t.is_deleted = FALSE
+      LEFT JOIN trabajadores t ON t.id = a.trabajador_id
       WHERE a.is_deleted = FALSE`
 
     if (caja_id) {

@@ -61,10 +61,13 @@ async function listRendiciones(req, res) {
     let sql = `
       SELECT r.*,
              c.clave_interna, c.nombre_exterior,
-             t.nombre_completo AS trabajador_nombre
+             COALESCE(
+               NULLIF(TRIM(t.nombre_completo), ''),
+               CONCAT('Trabajador #', r.trabajador_id)
+             ) AS trabajador_nombre
       FROM rendiciones_gastos r
       INNER JOIN cajas_chicas c ON c.id = r.caja_id AND c.is_deleted = FALSE
-      INNER JOIN trabajadores t ON t.id = r.trabajador_id AND t.is_deleted = FALSE
+      LEFT JOIN trabajadores t ON t.id = r.trabajador_id
       WHERE r.is_deleted = FALSE`
 
     if (caja_id) {
@@ -80,8 +83,12 @@ async function listRendiciones(req, res) {
       params.push(mes)
     }
     if (q?.trim()) {
-      sql += ' AND t.nombre_completo LIKE ?'
-      params.push(`%${q.trim()}%`)
+      sql += ` AND (
+        t.nombre_completo LIKE ?
+        OR CONCAT('Trabajador #', r.trabajador_id) LIKE ?
+      )`
+      const like = `%${q.trim()}%`
+      params.push(like, like)
     }
 
     // Usuario rendidor solo ve las suyas
