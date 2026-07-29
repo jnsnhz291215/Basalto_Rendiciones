@@ -65,6 +65,15 @@ async function ensureRendicionesTipoDocto() {
        COMMENT 'Import Excel sin comprobante; adjuntar después'`
     )
   }
+
+  if (!(await columnExists('rendiciones_gastos', 'patente'))) {
+    await query(
+      `ALTER TABLE rendiciones_gastos
+       ADD COLUMN patente VARCHAR(12) NULL
+       COMMENT 'Patente normalizada XXXXNN (opcional)'
+       AFTER numero_documento`
+    )
+  }
 }
 
 module.exports = { ensureRendicionesTipoDocto }

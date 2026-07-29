@@ -272,6 +272,7 @@ export function mapRendicion(row) {
     docto,
     tipoDocumento: tipo,
     numeroDocumento: num ? String(num) : '',
+    patente: row.patente || '',
     monto: formatMontoApi(row.monto),
     estado: row.estado || 'Sin Devolución',
     estadoClass: ESTADO_CLASS[row.estado] || 'dash-status--warn',

@@ -17,7 +17,8 @@ const {
   keysMatch,
   cellToString,
   tipoRequiereNumeroDocumento,
-  resolveNumeroDocumentoForTipo
+  resolveNumeroDocumentoForTipo,
+  normalizePatente
 } = require('../utils/excelImport')
 
 async function assertCajaAsignadaATrabajador(trabajadorId, cajaId) {
@@ -179,6 +180,7 @@ async function createRendicion(req, res) {
       fecha_documento,
       tipo_documento,
       numero_documento,
+      patente,
       monto,
       origen_pago,
       tarjeta_id,
@@ -251,8 +253,8 @@ async function createRendicion(req, res) {
     const result = await query(
       `INSERT INTO rendiciones_gastos
         (codigo_rinde, caja_id, trabajador_id, fecha_documento, tipo_documento, numero_documento,
-         monto, origen_pago, tarjeta_id, comprobante_url, descripcion, estado, arrastre_mes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Sin Devolución', ?)`,
+         patente, monto, origen_pago, tarjeta_id, comprobante_url, descripcion, estado, arrastre_mes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Sin Devolución', ?)`,
       [
         codigo,
         caja_id,
@@ -260,9 +262,10 @@ async function createRendicion(req, res) {
         fecha_documento,
         tipo_documento,
         resolveNumeroDocumentoForTipo(tipo_documento, numero_documento),
+        normalizePatente(patente) || null,
         Number(monto),
         origen_pago,
-        tarjeta_id || null,
+        origen_pago === 'Efectivo' ? null : tarjeta_id || null,
         comprobante_url || null,
         String(descripcion).trim(),
         arrastre
@@ -304,6 +307,7 @@ async function updateRendicion(req, res) {
       fecha_documento,
       tipo_documento,
       numero_documento,
+      patente,
       monto,
       origen_pago,
       tarjeta_id,
@@ -434,9 +438,17 @@ async function updateRendicion(req, res) {
       })
     }
 
-    const nextTarjetaId =
-      tarjeta_id !== undefined ? tarjeta_id : existing[0].tarjeta_id
     const nextOrigen = origen_pago || existing[0].origen_pago
+    const nextTarjetaId =
+      nextOrigen === 'Efectivo'
+        ? null
+        : tarjeta_id !== undefined
+          ? tarjeta_id
+          : existing[0].tarjeta_id
+    const nextPatente =
+      patente !== undefined
+        ? normalizePatente(patente) || null
+        : existing[0].patente || null
     const tarjetaCheck = await assertTarjetaPermitePago({
       tarjetaId: nextTarjetaId,
       origenPago: nextOrigen,
@@ -451,6 +463,7 @@ async function updateRendicion(req, res) {
        SET fecha_documento = ?,
            tipo_documento = ?,
            numero_documento = ?,
+           patente = ?,
            monto = ?,
            origen_pago = ?,
            tarjeta_id = ?,
@@ -463,6 +476,7 @@ async function updateRendicion(req, res) {
         fecha,
         tipo,
         num,
+        nextPatente,
         monto !== undefined ? Number(monto) : existing[0].monto,
         nextOrigen,
         nextTarjetaId,
@@ -649,7 +663,7 @@ async function importRendicionesExcel(req, res) {
         if (!caja) throw new Error('caja es obligatoria')
 
         const tipo = mapTipoDocumento(row.tipo_documento)
-        if (!tipo) throw new Error('tipo_documento inválido (b/f/p/g)')
+        if (!tipo) throw new Error('tipo_documento inválido (b/f/p/g/oc)')
 
         const origen = mapOrigenPago(row.origen_pago)
         if (!origen) throw new Error('origen_pago inválido (e/d/c)')
@@ -666,6 +680,8 @@ async function importRendicionesExcel(req, res) {
           throw new Error(`numero_documento obligatorio para ${tipo}`)
         }
 
+        const patente = normalizePatente(row.patente) || null
+
         const trabajadorId = await findTrabajadorIdByRut(rut)
         if (!trabajadorId) throw new Error(`trabajador_rut no encontrado (${row.trabajador_rut})`)
 
@@ -673,7 +689,9 @@ async function importRendicionesExcel(req, res) {
         if (!cajaId) throw new Error(`caja/cc no encontrados (${cc} / ${caja})`)
 
         let tarjetaId = null
-        if (origen === 'Debito' || origen === 'Credito') {
+        if (origen === 'Efectivo') {
+          tarjetaId = null
+        } else if (origen === 'Debito' || origen === 'Credito') {
           const ult4 = normalizeTarjetaUltimos4(row.tarjeta_ultimos4)
           if (ult4.length !== 4) {
             throw new Error('tarjeta_ultimos4 obligatorio (4 dígitos) si origen es d/c')
@@ -700,8 +718,9 @@ async function importRendicionesExcel(req, res) {
         const result = await query(
           `INSERT INTO rendiciones_gastos
             (codigo_rinde, caja_id, trabajador_id, fecha_documento, tipo_documento, numero_documento,
-             monto, origen_pago, tarjeta_id, comprobante_url, descripcion, estado, arrastre_mes, es_legacy)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'Sin Devolución', ?, 1)`,
+             patente, monto, origen_pago, tarjeta_id, comprobante_url, descripcion, estado,
+             arrastre_mes, es_legacy)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'Sin Devolución', ?, 1)`,
           [
             codigo,
             cajaId,
@@ -709,6 +728,7 @@ async function importRendicionesExcel(req, res) {
             fecha,
             tipo,
             numeroDoc,
+            patente,
             monto,
             origen,
             tarjetaId,

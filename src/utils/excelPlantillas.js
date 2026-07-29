@@ -319,17 +319,17 @@ export function descargarPlantillaGastos() {
     'monto',
     'origen_pago',
     'tarjeta_ultimos4',
+    'patente',
     'descripcion'
   ]
 
   const dataTable = [headers, ...blankRows(headers.length, EMPTY_DATA_ROWS)]
 
-  // Leyendas a la derecha (columna M = índice 12)
   const leyendaOrigen = [
     ['origen_pago', 'Significado'],
-    ['e / E', 'Efectivo'],
-    ['d / D', 'Débito'],
-    ['c / C', 'Crédito']
+    ['e / E', 'Efectivo (sin tarjeta_ultimos4)'],
+    ['d / D', 'Débito (requiere tarjeta_ultimos4)'],
+    ['c / C', 'Crédito (requiere tarjeta_ultimos4)']
   ]
 
   const leyendaTipo = [
@@ -337,7 +337,8 @@ export function descargarPlantillaGastos() {
     ['b / B', 'Boleta (N° docto opcional)'],
     ['f / F', 'Factura (requiere numero_documento)'],
     ['p / P', 'Peaje (sin N° docto)'],
-    ['g / G', 'Guía Despacho (requiere numero_documento)']
+    ['g / G', 'Guía Despacho (requiere numero_documento)'],
+    ['oc / OC', 'Orden de compra (N° docto opcional)']
   ]
 
   const notas = [
@@ -346,28 +347,29 @@ export function descargarPlantillaGastos() {
     ['cc: nombre del centro de cobro / empresa'],
     ['caja: clave interna de la caja'],
     ['monto: solo números (ej. 15000)'],
-    ['tarjeta_ultimos4: obligatorio si d o c'],
+    ['tarjeta_ultimos4: solo si d o c; vacío si e'],
+    ['patente: opcional (ABCD12 o AB-CD-12 → ABCD12)'],
     ['descripcion: obligatoria (máx. 500)'],
-    ['Letras e/d/c y b/f/p/g: mayúscula o minúscula'],
+    ['Letras e/d/c y b/f/p/g/oc: mayúscula o minúscula'],
     ['Se crean como Legacy sin comprobante; adjuntar después en el sistema']
   ]
 
   const cells = [
     ...tableCells(1, 0, dataTable),
-    ...tableCells(1, 12, leyendaOrigen),
-    ...tableCells(7, 12, leyendaTipo),
-    ...tableCells(14, 12, notas, { headerRows: 1 })
+    ...tableCells(1, 13, leyendaOrigen),
+    ...tableCells(7, 13, leyendaTipo),
+    ...tableCells(15, 13, notas, { headerRows: 1 })
   ]
 
   const cols = [
-    ...Array(11)
+    ...Array(12)
       .fill(null)
       .map((_, i) => ({
-        width: [12, 14, 18, 16, 14, 12, 14, 12, 12, 14, 28][i]
+        width: [12, 14, 18, 16, 14, 12, 14, 12, 12, 14, 12, 28][i]
       })),
     { width: 3 },
     { width: 16 },
-    { width: 36 }
+    { width: 42 }
   ]
 
   const instrHeaders = ['Campo', 'Obligatorio', 'Descripción']
@@ -381,12 +383,17 @@ export function descargarPlantillaGastos() {
     [
       'tipo_documento',
       'Sí',
-      'b = Boleta | f = Factura | p = Peaje | g = Guía Despacho (mayúscula o minúscula)'
+      'b = Boleta | f = Factura | p = Peaje | g = Guía Despacho | oc = Orden de compra'
     ],
-    ['numero_documento', 'Condicional', 'Obligatorio si tipo_documento = f o g; opcional en b; vacío en p'],
+    [
+      'numero_documento',
+      'Condicional',
+      'Obligatorio si tipo_documento = f o g; opcional en b/oc; vacío en p'
+    ],
     ['monto', 'Sí', 'Monto en pesos (sin $ ni puntos)'],
-    ['origen_pago', 'Sí', 'e = Efectivo | d = Débito | c = Crédito (mayúscula o minúscula)'],
-    ['tarjeta_ultimos4', 'Condicional', 'Obligatorio si origen_pago = d o c'],
+    ['origen_pago', 'Sí', 'e = Efectivo | d = Débito | c = Crédito'],
+    ['tarjeta_ultimos4', 'Condicional', 'Obligatorio solo si origen_pago = d o c; vacío si e'],
+    ['patente', 'No', 'Opcional. Se normaliza a XXXXNN (ej. AB-CD-12 → ABCD12)'],
     ['descripcion', 'Sí', 'Descripción / observación (máx. 500 caracteres)'],
     [
       'NOTA',

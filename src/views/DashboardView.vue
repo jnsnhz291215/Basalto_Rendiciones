@@ -624,71 +624,92 @@
             </button>
           </div>
 
-          <div class="dash-sidebar-modules">
-            <button
-              type="button"
-              class="dash-nav-item"
-              :class="
-                activeModule === 'caja' ? 'dash-nav-item--active' : 'dash-nav-item--ghost'
-              "
-              title="Control Caja Chica"
-              @click="selectModule('caja')"
-            >
-              <svg class="dash-nav-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
-                />
-              </svg>
+          <nav class="dash-sidebar-nav">
+            <div class="dash-sidebar-section">
               <span
-                class="dash-nav-text"
+                class="dash-sidebar-section-label"
                 :class="{ 'dash-sidebar-text--invisible': !sidebarOpen }"
               >
-                Control Caja Chica
+                Operación
               </span>
-            </button>
-          </div>
-        </div>
+              <template v-for="item in operacionNavItems" :key="item.id">
+                <button
+                  v-if="!item.adminOnly || isAdminSession"
+                  type="button"
+                  class="dash-nav-item"
+                  :class="
+                    activeView === item.id ? 'dash-nav-item--active' : 'dash-nav-item--ghost'
+                  "
+                  :title="item.label"
+                  @click="selectView(item.id)"
+                >
+                  <i class="dash-nav-icon fa-solid" :class="item.icon" aria-hidden="true"></i>
+                  <span
+                    class="dash-nav-text"
+                    :class="{ 'dash-sidebar-text--invisible': !sidebarOpen }"
+                  >
+                    {{ item.label }}
+                  </span>
+                </button>
+              </template>
+            </div>
 
-        <div v-if="isAdminSession" class="dash-sidebar-bottom">
-          <button
-            type="button"
-            class="dash-nav-item"
-            :class="
-              activeModule === 'admin' ? 'dash-nav-item--active' : 'dash-nav-item--ghost'
-            "
-            title="Administración"
-            @click="selectModule('admin')"
-          >
-            <svg
-              class="dash-nav-icon"
-              :class="{ 'dash-nav-icon--accent': activeModule !== 'admin' }"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-              />
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
-            <span
-              class="dash-nav-text"
-              :class="{ 'dash-sidebar-text--invisible': !sidebarOpen }"
-            >
-              Administración
-            </span>
-          </button>
+            <div v-if="isAdminSession" class="dash-sidebar-section">
+              <span
+                class="dash-sidebar-section-label"
+                :class="{ 'dash-sidebar-text--invisible': !sidebarOpen }"
+              >
+                Configuración
+              </span>
+              <button
+                v-for="item in configuracionNavItems"
+                :key="item.id"
+                type="button"
+                class="dash-nav-item"
+                :class="
+                  activeView === item.id ? 'dash-nav-item--active' : 'dash-nav-item--ghost'
+                "
+                :title="item.label"
+                @click="selectView(item.id)"
+              >
+                <i class="dash-nav-icon fa-solid" :class="item.icon" aria-hidden="true"></i>
+                <span
+                  class="dash-nav-text"
+                  :class="{ 'dash-sidebar-text--invisible': !sidebarOpen }"
+                >
+                  {{ item.label }}
+                </span>
+              </button>
+            </div>
+
+            <div v-if="isAdminSession" class="dash-sidebar-section">
+              <span
+                class="dash-sidebar-section-label"
+                :class="{ 'dash-sidebar-text--invisible': !sidebarOpen }"
+              >
+                Administración
+              </span>
+              <button
+                v-for="item in administracionNavItems"
+                :key="item.id"
+                type="button"
+                class="dash-nav-item"
+                :class="
+                  activeView === item.id ? 'dash-nav-item--active' : 'dash-nav-item--ghost'
+                "
+                :title="item.label"
+                @click="selectView(item.id)"
+              >
+                <i class="dash-nav-icon fa-solid" :class="item.icon" aria-hidden="true"></i>
+                <span
+                  class="dash-nav-text"
+                  :class="{ 'dash-sidebar-text--invisible': !sidebarOpen }"
+                >
+                  {{ item.label }}
+                </span>
+              </button>
+            </div>
+          </nav>
         </div>
       </aside>
 
@@ -697,8 +718,7 @@
         <p v-if="dataError" class="dash-banner dash-banner--danger">{{ dataError }}</p>
         <p v-if="saveError" class="dash-banner dash-banner--danger">{{ saveError }}</p>
         <p v-if="saveOk" class="dash-banner dash-banner--ok">{{ saveOk }}</p>
-        <template v-if="activeModule === 'caja'">
-        <section class="dash-metrics">
+        <section v-if="isOperacionView" class="dash-metrics">
           <div class="dash-metrics-head">
             <div class="dash-metrics-title">
               <span class="dash-metrics-dot" aria-hidden="true"></span>
@@ -706,17 +726,76 @@
             </div>
 
             <div class="dash-metrics-controls">
-              <div class="dash-caja">
-                <span class="dash-caja-label">Caja:</span>
-                <select v-model="cajaActiva" class="dash-caja-select">
-                  <option
-                    v-for="c in cajasActivasOpciones"
-                    :key="c.groupKey"
-                    :value="c.groupKey"
+              <div class="dash-caja dash-caja--search">
+                <span class="dash-caja-label">CC:</span>
+                <div class="dash-combobox dash-combobox--metrics">
+                  <input
+                    v-model="ccFiltroQuery"
+                    type="text"
+                    class="dash-caja-select dash-caja-search-input"
+                    placeholder="Todos"
+                    autocomplete="off"
+                    @focus="onCcFiltroFocus"
+                    @input="onCcFiltroQueryInput"
+                    @keydown.down.prevent="highlightCcFiltro(1)"
+                    @keydown.up.prevent="highlightCcFiltro(-1)"
+                    @keydown.enter.prevent="confirmCcFiltroHighlight"
+                    @keydown.escape="ccFiltroOpen = false"
+                    @blur="onCcFiltroBlur"
+                  />
+                  <ul
+                    v-if="ccFiltroOpen && ccFiltroOpcionesVisibles.length"
+                    class="dash-combobox-list dash-combobox-list--metrics"
+                    role="listbox"
                   >
-                    {{ c.label }}
-                  </option>
-                </select>
+                    <li
+                      v-for="(opt, idx) in ccFiltroOpcionesVisibles"
+                      :key="opt.id || 'todos'"
+                      class="dash-combobox-option"
+                      :class="{ 'dash-combobox-option--active': idx === ccFiltroHighlight }"
+                      role="option"
+                      @mousedown.prevent="selectCcFiltro(opt)"
+                    >
+                      {{ opt.label }}
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="dash-caja dash-caja--search">
+                <span class="dash-caja-label">Caja:</span>
+                <div class="dash-combobox dash-combobox--metrics">
+                  <input
+                    v-model="cajaFiltroQuery"
+                    type="text"
+                    class="dash-caja-select dash-caja-search-input"
+                    placeholder="Buscar caja…"
+                    autocomplete="off"
+                    @focus="onCajaFiltroFocus"
+                    @input="onCajaFiltroQueryInput"
+                    @keydown.down.prevent="highlightCajaFiltro(1)"
+                    @keydown.up.prevent="highlightCajaFiltro(-1)"
+                    @keydown.enter.prevent="confirmCajaFiltroHighlight"
+                    @keydown.escape="cajaFiltroOpen = false"
+                    @blur="onCajaFiltroBlur"
+                  />
+                  <ul
+                    v-if="cajaFiltroOpen && cajaFiltroOpcionesVisibles.length"
+                    class="dash-combobox-list dash-combobox-list--metrics"
+                    role="listbox"
+                  >
+                    <li
+                      v-for="(opt, idx) in cajaFiltroOpcionesVisibles"
+                      :key="opt.groupKey"
+                      class="dash-combobox-option"
+                      :class="{ 'dash-combobox-option--active': idx === cajaFiltroHighlight }"
+                      role="option"
+                      @mousedown.prevent="selectCajaFiltro(opt)"
+                    >
+                      {{ opt.label }}
+                    </li>
+                  </ul>
+                </div>
               </div>
 
               <div class="dash-caja">
@@ -786,23 +865,8 @@
           </div>
         </section>
 
-        <div v-if="visibleTabs.length > 1" class="dash-tabs-bar">
-          <div class="dash-tabs">
-            <button
-              v-for="tab in visibleTabs"
-              :key="tab.id"
-              type="button"
-              class="dash-tab"
-              :class="{ 'dash-tab--active': activeTab === tab.id }"
-              @click="activeTab = tab.id"
-            >
-              {{ tab.label }}
-            </button>
-          </div>
-        </div>
-
       <!-- Rendición de Gastos -->
-      <template v-if="activeTab === 'rendicion'">
+      <template v-if="activeView === 'rendicion'">
         <div class="dash-rendicion-gestion">
           <div class="dash-cajas-toolbar">
             <div>
@@ -877,9 +941,9 @@
                     guardar.
                   </p>
                   <p>
-                    <strong>N° documento:</strong> Peaje no requiere; Boleta opcional;
-                    <strong>Factura</strong> y <strong>Guía Despacho</strong> obligatorio (debe
-                    verse en la foto).
+                    <strong>N° documento:</strong> Peaje no requiere; Boleta y Orden de compra
+                    opcional; <strong>Factura</strong> y <strong>Guía Despacho</strong> obligatorio
+                    (debe verse en la foto).
                   </p>
                   <p>
                     Si adjunta una <strong>foto</strong> (no PDF), asegúrese de que se vea
@@ -959,15 +1023,16 @@
                     <option>Factura</option>
                     <option>Peaje</option>
                     <option>Guía Despacho</option>
+                    <option>Orden de compra</option>
                   </select>
                 </div>
                 <div class="dash-field">
-                  <label>
+                  <label class="dash-label-inline">
                     N° Docto
-                    <span v-if="gasto.tipo === 'Peaje'" class="dash-field-hint">(no aplica)</span>
+                    <span v-if="gasto.tipo === 'Peaje'" class="dash-label-aside">(no aplica)</span>
                     <span
                       v-else-if="!gastoRequiereNumeroDocto"
-                      class="dash-field-hint"
+                      class="dash-label-aside"
                     >(opcional)</span>
                   </label>
                   <input
@@ -991,6 +1056,22 @@
                     class="dash-input-strong dash-input-monto"
                     autocomplete="off"
                     @input="onGastoMontoInput"
+                  />
+                </div>
+
+                <div class="dash-field">
+                  <label>
+                    Patente
+                    <span class="dash-label-aside">(opcional)</span>
+                  </label>
+                  <input
+                    :value="gasto.patenteDisplay"
+                    type="text"
+                    placeholder="AB-CD-12"
+                    maxlength="8"
+                    autocomplete="off"
+                    class="dash-mono"
+                    @input="onGastoPatenteInput"
                   />
                 </div>
 
@@ -1049,7 +1130,7 @@
 
                 <div
                   class="dash-field"
-                  :class="{ 'dash-gasto-span-4': gastoRequiereTarjetaDigits }"
+                  :class="{ 'dash-gasto-span-4': true }"
                 >
                   <label>Adjuntar Comprobante (PDF / PNG / JPG) *</label>
                   <input
@@ -1703,6 +1784,7 @@
                     <option>Factura</option>
                     <option>Peaje</option>
                     <option>Guía Despacho</option>
+                    <option>Orden de compra</option>
                   </select>
                 </div>
                 <div v-if="modalCorregir.campos.monto" class="dash-field">
@@ -1796,7 +1878,7 @@
       </template>
 
       <!-- Asignación -->
-      <div v-else-if="activeTab === 'asignacion' && isAdminSession" class="dash-assign">
+      <div v-else-if="activeView === 'asignacion' && isAdminSession" class="dash-assign">
         <div class="dash-rendicion-gestion">
           <div class="dash-cajas-toolbar">
             <div>
@@ -2203,7 +2285,7 @@
       </div>
 
       <!-- Informes y Cartola -->
-      <div v-else-if="activeTab === 'informes' && isAdminSession" class="dash-informes">
+      <div v-else-if="activeView === 'informes' && isAdminSession" class="dash-informes">
         <div class="dash-cajas-toolbar">
           <div>
             <h3 class="dash-cajas-toolbar-title">Centro de Informes y Cartolas</h3>
@@ -2601,7 +2683,7 @@
       </div>
 
       <!-- Cajas -->
-      <div v-else-if="activeTab === 'cajas' && isAdminSession" class="dash-cajas-gestion">
+      <div v-else-if="activeView === 'cajas' && isAdminSession" class="dash-cajas-gestion">
         <div class="dash-cajas-toolbar">
           <div>
             <h3 class="dash-cajas-toolbar-title">Cajas</h3>
@@ -2778,7 +2860,7 @@
       </div>
 
       <!-- Centro de cobro / empresa -->
-      <div v-else-if="activeTab === 'centros-costo' && isAdminSession" class="dash-cajas-gestion">
+      <div v-else-if="activeView === 'centros-costo' && isAdminSession" class="dash-cajas-gestion">
         <div class="dash-cajas-toolbar">
           <div>
             <h3 class="dash-cajas-toolbar-title">Centro de cobro / empresa</h3>
@@ -2889,26 +2971,31 @@
           </table>
         </div>
       </div>
-        </template>
 
-        <div v-else-if="isAdminSession" class="dash-admin">
-          <div class="dash-tabs-bar">
-            <div class="dash-tabs">
-              <button
-                v-for="tab in adminTabs"
-                :key="tab.id"
-                type="button"
-                class="dash-tab"
-                :class="{ 'dash-tab--active': activeAdminTab === tab.id }"
-                @click="activeAdminTab = tab.id"
-              >
-                {{ tab.label }}
-              </button>
-            </div>
+      <!-- Personal / Usuarios -->
+      <div v-else-if="activeView === 'personal' && isAdminSession" class="dash-admin-tab">
+        <div v-if="showPersonalAdminsToggle" class="dash-personal-subview-bar">
+          <div class="dash-personal-subview-tabs">
+            <button
+              type="button"
+              class="dash-personal-subview-tab"
+              :class="{ 'dash-personal-subview-tab--active': personalSubview === 'personal' }"
+              @click="personalSubview = 'personal'"
+            >
+              Personal
+            </button>
+            <button
+              type="button"
+              class="dash-personal-subview-tab"
+              :class="{ 'dash-personal-subview-tab--active': personalSubview === 'admins' }"
+              @click="personalSubview = 'admins'"
+            >
+              Administradores
+            </button>
           </div>
+        </div>
 
-          <!-- Admin Users -->
-          <div v-if="activeAdminTab === 'admin-users'" class="dash-admin-tab">
+        <template v-if="personalSubview === 'admins' && showPersonalAdminsToggle">
             <div class="dash-cajas-toolbar">
               <div>
                 <h3 class="dash-cajas-toolbar-title">Administradores del Sistema</h3>
@@ -3135,10 +3222,9 @@
                 </tbody>
               </table>
             </div>
-          </div>
+        </template>
 
-          <!-- Personal / Usuarios -->
-          <div v-else-if="activeAdminTab === 'personal'" class="dash-admin-tab">
+        <template v-else>
             <div class="dash-cajas-toolbar">
               <div>
                 <h3 class="dash-cajas-toolbar-title">Gestión de Personal</h3>
@@ -3326,10 +3412,11 @@
                 </div>
               </div>
             </div>
-          </div>
+        </template>
+      </div>
 
-          <!-- Tarjetas Empresa -->
-          <div v-else-if="activeAdminTab === 'tarjetas'" class="dash-admin-tab">
+      <!-- Tarjetas Empresa -->
+      <div v-else-if="activeView === 'tarjetas' && isAdminSession" class="dash-admin-tab">
             <div class="dash-cajas-toolbar">
               <div>
                 <h3 class="dash-cajas-toolbar-title">Tarjetas Corporativas Habilitadas</h3>
@@ -3499,10 +3586,10 @@
                 </tbody>
               </table>
             </div>
-          </div>
+      </div>
 
-          <!-- Auditoría -->
-          <div v-else-if="activeAdminTab === 'auditoria'" class="dash-informes">
+      <!-- Auditoría -->
+      <div v-else-if="activeView === 'auditoria' && isAdminSession" class="dash-informes">
             <div class="dash-panel">
               <div class="dash-panel-head">
                 <div>
@@ -3588,12 +3675,7 @@
                 </tbody>
               </table>
             </div>
-          </div>
-
-          <div v-else class="dash-panel dash-panel--placeholder">
-            <p>Sección “{{ currentAdminTabLabel }}” - próximamente.</p>
-          </div>
-        </div>
+      </div>
     </main>
     </div>
   </div>
@@ -3613,6 +3695,7 @@ import {
   rutStatusLabel,
   validarRutChileno
 } from '../utils/rut'
+import { fromPatenteInput, normalizePatente } from '../utils/patente'
 import {
   descargarPlantillaAsignaciones,
   descargarPlantillaGastos,
@@ -3773,7 +3856,16 @@ const legacyComprobanteInputEl = ref(null)
 const pendingLegacyAttach = ref(null)
 
 const cajaActiva = ref('')
+/** '' = Todos los centros de cobro */
+const ccActivo = ref('')
 const mesActivo = ref('')
+
+const ccFiltroQuery = ref('Todos')
+const ccFiltroOpen = ref(false)
+const ccFiltroHighlight = ref(0)
+const cajaFiltroQuery = ref('')
+const cajaFiltroOpen = ref(false)
+const cajaFiltroHighlight = ref(0)
 
 const resumenLoading = ref(false)
 const resumenCaja = reactive({
@@ -3902,30 +3994,30 @@ function normalizarGroupKey(value) {
     .replace(/\s+/g, '_')
     .replace(/[^A-Z0-9_]/g, '')
 }
-const activeTab = ref('rendicion')
+const activeView = ref('rendicion')
+const personalSubview = ref('personal')
 const sidebarOpen = ref(false)
-const activeModule = ref('caja')
 
-const ALL_CAJA_TABS = [
-  { id: 'rendicion', label: 'Rendición de Gastos' },
-  { id: 'asignacion', label: 'Asignación' },
-  { id: 'informes', label: 'Informes y Cartola' },
-  { id: 'cajas', label: 'Cajas' },
-  { id: 'centros-costo', label: 'Centro de cobro / empresa' }
+const OPERACION_VIEW_IDS = ['rendicion', 'asignacion', 'informes']
+
+const operacionNavItems = [
+  { id: 'rendicion', label: 'Rendición de Gastos', icon: 'fa-file-invoice-dollar' },
+  { id: 'asignacion', label: 'Asignaciones', icon: 'fa-hand-holding-dollar', adminOnly: true },
+  { id: 'informes', label: 'Informes y Cartola', icon: 'fa-chart-line', adminOnly: true }
 ]
 
-const adminTabs = [
-  { id: 'admin-users', label: 'Admin Users' },
-  { id: 'personal', label: 'Personal / Usuarios' },
-  { id: 'tarjetas', label: 'Tarjetas Empresa' },
-  { id: 'auditoria', label: 'Auditoría' }
+const configuracionNavItems = [
+  { id: 'cajas', label: 'Cajas', icon: 'fa-cash-register' },
+  { id: 'centros-costo', label: 'Centros de Costo', icon: 'fa-building' },
+  { id: 'tarjetas', label: 'Tarjetas Empresa', icon: 'fa-credit-card' }
 ]
 
-const activeAdminTab = ref('admin-users')
+const administracionNavItems = [
+  { id: 'personal', label: 'Personal / Usuarios', icon: 'fa-users' },
+  { id: 'auditoria', label: 'Auditoría', icon: 'fa-clipboard-list' }
+]
 
-const currentAdminTabLabel = computed(
-  () => adminTabs.find((t) => t.id === activeAdminTab.value)?.label || ''
-)
+const isOperacionView = computed(() => OPERACION_VIEW_IDS.includes(activeView.value))
 
 const initials = computed(() => {
   const name = user.value?.nombre || 'Usuario'
@@ -3940,6 +4032,8 @@ const gasto = reactive({
   trabajador: '',
   tipo: 'Boleta',
   numero: '',
+  patente: '',
+  patenteDisplay: '',
   monto: '',
   cajaGroupKey: '',
   metodoPago: 'efectivo',
@@ -4202,19 +4296,11 @@ const isAdminSession = computed(() => {
 
 const isUsuarioNormal = computed(() => !isAdminSession.value)
 
-const visibleTabs = computed(() => {
-  if (!isAdminSession.value) {
-    return ALL_CAJA_TABS.filter((t) => t.id === 'rendicion')
-  }
-  return ALL_CAJA_TABS
-})
-
 watch(
   isAdminSession,
   (admin) => {
-    if (!admin) {
-      activeModule.value = 'caja'
-      activeTab.value = 'rendicion'
+    if (!admin && activeView.value !== 'rendicion') {
+      activeView.value = 'rendicion'
     }
   },
   { immediate: true }
@@ -4223,6 +4309,19 @@ watch(
 const canCreateAdmins = computed(() => {
   const nivel = sessionAdminNivel.value
   return nivel === ROLE_DEV || nivel === ROLE_SUPER
+})
+
+function canAccessView(id) {
+  if (id === 'rendicion') return true
+  return isAdminSession.value
+}
+
+const showPersonalAdminsToggle = computed(() => isAdminSession.value && canCreateAdmins.value)
+
+watch(activeView, (view) => {
+  if (view === 'personal' && !showPersonalAdminsToggle.value) {
+    personalSubview.value = 'personal'
+  }
 })
 
 const canCreateUsuarios = computed(() => {
@@ -4461,6 +4560,12 @@ function onGastoTipoChange() {
   }
 }
 
+function onGastoPatenteInput(event) {
+  const { clean, display } = fromPatenteInput(event.target.value)
+  gasto.patente = clean
+  gasto.patenteDisplay = display
+}
+
 function onGastoTrabajadorChange() {
   if (gasto.trabajadorId === 'me') {
     gasto.trabajador = nombreSesion.value
@@ -4594,12 +4699,13 @@ const gastoRequiereTarjetaDigits = computed(
   () => gasto.metodoPago === 'debito' || gasto.metodoPago === 'credito'
 )
 
-/** N° docto: Peaje no; Boleta opcional; Factura y Guía Despacho obligatorio */
+/** N° docto: Peaje no; Boleta/OC opcional; Factura y Guía Despacho obligatorio */
 const gastoMuestraNumeroDocto = computed(
   () =>
     gasto.tipo === 'Boleta' ||
     gasto.tipo === 'Factura' ||
-    gasto.tipo === 'Guía Despacho'
+    gasto.tipo === 'Guía Despacho' ||
+    gasto.tipo === 'Orden de compra'
 )
 
 const gastoRequiereNumeroDocto = computed(
@@ -4668,14 +4774,24 @@ function applyTieneUsuario(trabajadoresList, usuariosList) {
 }
 
 function syncSelectoresCajaMes() {
-  if (!cajas.value.length) {
-    cajaActiva.value = ''
-  } else {
-    const keys = [...new Set(cajas.value.map((c) => c.groupKey))]
-    if (!keys.includes(cajaActiva.value)) {
-      cajaActiva.value = keys[0] || ''
-    }
+  if (ccActivo.value) {
+    const ccOk = centrosCosto.value.some((c) => String(c.id) === String(ccActivo.value))
+    if (!ccOk) ccActivo.value = ''
   }
+  syncCcFiltroQueryFromSelection()
+
+  const opts = cajasFiltroHeaderOpciones.value
+  if (!opts.length) {
+    // Si el CC no tiene cajas, no forzar vacío del resto del sistema:
+    // caer a la primera caja global disponible.
+    const all = cajasActivasOpciones.value
+    if (!all.some((c) => c.groupKey === cajaActiva.value)) {
+      cajaActiva.value = all[0]?.groupKey || ''
+    }
+  } else if (!opts.some((c) => c.groupKey === cajaActiva.value)) {
+    cajaActiva.value = opts[0].groupKey || ''
+  }
+  syncCajaFiltroQueryFromSelection()
 
   if (!mesesDisponibles.value.some((m) => m.value === mesActivo.value)) {
     const now = new Date()
@@ -4820,17 +4936,162 @@ function toggleCcAccordion(key) {
   ccAccordionOpen[key] = !ccAccordionOpen[key]
 }
 
+const ccFiltroOpciones = computed(() => [
+  { id: '', label: 'Todos' },
+  ...centrosCosto.value.map((cc) => ({
+    id: String(cc.id),
+    label: cc.nombre || `CC #${cc.id}`
+  }))
+])
+
+const ccFiltroOpcionesVisibles = computed(() => {
+  const q = ccFiltroQuery.value.trim().toLowerCase()
+  if (!q || q === 'todos') return ccFiltroOpciones.value
+  return ccFiltroOpciones.value.filter(
+    (o) =>
+      o.id === '' ||
+      o.label.toLowerCase().includes(q)
+  )
+})
+
 const cajasActivasOpciones = computed(() => {
   const map = new Map()
   for (const c of cajas.value) {
     if (!map.has(c.groupKey)) {
-      map.set(c.groupKey, c.displayName)
+      map.set(c.groupKey, {
+        displayName: c.displayName,
+        centroCobroId: c.centroCobroId,
+        centroCobroNombre: c.centroCobroNombre
+      })
     }
   }
-  return [...map.entries()].map(([groupKey, displayName]) => ({
+  return [...map.entries()].map(([groupKey, meta]) => ({
     groupKey,
-    label: displayName
+    label: meta.displayName,
+    centroCobroId: meta.centroCobroId,
+    centroCobroNombre: meta.centroCobroNombre
   }))
+})
+
+/** Cajas del buscador del header (filtradas por CC activo). */
+const cajasFiltroHeaderOpciones = computed(() => {
+  if (!ccActivo.value) return cajasActivasOpciones.value
+  return cajasActivasOpciones.value.filter(
+    (c) => String(c.centroCobroId ?? '') === String(ccActivo.value)
+  )
+})
+
+const cajaFiltroOpcionesVisibles = computed(() => {
+  const q = cajaFiltroQuery.value.trim().toLowerCase()
+  const all = cajasFiltroHeaderOpciones.value
+  if (!q) return all
+  return all.filter(
+    (o) =>
+      o.label.toLowerCase().includes(q) ||
+      o.groupKey.toLowerCase().includes(q) ||
+      String(o.centroCobroNombre || '')
+        .toLowerCase()
+        .includes(q)
+  )
+})
+
+function syncCcFiltroQueryFromSelection() {
+  if (!ccActivo.value) {
+    ccFiltroQuery.value = 'Todos'
+    return
+  }
+  const opt = ccFiltroOpciones.value.find((o) => o.id === String(ccActivo.value))
+  ccFiltroQuery.value = opt?.label || 'Todos'
+}
+
+function syncCajaFiltroQueryFromSelection() {
+  const opt = cajasActivasOpciones.value.find((c) => c.groupKey === cajaActiva.value)
+  cajaFiltroQuery.value = opt?.label || ''
+}
+
+function onCcFiltroFocus() {
+  ccFiltroOpen.value = true
+  ccFiltroHighlight.value = 0
+}
+
+function onCcFiltroQueryInput() {
+  ccFiltroOpen.value = true
+  ccFiltroHighlight.value = 0
+}
+
+function highlightCcFiltro(delta) {
+  const n = ccFiltroOpcionesVisibles.value.length
+  if (!n) return
+  ccFiltroHighlight.value = (ccFiltroHighlight.value + delta + n) % n
+}
+
+function confirmCcFiltroHighlight() {
+  const opt = ccFiltroOpcionesVisibles.value[ccFiltroHighlight.value]
+  if (opt) selectCcFiltro(opt)
+}
+
+function selectCcFiltro(opt) {
+  ccActivo.value = opt.id || ''
+  ccFiltroQuery.value = opt.label
+  ccFiltroOpen.value = false
+  const opts = cajasFiltroHeaderOpciones.value
+  if (!opts.some((c) => c.groupKey === cajaActiva.value)) {
+    cajaActiva.value = opts[0]?.groupKey || ''
+  }
+  syncCajaFiltroQueryFromSelection()
+}
+
+function onCcFiltroBlur() {
+  setTimeout(() => {
+    ccFiltroOpen.value = false
+    syncCcFiltroQueryFromSelection()
+  }, 120)
+}
+
+function onCajaFiltroFocus() {
+  cajaFiltroOpen.value = true
+  cajaFiltroHighlight.value = 0
+}
+
+function onCajaFiltroQueryInput() {
+  cajaFiltroOpen.value = true
+  cajaFiltroHighlight.value = 0
+}
+
+function highlightCajaFiltro(delta) {
+  const n = cajaFiltroOpcionesVisibles.value.length
+  if (!n) return
+  cajaFiltroHighlight.value = (cajaFiltroHighlight.value + delta + n) % n
+}
+
+function confirmCajaFiltroHighlight() {
+  const opt = cajaFiltroOpcionesVisibles.value[cajaFiltroHighlight.value]
+  if (opt) selectCajaFiltro(opt)
+}
+
+function selectCajaFiltro(opt) {
+  cajaActiva.value = opt.groupKey
+  cajaFiltroQuery.value = opt.label
+  cajaFiltroOpen.value = false
+}
+
+function onCajaFiltroBlur() {
+  setTimeout(() => {
+    cajaFiltroOpen.value = false
+    syncCajaFiltroQueryFromSelection()
+  }, 120)
+}
+
+watch(ccActivo, () => {
+  const opts = cajasFiltroHeaderOpciones.value
+  if (!opts.some((c) => c.groupKey === cajaActiva.value)) {
+    cajaActiva.value = opts[0]?.groupKey || ''
+  }
+  syncCajaFiltroQueryFromSelection()
+})
+
+watch(cajaActiva, () => {
+  syncCajaFiltroQueryFromSelection()
 })
 
 const cajasActivas = computed(() =>
@@ -5814,12 +6075,15 @@ async function onSaveCorreccion() {
 
   if (campos.tipo_docto) {
     payload.tipo_documento = modalCorregir.tipo
-    if (modalCorregir.tipo === 'Peaje') {
+    if (
+      modalCorregir.tipo === 'Peaje'
+    ) {
       payload.numero_documento = null
     } else if (
       modalCorregir.tipo === 'Factura' ||
       modalCorregir.tipo === 'Guía Despacho' ||
-      modalCorregir.tipo === 'Boleta'
+      modalCorregir.tipo === 'Boleta' ||
+      modalCorregir.tipo === 'Orden de compra'
     ) {
       payload.numero_documento = modalCorregir.numeroLocked || null
       if (
@@ -5913,10 +6177,12 @@ function toggleSidebar() {
   sidebarOpen.value = !sidebarOpen.value
 }
 
-function selectModule(moduleName) {
-  if (!isAdminSession.value && moduleName === 'admin') return
-  if (!sidebarOpen.value) openSidebar()
-  activeModule.value = moduleName
+function selectView(id) {
+  if (!canAccessView(id)) return
+  activeView.value = id
+  if (id === 'personal') {
+    personalSubview.value = 'personal'
+  }
 }
 
 async function onSaveGasto() {
@@ -5984,9 +6250,11 @@ async function onSaveGasto() {
     numero_documento: gastoMuestraNumeroDocto.value
       ? gasto.numero.trim() || null
       : null,
+    patente: normalizePatente(gasto.patente) || null,
     monto: montoNum,
     origen_pago: origenFromMetodo(gasto.metodoPago),
-    tarjeta_id: resolveTarjetaIdParaGasto(),
+    tarjeta_id:
+      gasto.metodoPago === 'efectivo' ? null : resolveTarjetaIdParaGasto(),
     descripcion: String(gasto.descripcion || '').trim()
   }
   await ejecutarVerificacionYGuardado()
@@ -5995,6 +6263,8 @@ async function onSaveGasto() {
 function resetGastoFormFields() {
   gasto.tipo = 'Boleta'
   gasto.numero = ''
+  gasto.patente = ''
+  gasto.patenteDisplay = ''
   gasto.monto = ''
   gasto.metodoPago = 'efectivo'
   gasto.tarjetaUltimos4 = ''

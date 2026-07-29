@@ -13,6 +13,7 @@ const HEADERS_GASTOS = [
   'monto',
   'origen_pago',
   'tarjeta_ultimos4',
+  'patente',
   'descripcion'
 ]
 
@@ -237,6 +238,16 @@ function mapTipoDocumento(value) {
   ) {
     return 'Guía Despacho'
   }
+  if (
+    raw === 'oc' ||
+    raw === 'o' ||
+    raw === 'orden_de_compra' ||
+    raw === 'orden de compra' ||
+    raw === 'ordencompra' ||
+    raw.startsWith('orden')
+  ) {
+    return 'Orden de compra'
+  }
   return null
 }
 
@@ -245,22 +256,55 @@ function mapOrigenPago(value) {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z]/g, '')
     .trim()
   if (!raw) return null
-  if (raw === 'e' || raw === 'efectivo') return 'Efectivo'
-  if (raw === 'd' || raw === 'debito') return 'Debito'
-  if (raw === 'c' || raw === 'credito') return 'Credito'
+  if (raw === 'e' || raw.startsWith('efect')) return 'Efectivo'
+  if (raw === 'd' || raw.startsWith('debit')) return 'Debito'
+  if (raw === 'c' || raw.startsWith('credit')) return 'Credito'
   return null
+}
+
+/**
+ * Patente chilena corta: display XX-XX-NN, guardado XXXXNN (4 letras + 2 dígitos).
+ */
+function normalizePatente(value) {
+  const chars = String(value || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  let out = ''
+  for (const ch of chars) {
+    if (out.length >= 6) break
+    if (out.length < 4) {
+      if (/[A-Z]/.test(ch)) out += ch
+    } else if (/[0-9]/.test(ch)) {
+      out += ch
+    }
+  }
+  return out
+}
+
+function formatPatenteDisplay(value) {
+  const clean = normalizePatente(value)
+  if (!clean) return ''
+  if (clean.length <= 2) return clean
+  if (clean.length <= 4) return `${clean.slice(0, 2)}-${clean.slice(2)}`
+  return `${clean.slice(0, 2)}-${clean.slice(2, 4)}-${clean.slice(4)}`
 }
 
 /**
  * N° documento:
  * - Peaje: no aplica
- * - Boleta: opcional
+ * - Boleta / Orden de compra: opcional
  * - Factura / Guía Despacho: obligatorio
  */
 function tipoAceptaNumeroDocumento(tipo) {
-  return tipo === 'Boleta' || tipo === 'Factura' || tipo === 'Guía Despacho'
+  return (
+    tipo === 'Boleta' ||
+    tipo === 'Factura' ||
+    tipo === 'Guía Despacho' ||
+    tipo === 'Orden de compra'
+  )
 }
 
 function tipoRequiereNumeroDocumento(tipo) {
@@ -298,5 +342,7 @@ module.exports = {
   cellToString,
   tipoAceptaNumeroDocumento,
   tipoRequiereNumeroDocumento,
-  resolveNumeroDocumentoForTipo
+  resolveNumeroDocumentoForTipo,
+  normalizePatente,
+  formatPatenteDisplay
 }
