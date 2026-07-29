@@ -52,4 +52,85 @@ function nextCodigo(prefix, maxNum) {
   return `${prefix}-${n}`
 }
 
-module.exports = { calcularArrastreMes, nextCodigo, MESES_ES, mesActualYYYYMM }
+/** Ventana en horas para que ADMINS editen datos o soft-deleteen un movimiento. */
+const VENTANA_EDICION_HORAS = 24
+
+/**
+ * ¿Está `createdAt` dentro de la ventana de edición/borrado?
+ * @param {Date|string|number|null|undefined} createdAt
+ * @param {number} [hours=24]
+ */
+function estaDentroVentanaEdicion(createdAt, hours = VENTANA_EDICION_HORAS) {
+  if (createdAt == null || createdAt === '') return false
+  const t =
+    createdAt instanceof Date
+      ? createdAt.getTime()
+      : typeof createdAt === 'number'
+        ? createdAt
+        : new Date(createdAt).getTime()
+  if (!Number.isFinite(t)) return false
+  const h = Number(hours)
+  const ms = (Number.isFinite(h) && h > 0 ? h : VENTANA_EDICION_HORAS) * 60 * 60 * 1000
+  return Date.now() - t <= ms
+}
+
+function mensajeFueraVentanaEdicion(accion = 'editar') {
+  const verb = accion === 'eliminar' ? 'eliminar' : 'editar'
+  return `Fuera de la ventana de 24 horas: no se puede ${verb}`
+}
+
+/**
+ * @returns {{ status: number, error: string } | null}
+ */
+function assertDentroVentanaEdicion(createdAt, accion = 'editar') {
+  if (estaDentroVentanaEdicion(createdAt)) return null
+  return { status: 403, error: mensajeFueraVentanaEdicion(accion) }
+}
+
+/** Campos de datos de gasto (no workflow ni solo comprobante). */
+const CAMPOS_DATOS_RENDICION = [
+  'fecha_documento',
+  'tipo_documento',
+  'numero_documento',
+  'patente',
+  'monto',
+  'origen_pago',
+  'tarjeta_id'
+]
+
+/** Campos de datos de asignación (no solo comprobante). */
+const CAMPOS_DATOS_ANTICIPO = [
+  'fecha',
+  'monto',
+  'observacion',
+  'trabajador_id',
+  'caja_id',
+  'numero_cuenta',
+  'banco_origen'
+]
+
+function bodyTocaCampos(body, keys) {
+  if (!body || typeof body !== 'object') return false
+  return keys.some((k) => Object.prototype.hasOwnProperty.call(body, k) && body[k] !== undefined)
+}
+
+function adminUpdateTocaDatosRendicion(body) {
+  return bodyTocaCampos(body, CAMPOS_DATOS_RENDICION)
+}
+
+function adminUpdateTocaDatosAnticipo(body) {
+  return bodyTocaCampos(body, CAMPOS_DATOS_ANTICIPO)
+}
+
+module.exports = {
+  calcularArrastreMes,
+  nextCodigo,
+  MESES_ES,
+  mesActualYYYYMM,
+  VENTANA_EDICION_HORAS,
+  estaDentroVentanaEdicion,
+  mensajeFueraVentanaEdicion,
+  assertDentroVentanaEdicion,
+  adminUpdateTocaDatosRendicion,
+  adminUpdateTocaDatosAnticipo
+}

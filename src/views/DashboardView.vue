@@ -1407,6 +1407,16 @@
                         Admin
                       </button>
                       <button
+                        v-if="muestraSoftDeleteAdmin(row)"
+                        class="dash-btn-icon dash-btn-icon--danger"
+                        type="button"
+                        :disabled="!puedeSoftDeleteAdmin(row)"
+                        :title="tituloSoftDeleteAdmin(row)"
+                        @click="onSoftDeleteRendicion(row)"
+                      >
+                        <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                      </button>
+                      <button
                         v-if="canDevForceDelete && !esLegacyHistorico(row) && row.id"
                         class="dash-btn-icon dash-btn-icon--danger"
                         type="button"
@@ -2304,6 +2314,16 @@
                       }}
                     </button>
                     <button
+                      v-if="muestraSoftDeleteAdmin(row)"
+                      class="dash-btn-icon dash-btn-icon--danger"
+                      type="button"
+                      :disabled="!puedeSoftDeleteAdmin(row)"
+                      :title="tituloSoftDeleteAdmin(row)"
+                      @click="onSoftDeleteAnticipo(row)"
+                    >
+                      <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                    </button>
+                    <button
                       v-if="canDevForceDelete && row.id"
                       class="dash-btn-icon dash-btn-icon--danger"
                       type="button"
@@ -2313,7 +2333,9 @@
                       <i class="fa-solid fa-trash" aria-hidden="true"></i>
                     </button>
                     <span
-                      v-else-if="!puedeAdjuntarComprobanteAsignacion(row)"
+                      v-else-if="
+                        !puedeAdjuntarComprobanteAsignacion(row) && !muestraSoftDeleteAdmin(row)
+                      "
                       class="dash-muted"
                       >-</span
                     >
@@ -4572,6 +4594,11 @@ import {
 } from '../utils/rut'
 import { fromPatenteInput, normalizePatente } from '../utils/patente'
 import {
+  estaDentroVentanaEdicion,
+  hintFueraVentanaEdicion,
+  hintVentanaEdicionActiva
+} from '../utils/ventanaEdicion'
+import {
   descargarPlantillaAsignaciones,
   descargarPlantillaGastos,
   exportarCartolaVisible
@@ -6825,6 +6852,29 @@ function esLegacyOperacional(row) {
   return Boolean(row?.legacy && row?.id && !row?.legacyId)
 }
 
+/** Soft delete admin: visible solo dentro de 24h (fuera: oculto; API sigue bloqueando). */
+function muestraSoftDeleteAdmin(row) {
+  if (!isAdminSession.value || canDevForceDelete.value) return false
+  if (!row?.id || esLegacyHistorico(row)) return false
+  return estaDentroVentanaEdicion(createdAtRefMovimiento(row))
+}
+
+function createdAtRefMovimiento(row) {
+  if (!row) return null
+  if (row.createdAtMs) return row.createdAtMs
+  if (row.created_at) return row.created_at
+  return null
+}
+
+function puedeSoftDeleteAdmin(row) {
+  return muestraSoftDeleteAdmin(row)
+}
+
+function tituloSoftDeleteAdmin(row) {
+  if (puedeSoftDeleteAdmin(row)) return hintVentanaEdicionActiva()
+  return hintFueraVentanaEdicion('eliminar')
+}
+
 function puedeAdjuntarComprobanteGasto(row) {
   return esLegacyOperacional(row)
 }
@@ -8270,6 +8320,24 @@ async function onDeleteCentroCosto(cc) {
   }
 }
 
+async function onSoftDeleteRendicion(row) {
+  if (!puedeSoftDeleteAdmin(row)) return
+  if (
+    !confirm(
+      `¿Eliminar la rendición ${row.rinde}? (soft delete, solo dentro de 24 h desde Subido el)`
+    )
+  ) {
+    return
+  }
+  try {
+    saveError.value = ''
+    await api.deleteRendicion(row.id)
+    await loadDashboardData()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo eliminar la rendición'
+  }
+}
+
 async function onHardDeleteRendicion(row) {
   if (!canDevForceDelete.value || !row?.id || esLegacyHistorico(row)) return
   if (
@@ -8285,6 +8353,24 @@ async function onHardDeleteRendicion(row) {
     await loadDashboardData()
   } catch (err) {
     saveError.value = err?.message || 'No se pudo eliminar la rendición'
+  }
+}
+
+async function onSoftDeleteAnticipo(row) {
+  if (!puedeSoftDeleteAdmin(row)) return
+  if (
+    !confirm(
+      `¿Eliminar la asignación ${row.doc}? (soft delete, solo dentro de 24 h desde Subido el)`
+    )
+  ) {
+    return
+  }
+  try {
+    saveError.value = ''
+    await api.deleteAnticipo(row.id)
+    await loadDashboardData()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo eliminar la asignación'
   }
 }
 

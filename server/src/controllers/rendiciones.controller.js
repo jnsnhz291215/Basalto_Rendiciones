@@ -1,6 +1,12 @@
 const { query } = require('../config/db')
 const { registrarAuditoria } = require('../utils/audit')
-const { calcularArrastreMes, nextCodigo, mesActualYYYYMM } = require('../utils/helpers')
+const {
+  calcularArrastreMes,
+  nextCodigo,
+  mesActualYYYYMM,
+  assertDentroVentanaEdicion,
+  adminUpdateTocaDatosRendicion
+} = require('../utils/helpers')
 const { ROLES, ADMINS } = require('../middlewares/role.middleware')
 const { assertTarjetaPermitePago } = require('../utils/tarjetaPago')
 const { guardarYVerificarComprobante } = require('../utils/verificarComprobante')
@@ -485,6 +491,15 @@ async function updateRendicion(req, res) {
       return res.json(updated[0])
     }
 
+    // Admin: edición de datos solo dentro de 24h desde created_at.
+    // Workflow (estado / comprobante / descripción) y adjuntos de lote quedan fuera de esta regla.
+    if (adminUpdateTocaDatosRendicion(req.body)) {
+      const bloqueoVentana = assertDentroVentanaEdicion(existing[0].created_at, 'editar')
+      if (bloqueoVentana) {
+        return res.status(bloqueoVentana.status).json({ error: bloqueoVentana.error })
+      }
+    }
+
     let arrastre = existing[0].arrastre_mes
     const fecha = fecha_documento || existing[0].fecha_documento
     if (fecha_documento) {
@@ -609,6 +624,14 @@ async function softDeleteRendicion(req, res) {
     const bloqueoLote = await assertPuedeBorrarMovimientoImportado(existing[0])
     if (bloqueoLote) {
       return res.status(bloqueoLote.status).json({ error: bloqueoLote.error })
+    }
+
+    // Soft delete: ventana 24h. Hard delete Dev (`canDevHardDelete`) la omite.
+    if (!allowHard) {
+      const bloqueoVentana = assertDentroVentanaEdicion(existing[0].created_at, 'eliminar')
+      if (bloqueoVentana) {
+        return res.status(bloqueoVentana.status).json({ error: bloqueoVentana.error })
+      }
     }
 
     if (allowHard) {

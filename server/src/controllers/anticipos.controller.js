@@ -2,7 +2,11 @@
 
 const { query } = require('../config/db')
 const { registrarAuditoria } = require('../utils/audit')
-const { nextCodigo } = require('../utils/helpers')
+const {
+  nextCodigo,
+  assertDentroVentanaEdicion,
+  adminUpdateTocaDatosAnticipo
+} = require('../utils/helpers')
 const { canDevHardDelete } = require('../config/devFlags')
 const {
   ensureAsignacionesSchema,
@@ -240,6 +244,14 @@ async function updateAnticipo(req, res) {
       }
     }
 
+    // Admin: edición de datos solo dentro de 24h. Solo comprobante (p. ej. adjunto) queda exento.
+    if (adminUpdateTocaDatosAnticipo(req.body)) {
+      const bloqueoVentana = assertDentroVentanaEdicion(existing[0].created_at, 'editar')
+      if (bloqueoVentana) {
+        return res.status(bloqueoVentana.status).json({ error: bloqueoVentana.error })
+      }
+    }
+
     let nextCuenta = existing[0].numero_cuenta
     let nextBanco = existing[0].banco_origen
     if (numero_cuenta !== undefined || banco_origen !== undefined) {
@@ -317,6 +329,14 @@ async function softDeleteAnticipo(req, res) {
     }
 
     const allowHard = canDevHardDelete(req.user)
+    // Soft delete: ventana 24h. Hard delete Dev la omite.
+    if (!allowHard) {
+      const bloqueoVentana = assertDentroVentanaEdicion(existing[0].created_at, 'eliminar')
+      if (bloqueoVentana) {
+        return res.status(bloqueoVentana.status).json({ error: bloqueoVentana.error })
+      }
+    }
+
     if (allowHard) {
       await query(`DELETE FROM anticipos WHERE id = ?`, [id])
       await registrarAuditoria(
