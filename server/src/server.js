@@ -9,6 +9,7 @@ const { STORAGE_ROOT, ensureStorageDirs } = require('./config/storage')
 const { ensureCajasSchema } = require('./utils/ensureCajasSchema')
 const { ensureAsignacionesSchema } = require('./utils/ensureAsignacionesSchema')
 const { ensureRendicionesTipoDocto } = require('./utils/ensureRendicionesTipoDocto')
+const { ensureIndexes } = require('./utils/ensureIndexes')
 
 const authRoutes = require('./routes/auth.routes')
 const cajasRoutes = require('./routes/cajas.routes')
@@ -117,6 +118,12 @@ app.listen(PORT, async () => {
     console.log('[schema] rendiciones tipo_documento OK')
   } catch (err) {
     console.warn('[schema] ensureRendicionesTipoDocto:', err.message)
+  }
+  try {
+    await ensureIndexes()
+    console.log('[schema] indexes OK')
+  } catch (err) {
+    console.warn('[schema] ensureIndexes:', err.message)
   }
 })
 
