@@ -355,6 +355,10 @@ export async function getImportacion(id) {
   return jsonOrThrow(`/api/importaciones/${id}`)
 }
 
+export async function confirmarImportacion(id) {
+  return jsonOrThrow(`/api/importaciones/${id}/confirmar`, { method: 'POST' })
+}
+
 export async function anularImportacion(id) {
   return jsonOrThrow(`/api/importaciones/${id}`, { method: 'DELETE' })
 }

@@ -213,9 +213,9 @@ API: `GET/POST /api/cajas/centros-costo`, `PUT/DELETE /api/cajas/centros-costo/:
 | `origen_pago`: Efectivo / Tarjeta Personal / Tarjeta Empresa | Solo **Efectivo**, **Débito**, **Crédito** |
 
 **Recomendación:**  
-- `origen_pago` enum: `efectivo` \| `debito` \| `credito`.  
-- `tarjeta_id` opcional solo si en el futuro se vuelve a vincular tarjeta corporativa; hoy el front no exige elegir tarjeta empresa en el ingreso de gasto.  
-- Mantener `tarjetas_empresa` como maestro administrativo aunque no mueva el origen de pago hasta que se defina de nuevo.
+- Columna DB `origen_pago` enum: `efectivo` \| `debito` \| `credito` (UI/plantilla: **forma de pago** / header `forma_pago`).  
+- `tarjeta_id` opcional solo si en el futuro se vuelve a vincular tarjeta corporativa; hoy el front no exige elegir tarjeta empresa en el ingreso de gasto (sí últimos 4 si Débito/Crédito).  
+- Mantener `tarjetas_empresa` como maestro administrativo aunque no mueva la forma de pago hasta que se defina de nuevo.
 
 ---
 
@@ -226,7 +226,7 @@ API: `GET/POST /api/cajas/centros-costo`, `PUT/DELETE /api/cajas/centros-costo/:
 | `fecha_documento` | Fecha de la boleta/factura |
 | `created_at` | “Subido el” |
 | `arrastre_mes` | Texto inmutable o `NULL` |
-| `origen_pago` | Ver §6.4 — preferir Efectivo/Débito/Crédito |
+| `origen_pago` | Columna DB (API). En UI/plantilla Excel se muestra como **forma de pago** (`forma_pago`; alias import `origen_pago`). Valores: Efectivo/Débito/Crédito |
 | `caja_id` | FK → `cajas_chicas` |
 | `trabajador_id` | FK → `trabajadores` |
 | `tarjeta_id` | Opcional |
@@ -300,7 +300,7 @@ Incluida en el DDL canónico (§8). Asigna por `clave_interna` (no por mes).
 | Caja = clave_interna + mes | Sí (falta UNIQUE compuesto — ver §8.1) |
 | Anticipo sin patente/hora/tipo | Sí |
 | Audit sin IP / sin soft delete | Sí |
-| Origen pago Efectivo/Débito/Crédito | Sí |
+| Forma de pago (DB: `origen_pago`) Efectivo/Débito/Crédito | Sí |
 | N° docto nullable (Factura en backend) | Sí |
 | Asignar cajas al trabajador | Sí (`trabajador_cajas`) |
 | Rol Super Admin (no Dev) | Sí |

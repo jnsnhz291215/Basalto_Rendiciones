@@ -21,12 +21,12 @@ const {
   normalizePatente
 } = require('../utils/excelImport')
 const { ensureImportacionesSchema } = require('../utils/ensureImportacionesSchema')
-
-function estadoLoteImport(creadosCount, erroresCount) {
-  if (creadosCount === 0) return 'fallido'
-  if (erroresCount > 0) return 'parcial'
-  return 'completo'
-}
+const {
+  ESTADOS_FLUJO,
+  getImportacionLoteById,
+  isLoteConfirmado,
+  assertPuedeBorrarMovimientoImportado
+} = require('../utils/importacionLote')
 
 async function assertCajaAsignadaATrabajador(trabajadorId, cajaId) {
   const rows = await query(
@@ -323,6 +323,39 @@ async function updateRendicion(req, res) {
       estado
     } = req.body || {}
 
+    // Lote confirmado: no editar datos; solo subir comprobante si faltaba
+    if (existing[0].importacion_lote_id) {
+      const lote = await getImportacionLoteById(existing[0].importacion_lote_id)
+      if (lote && isLoteConfirmado(lote)) {
+        const tieneComprobante = Boolean(String(existing[0].comprobante_url || '').trim())
+        const nuevaUrl = String(comprobante_url || '').trim()
+        if (tieneComprobante || !nuevaUrl) {
+          return res.status(403).json({
+            error:
+              'El lote está confirmado: no se puede editar. Solo se permite subir comprobante si aún no lo tenía.'
+          })
+        }
+        await query(
+          `UPDATE rendiciones_gastos
+           SET comprobante_url = ?
+           WHERE id = ? AND is_deleted = FALSE`,
+          [nuevaUrl, id]
+        )
+        await registrarAuditoria(
+          req.user.id,
+          req.user.nombre,
+          'MODIFICAR',
+          'Gastos',
+          `Comprobante adjunto a gasto importado (lote confirmado) ${existing[0].codigo_rinde}`
+        )
+        const updated = await query(
+          `SELECT * FROM rendiciones_gastos WHERE id = ? AND is_deleted = FALSE`,
+          [id]
+        )
+        return res.json(updated[0])
+      }
+    }
+
     if (isUser) {
       if (existing[0].trabajador_id !== req.user.trabajador_id) {
         return res.status(403).json({ error: 'Forbidden' })
@@ -535,6 +568,11 @@ async function softDeleteRendicion(req, res) {
     )
     if (!existing[0]) return res.status(404).json({ error: 'Rendición no encontrada' })
 
+    const bloqueoLote = await assertPuedeBorrarMovimientoImportado(existing[0])
+    if (bloqueoLote) {
+      return res.status(bloqueoLote.status).json({ error: bloqueoLote.error })
+    }
+
     if (allowHard) {
       await query(`DELETE FROM rendiciones_gastos WHERE id = ?`, [id])
       await registrarAuditoria(
@@ -658,8 +696,8 @@ async function importRendicionesExcel(req, res) {
     const loteInsert = await query(
       `INSERT INTO importaciones_lotes
         (tipo, archivo_nombre, usuario_id, usuario_nombre, estado, creados, errores_count)
-       VALUES ('gastos', ?, ?, ?, 'parcial', 0, 0)`,
-      [archivoNombre, req.user.id ?? null, req.user.nombre ?? null]
+       VALUES ('gastos', ?, ?, ?, ?, 0, 0)`,
+      [archivoNombre, req.user.id ?? null, req.user.nombre ?? null, ESTADOS_FLUJO.PENDIENTE]
     )
     const loteId = loteInsert.insertId
 
@@ -683,8 +721,9 @@ async function importRendicionesExcel(req, res) {
         const tipo = mapTipoDocumento(row.tipo_documento)
         if (!tipo) throw new Error('tipo_documento inválido (b/f/p/g/oc)')
 
-        const origen = mapOrigenPago(row.origen_pago)
-        if (!origen) throw new Error('origen_pago inválido (e/d/c)')
+        // forma_pago (plantilla nueva) o legado vía alias → valor DB origen_pago
+        const origen = mapOrigenPago(row.forma_pago)
+        if (!origen) throw new Error('forma_pago inválido (e/d/c)')
 
         const monto = parseMonto(row.__raw?.monto ?? row.monto)
         if (monto == null) throw new Error('monto inválido')
@@ -698,6 +737,7 @@ async function importRendicionesExcel(req, res) {
           throw new Error(`numero_documento obligatorio para ${tipo}`)
         }
 
+        // patente opcional: vacío → null (no error)
         const patente = normalizePatente(row.patente) || null
 
         const trabajadorId = await findTrabajadorIdByRut(rut)
@@ -708,11 +748,12 @@ async function importRendicionesExcel(req, res) {
 
         let tarjetaId = null
         if (origen === 'Efectivo') {
+          // Efectivo: tarjeta_ultimos4 puede ir vacío (se ignora si viene)
           tarjetaId = null
         } else if (origen === 'Debito' || origen === 'Credito') {
           const ult4 = normalizeTarjetaUltimos4(row.tarjeta_ultimos4)
           if (ult4.length !== 4) {
-            throw new Error('tarjeta_ultimos4 obligatorio (4 dígitos) si origen es d/c')
+            throw new Error('tarjeta_ultimos4 obligatorio (4 dígitos) si forma_pago es d/c')
           }
           tarjetaId = await findTarjetaIdPorUltimos4(origen, ult4)
           if (!tarjetaId) {
@@ -762,14 +803,13 @@ async function importRendicionesExcel(req, res) {
       }
     }
 
-    const estado = estadoLoteImport(creados.length, errores.length)
     await query(
       `UPDATE importaciones_lotes
        SET estado = ?, creados = ?, errores_count = ?,
            errores_json = ?, detalle_creados_json = ?
        WHERE id = ?`,
       [
-        estado,
+        ESTADOS_FLUJO.PENDIENTE,
         creados.length,
         errores.length,
         JSON.stringify(errores),
@@ -789,7 +829,7 @@ async function importRendicionesExcel(req, res) {
     return res.json({
       ok: errores.length === 0,
       lote_id: loteId,
-      estado,
+      estado: ESTADOS_FLUJO.PENDIENTE,
       creados: creados.length,
       errores,
       detalle_creados: creados

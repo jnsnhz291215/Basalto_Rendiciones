@@ -2,6 +2,7 @@
 
 const XLSX = require('xlsx')
 
+/** Header canónico de plantilla. Columna DB / API sigue siendo origen_pago. */
 const HEADERS_GASTOS = [
   'fecha',
   'trabajador_rut',
@@ -11,11 +12,19 @@ const HEADERS_GASTOS = [
   'tipo_documento',
   'numero_documento',
   'monto',
-  'origen_pago',
+  'forma_pago',
   'tarjeta_ultimos4',
   'patente',
   'descripcion'
 ]
+
+/**
+ * Alias de encabezado Excel → clave canónica en HEADERS_*.
+ * Acepta plantillas antiguas (origen_pago) y variantes con espacios.
+ */
+const HEADER_ALIASES = {
+  forma_pago: ['origen_pago', 'forma_de_pago']
+}
 
 const HEADERS_ASIGNACIONES = [
   'fecha',
@@ -102,8 +111,19 @@ function normalizeNumeroCuenta(value) {
     .slice(0, 40)
 }
 
+/** Resuelve índice de columna: clave canónica o cualquiera de sus alias. */
+function resolveHeaderIndex(indexByHeader, canonicalKey) {
+  if (indexByHeader.has(canonicalKey)) return indexByHeader.get(canonicalKey)
+  const aliases = HEADER_ALIASES[canonicalKey] || []
+  for (const alias of aliases) {
+    if (indexByHeader.has(alias)) return indexByHeader.get(alias)
+  }
+  return undefined
+}
+
 /**
  * Lee el primer sheet y exige que existan TODAS las columnas requeridas.
+ * Acepta alias de encabezado (p. ej. origen_pago → forma_pago).
  * @returns {{ ok: true, rows: object[] } | { ok: false, error: string, faltantes?: string[] }}
  */
 function parseExcelConHeaders(buffer, requiredHeaders, sheetPreferido = null) {
@@ -148,7 +168,9 @@ function parseExcelConHeaders(buffer, requiredHeaders, sheetPreferido = null) {
     if (h && !indexByHeader.has(h)) indexByHeader.set(h, i)
   })
 
-  const faltantes = requiredHeaders.filter((h) => !indexByHeader.has(h))
+  const faltantes = requiredHeaders.filter(
+    (h) => resolveHeaderIndex(indexByHeader, h) === undefined
+  )
   if (faltantes.length) {
     return {
       ok: false,
@@ -163,7 +185,7 @@ function parseExcelConHeaders(buffer, requiredHeaders, sheetPreferido = null) {
     const obj = {}
     let any = false
     for (const key of requiredHeaders) {
-      const idx = indexByHeader.get(key)
+      const idx = resolveHeaderIndex(indexByHeader, key)
       const raw = line[idx]
       const val = cellToString(raw)
       obj[key] = val
@@ -251,6 +273,7 @@ function mapTipoDocumento(value) {
   return null
 }
 
+/** Mapea forma_pago / origen_pago Excel → valor DB origen_pago (Efectivo|Debito|Credito). */
 function mapOrigenPago(value) {
   const raw = cellToString(value)
     .toLowerCase()
@@ -295,8 +318,8 @@ function formatPatenteDisplay(value) {
 /**
  * N° documento:
  * - Peaje: no aplica
- * - Boleta / Orden de compra: opcional
- * - Factura / Guía Despacho: obligatorio
+ * - Boleta: opcional
+ * - Factura / Guía Despacho / Orden de compra: obligatorio
  */
 function tipoAceptaNumeroDocumento(tipo) {
   return (
@@ -308,7 +331,11 @@ function tipoAceptaNumeroDocumento(tipo) {
 }
 
 function tipoRequiereNumeroDocumento(tipo) {
-  return tipo === 'Factura' || tipo === 'Guía Despacho'
+  return (
+    tipo === 'Factura' ||
+    tipo === 'Guía Despacho' ||
+    tipo === 'Orden de compra'
+  )
 }
 
 function resolveNumeroDocumentoForTipo(tipo, value) {
@@ -328,6 +355,7 @@ function keysMatch(a, b) {
 module.exports = {
   HEADERS_GASTOS,
   HEADERS_ASIGNACIONES,
+  HEADER_ALIASES,
   parseExcelConHeaders,
   parseFechaToIso,
   parseMonto,

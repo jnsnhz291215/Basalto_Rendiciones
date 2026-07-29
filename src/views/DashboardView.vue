@@ -963,9 +963,13 @@
                     guardar.
                   </p>
                   <p>
-                    <strong>N° documento:</strong> Peaje no requiere; Boleta y Orden de compra
-                    opcional; <strong>Factura</strong> y <strong>Guía Despacho</strong> obligatorio
-                    (debe verse en la foto).
+                    <strong>N° documento:</strong> Peaje no requiere; Boleta opcional;
+                    <strong>Factura</strong>, <strong>Guía Despacho</strong> y
+                    <strong>Orden de compra</strong> obligatorio (debe verse en la foto).
+                  </p>
+                  <p>
+                    <strong>Opcionales:</strong> Patente; N° docto en Boleta; últimos 4 dígitos
+                    de tarjeta si la forma de pago es Efectivo.
                   </p>
                   <p>
                     Si adjunta una <strong>foto</strong> (no PDF), asegúrese de que se vea
@@ -1118,12 +1122,15 @@
                 </div>
 
                 <div class="dash-field">
-                  <label>Origen de Pago</label>
+                  <label>Forma de Pago</label>
                   <select v-model="gasto.metodoPago" @change="onGastoMetodoPagoChange">
                     <option value="efectivo">Efectivo</option>
                     <option value="debito">Débito</option>
                     <option value="credito">Crédito</option>
                   </select>
+                  <p v-if="gasto.metodoPago === 'efectivo'" class="dash-field-hint">
+                    Con efectivo no se requieren dígitos de tarjeta.
+                  </p>
                 </div>
 
                 <div v-if="gastoRequiereTarjetaDigits" class="dash-field">
@@ -1616,7 +1623,7 @@
                   </label>
                   <label class="dash-check">
                     <input v-model="modalResponder.campos.origen_pago" type="checkbox" />
-                    <span>Origen de Pago</span>
+                    <span>Forma de Pago</span>
                   </label>
                   <label class="dash-check dash-check--span2">
                     <input v-model="modalResponder.campos.descripcion" type="checkbox" />
@@ -1821,12 +1828,15 @@
                   />
                 </div>
                 <div v-if="modalCorregir.campos.origen_pago" class="dash-field">
-                  <label>Origen de Pago</label>
+                  <label>Forma de Pago</label>
                   <select v-model="modalCorregir.metodoPago">
                     <option value="efectivo">Efectivo</option>
                     <option value="debito">Débito</option>
                     <option value="credito">Crédito</option>
                   </select>
+                  <p v-if="modalCorregir.metodoPago === 'efectivo'" class="dash-field-hint">
+                    Con efectivo no se requieren dígitos de tarjeta.
+                  </p>
                 </div>
                 <div
                   v-if="
@@ -2684,7 +2694,7 @@
           <div>
             <h3 class="dash-cajas-toolbar-title">Importaciones</h3>
             <p class="dash-cajas-toolbar-hint">
-              Importación masiva de gastos y asignaciones por lote (Excel).
+              Lotes expandibles: revisa movimientos, sube comprobantes y confirma la importación.
             </p>
           </div>
           <div class="dash-toolbar-actions">
@@ -2830,108 +2840,397 @@
         <div v-else-if="!importacionesLotes.length" class="dash-cajas-empty">
           No hay importaciones registradas.
         </div>
-        <div v-else class="dash-table-wrap">
-          <table class="dash-table">
-            <thead>
-              <tr>
-                <th>Fecha</th>
-                <th>Tipo</th>
-                <th>Archivo</th>
-                <th>Usuario</th>
-                <th class="dash-table-center">Creados</th>
-                <th class="dash-table-center">Errores</th>
-                <th class="dash-table-center">Estado</th>
-                <th class="dash-table-center">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="lote in importacionesLotes" :key="lote.id">
-                <td>{{ formatFechaHoraImport(lote.created_at) }}</td>
-                <td class="dash-table-strong">{{ labelTipoImportacion(lote.tipo) }}</td>
-                <td>{{ lote.archivo_nombre || '—' }}</td>
-                <td>{{ lote.usuario_nombre || '—' }}</td>
-                <td class="dash-table-center">{{ lote.creados ?? 0 }}</td>
-                <td class="dash-table-center">{{ lote.errores_count ?? 0 }}</td>
-                <td class="dash-table-center">
-                  <span class="dash-badge" :class="badgeClassEstadoImport(lote.estado)">
-                    {{ lote.estado || '—' }}
+        <div v-else class="dash-cc-accordion dash-import-lotes">
+          <div
+            v-for="lote in importacionesLotes"
+            :key="lote.id"
+            class="dash-cc-accordion-item dash-import-lote"
+            :class="{ 'dash-import-lote--anulado': lote.estado === 'anulado' || lote.is_deleted }"
+          >
+            <div class="dash-import-lote-head">
+              <button
+                class="dash-import-lote-toggle"
+                type="button"
+                :aria-expanded="isImportLoteOpen(lote.id)"
+                @click="toggleImportLote(lote)"
+              >
+                <span class="dash-cc-accordion-chevron">
+                  {{ isImportLoteOpen(lote.id) ? '▼' : '▶' }}
+                </span>
+                <span class="dash-import-lote-meta">
+                  <span class="dash-import-lote-title">
+                    {{ labelTipoImportacion(lote.tipo) }}
+                    <span class="dash-muted">#{{ lote.id }}</span>
                   </span>
-                </td>
-                <td class="dash-table-center dash-table-actions">
-                  <button
-                    class="dash-btn-ghost-sm"
-                    type="button"
-                    title="Ver detalle / errores del lote"
-                    @click="openImportacionDetalle(lote)"
+                  <span class="dash-import-lote-sub">
+                    {{ formatFechaHoraImport(lote.created_at) }}
+                    <template v-if="lote.archivo_nombre"> · {{ lote.archivo_nombre }}</template>
+                    <template v-if="lote.usuario_nombre"> · {{ lote.usuario_nombre }}</template>
+                  </span>
+                </span>
+                <span class="dash-import-lote-counters" @click.stop>
+                  <span class="dash-import-counter" title="Total de filas del lote">
+                    {{ lote.contadores?.movimientos ?? 0 }} mov.
+                  </span>
+                  <span class="dash-import-counter dash-import-counter--ok" title="Correctos">
+                    {{ lote.contadores?.correctos ?? 0 }} correctos
+                  </span>
+                  <span class="dash-import-counter dash-import-counter--warn" title="Parcial">
+                    {{ lote.contadores?.parcial ?? 0 }} parcial
+                  </span>
+                  <span class="dash-import-counter dash-import-counter--danger" title="Inválidos">
+                    {{ lote.contadores?.invalidos ?? 0 }} inválidos
+                  </span>
+                </span>
+                <span class="dash-badge" :class="badgeClassEstadoImport(lote.estado)">
+                  {{ labelEstadoImportacion(lote.estado) }}
+                </span>
+              </button>
+              <div class="dash-import-lote-actions" @click.stop>
+                <button
+                  v-if="lote.puede_confirmar"
+                  class="dash-btn-ghost-sm dash-import-btn-confirm"
+                  type="button"
+                  title="Confirmar importación"
+                  :disabled="importacionConfirmandoId === lote.id"
+                  @click="openConfirmarImportacion(lote)"
+                >
+                  <i class="fa-solid fa-check" aria-hidden="true"></i>
+                  Confirmar
+                </button>
+                <button
+                  v-if="lote.puede_anular"
+                  class="dash-btn-icon dash-btn-icon--danger"
+                  type="button"
+                  title="Anular / borrar importación"
+                  :disabled="importacionAnulandoId === lote.id"
+                  @click="onAnularImportacion(lote)"
+                >
+                  <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
+
+            <div
+              class="dash-collapse"
+              :class="{ 'dash-collapse--open': isImportLoteOpen(lote.id) }"
+            >
+              <div class="dash-collapse-inner">
+                <div v-if="importLoteDetalleLoading[lote.id]" class="dash-cajas-empty">
+                  Cargando movimientos…
+                </div>
+                <template v-else-if="importLoteDetalles[lote.id]">
+                  <div
+                    v-if="(importLoteDetalles[lote.id].filas_invalidas || []).length"
+                    class="dash-import-invalidos"
                   >
-                    Ver errores
-                  </button>
-                  <button
-                    v-if="lote.estado !== 'anulado' && !lote.is_deleted"
-                    class="dash-btn-icon dash-btn-icon--danger"
-                    type="button"
-                    title="Anular lote (soft-delete de registros creados)"
-                    :disabled="importacionAnulandoId === lote.id"
-                    @click="onAnularImportacion(lote)"
+                    <p class="dash-import-invalidos-title">
+                      Filas inválidas ({{ importLoteDetalles[lote.id].filas_invalidas.length }})
+                    </p>
+                    <ul class="dash-import-invalidos-list">
+                      <li
+                        v-for="(err, idx) in importLoteDetalles[lote.id].filas_invalidas"
+                        :key="`inv-${lote.id}-${err.fila}-${idx}`"
+                      >
+                        Fila {{ err.fila }}: {{ err.error }}
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div
+                    v-if="!(importLoteDetalles[lote.id].movimientos || []).length"
+                    class="dash-cajas-empty"
                   >
-                    <i class="fa-solid fa-trash" aria-hidden="true"></i>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                    Sin movimientos creados en este lote.
+                  </div>
+
+                  <div v-else class="dash-table-wrap dash-cc-accordion-body">
+                    <!-- Gastos -->
+                    <table
+                      v-if="lote.tipo === 'gastos'"
+                      class="dash-table dash-import-mov-table"
+                    >
+                      <thead>
+                        <tr>
+                          <th>Código</th>
+                          <th>Fecha</th>
+                          <th>Trabajador</th>
+                          <th>CC / Caja</th>
+                          <th>Tipo / N°</th>
+                          <th>Forma de pago</th>
+                          <th class="dash-table-right">Monto</th>
+                          <th>Descripción</th>
+                          <th class="dash-table-center">Calidad</th>
+                          <th class="dash-table-center">Comprobante</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="mov in importLoteDetalles[lote.id].movimientos"
+                          :key="`g-${mov.id}`"
+                        >
+                          <td class="dash-mono">{{ mov.codigo_rinde }}</td>
+                          <td class="dash-mono">{{ formatFechaCortaImport(mov.fecha_documento) }}</td>
+                          <td>
+                            {{ mov.trabajador_nombre || '—' }}
+                            <span v-if="mov.trabajador_rut" class="dash-muted dash-block-sm">
+                              {{ mov.trabajador_rut }}
+                            </span>
+                          </td>
+                          <td>
+                            {{ mov.cc_nombre || '—' }}
+                            <span class="dash-muted dash-block-sm">
+                              {{ mov.clave_interna || mov.nombre_exterior || '—' }}
+                            </span>
+                          </td>
+                          <td>
+                            {{ mov.tipo_documento || '—' }}
+                            <span v-if="mov.numero_documento" class="dash-muted">
+                              #{{ mov.numero_documento }}
+                            </span>
+                          </td>
+                          <td>{{ mov.origen_pago || '—' }}</td>
+                          <td class="dash-table-right">{{ formatMontoCl(mov.monto) }}</td>
+                          <td class="dash-import-desc">{{ mov.descripcion || '—' }}</td>
+                          <td class="dash-table-center">
+                            <span
+                              class="dash-badge"
+                              :class="badgeClassCalidadMov(mov.calidad)"
+                            >
+                              {{ mov.calidad || '—' }}
+                            </span>
+                          </td>
+                          <td class="dash-table-center">
+                            <button
+                              class="dash-btn-ghost-sm"
+                              type="button"
+                              title="Ver / subir comprobante"
+                              @click="openImportComprobanteModal(lote, mov)"
+                            >
+                              <i class="fa-solid fa-paperclip" aria-hidden="true"></i>
+                              {{ mov.comprobante_url ? 'Ver' : 'Subir' }}
+                            </button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    <!-- Asignaciones -->
+                    <table
+                      v-else
+                      class="dash-table dash-import-mov-table"
+                    >
+                      <thead>
+                        <tr>
+                          <th>Código</th>
+                          <th>Fecha</th>
+                          <th>Trabajador</th>
+                          <th>CC / Caja</th>
+                          <th>Cuenta</th>
+                          <th>Banco</th>
+                          <th class="dash-table-right">Monto</th>
+                          <th>Observación</th>
+                          <th class="dash-table-center">Calidad</th>
+                          <th class="dash-table-center">Comprobante</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="mov in importLoteDetalles[lote.id].movimientos"
+                          :key="`a-${mov.id}`"
+                        >
+                          <td class="dash-mono">{{ mov.codigo_vale }}</td>
+                          <td class="dash-mono">{{ formatFechaCortaImport(mov.fecha) }}</td>
+                          <td>
+                            {{ mov.trabajador_nombre || '—' }}
+                            <span v-if="mov.trabajador_rut" class="dash-muted dash-block-sm">
+                              {{ mov.trabajador_rut }}
+                            </span>
+                          </td>
+                          <td>
+                            {{ mov.cc_nombre || '—' }}
+                            <span class="dash-muted dash-block-sm">
+                              {{ mov.clave_interna || mov.nombre_exterior || '—' }}
+                            </span>
+                          </td>
+                          <td class="dash-mono">{{ mov.numero_cuenta || '—' }}</td>
+                          <td>{{ mov.banco_origen || '—' }}</td>
+                          <td class="dash-table-right">{{ formatMontoCl(mov.monto) }}</td>
+                          <td class="dash-import-desc">{{ mov.observacion || '—' }}</td>
+                          <td class="dash-table-center">
+                            <span
+                              class="dash-badge"
+                              :class="badgeClassCalidadMov(mov.calidad)"
+                            >
+                              {{ mov.calidad || '—' }}
+                            </span>
+                          </td>
+                          <td class="dash-table-center">
+                            <button
+                              class="dash-btn-ghost-sm"
+                              type="button"
+                              title="Ver / subir comprobante"
+                              @click="openImportComprobanteModal(lote, mov)"
+                            >
+                              <i class="fa-solid fa-paperclip" aria-hidden="true"></i>
+                              {{ mov.comprobante_url ? 'Ver' : 'Subir' }}
+                            </button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </div>
         </div>
 
+        <!-- Modal confirmar lote -->
         <div
-          v-if="importacionDetalleOpen"
+          v-if="importConfirmModal.open"
           class="dash-modal-backdrop"
-          @click.self="closeImportacionDetalle"
+          @click.self="closeConfirmarImportacion"
         >
-          <div class="dash-modal dash-modal--wide" role="dialog" aria-modal="true">
+          <div class="dash-modal" role="dialog" aria-modal="true" aria-labelledby="modal-import-confirm-title">
             <div class="dash-modal-head">
-              <h3>
-                Errores lote #{{ importacionDetalle?.id }}
-                <span v-if="importacionDetalle?.archivo_nombre">
-                  — {{ importacionDetalle.archivo_nombre }}
-                </span>
-              </h3>
+              <h3 id="modal-import-confirm-title">Confirmar importación</h3>
               <button
                 class="dash-modal-close"
                 type="button"
                 aria-label="Cerrar"
-                @click="closeImportacionDetalle"
+                @click="closeConfirmarImportacion"
               >
                 ×
               </button>
             </div>
-            <div v-if="importacionDetalleLoading" class="dash-cajas-empty">Cargando…</div>
-            <div
-              v-else-if="!(importacionDetalle?.errores || []).length"
-              class="dash-cajas-empty"
-            >
-              Sin errores registrados en este lote.
-            </div>
-            <div v-else class="dash-table-wrap">
-              <table class="dash-table">
-                <thead>
-                  <tr>
-                    <th class="dash-table-center">Fila</th>
-                    <th>Error</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="(err, idx) in importacionDetalle.errores"
-                    :key="`${err.fila}-${idx}`"
-                  >
-                    <td class="dash-table-center">{{ err.fila }}</td>
-                    <td>{{ err.error }}</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div class="dash-import-modal-body">
+              <p>
+                ¿Confirmas el lote
+                <strong>#{{ importConfirmModal.lote?.id }}</strong>
+                ({{ labelTipoImportacion(importConfirmModal.lote?.tipo) }})?
+              </p>
+              <p class="dash-hint">
+                Tras confirmar no podrás anular el lote ni editar los movimientos.
+                Solo se podrá subir comprobante si aún no lo tenían.
+              </p>
+              <p class="dash-muted">
+                {{ importConfirmModal.lote?.creados ?? 0 }} movimiento(s) ·
+                {{ importConfirmModal.lote?.contadores?.parcial ?? 0 }} sin comprobante ·
+                {{ importConfirmModal.lote?.contadores?.invalidos ?? 0 }} inválido(s)
+              </p>
             </div>
             <div class="dash-modal-actions">
-              <button class="dash-btn-ghost-sm" type="button" @click="closeImportacionDetalle">
+              <button class="dash-btn-secondary" type="button" @click="closeConfirmarImportacion">
+                Cancelar
+              </button>
+              <button
+                class="dash-btn-primary"
+                type="button"
+                :disabled="importacionConfirmandoId === importConfirmModal.lote?.id"
+                @click="submitConfirmarImportacion"
+              >
+                {{
+                  importacionConfirmandoId === importConfirmModal.lote?.id
+                    ? 'Confirmando…'
+                    : 'Sí, confirmar'
+                }}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal comprobante por movimiento -->
+        <div
+          v-if="importComprobanteModal.open"
+          class="dash-modal-backdrop"
+          @click.self="closeImportComprobanteModal"
+        >
+          <div
+            class="dash-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-import-comp-title"
+          >
+            <div class="dash-modal-head">
+              <h3 id="modal-import-comp-title">Comprobante</h3>
+              <button
+                class="dash-modal-close"
+                type="button"
+                aria-label="Cerrar"
+                @click="closeImportComprobanteModal"
+              >
+                ×
+              </button>
+            </div>
+            <div class="dash-import-modal-body">
+              <p class="dash-import-comp-meta">
+                Lote #{{ importComprobanteModal.lote?.id }} ·
+                {{
+                  importComprobanteModal.lote?.tipo === 'gastos'
+                    ? importComprobanteModal.mov?.codigo_rinde
+                    : importComprobanteModal.mov?.codigo_vale
+                }}
+              </p>
+
+              <div v-if="importComprobanteModal.mov?.comprobante_url" class="dash-import-comp-existing">
+                <p class="dash-field-hint">
+                  Archivo:
+                  {{ labelAdjunto(importComprobanteModal.mov.comprobante_url) }}
+                </p>
+                <button
+                  class="dash-btn-excel dash-btn-excel--outline"
+                  type="button"
+                  @click="openComprobanteArchivo(importComprobanteModal.mov.comprobante_url)"
+                >
+                  <span>📄</span>
+                  <span>Descargar comprobante</span>
+                </button>
+              </div>
+              <p v-else class="dash-muted">Sin comprobante adjunto.</p>
+
+              <div v-if="puedeSubirComprobanteImport(importComprobanteModal)" class="dash-import-modal-section">
+                <p class="dash-import-modal-hint">
+                  {{
+                    importComprobanteModal.mov?.comprobante_url
+                      ? 'Puedes reemplazar el comprobante (lote aún no confirmado).'
+                      : 'Sube el comprobante del movimiento.'
+                  }}
+                </p>
+                <input
+                  ref="importComprobanteInputEl"
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+                  class="dash-sr-only"
+                  @change="onImportComprobanteFileChange"
+                />
+                <button
+                  class="dash-btn-primary"
+                  type="button"
+                  :disabled="importComprobanteUploading"
+                  @click="triggerImportComprobantePicker"
+                >
+                  {{
+                    importComprobanteUploading
+                      ? 'Subiendo…'
+                      : importComprobanteModal.mov?.comprobante_url
+                        ? 'Reemplazar comprobante'
+                        : 'Subir comprobante'
+                  }}
+                </button>
+              </div>
+              <p
+                v-else-if="
+                  importComprobanteModal.lote?.estado === 'confirmado' &&
+                  importComprobanteModal.mov?.comprobante_url
+                "
+                class="dash-hint"
+              >
+                Lote confirmado: el comprobante no se puede reemplazar.
+              </p>
+            </div>
+            <div class="dash-modal-actions">
+              <button class="dash-btn-ghost-sm" type="button" @click="closeImportComprobanteModal">
                 Cerrar
               </button>
             </div>
@@ -4130,10 +4429,16 @@ const pendingLegacyAttach = ref(null)
 
 const importacionesLotes = ref([])
 const importacionesLoading = ref(false)
-const importacionDetalleOpen = ref(false)
-const importacionDetalleLoading = ref(false)
-const importacionDetalle = ref(null)
 const importacionAnulandoId = ref(null)
+const importacionConfirmandoId = ref(null)
+const importLoteOpen = reactive({})
+const importLoteDetalles = reactive({})
+const importLoteDetalleLoading = reactive({})
+const importConfirmModal = reactive({ open: false, lote: null })
+const importComprobanteModal = reactive({ open: false, lote: null, mov: null })
+const importComprobanteInputEl = ref(null)
+const importComprobanteUploading = ref(false)
+const pendingImportLoteRefreshId = ref(null)
 
 const cajaActiva = ref('')
 /** '' = Todos los centros de cobro */
@@ -5021,7 +5326,7 @@ const gastoRequiereTarjetaDigits = computed(
   () => gasto.metodoPago === 'debito' || gasto.metodoPago === 'credito'
 )
 
-/** N° docto: Peaje no; Boleta/OC opcional; Factura y Guía Despacho obligatorio */
+/** N° docto: Peaje no; Boleta opcional; Factura / Guía / OC obligatorio */
 const gastoMuestraNumeroDocto = computed(
   () =>
     gasto.tipo === 'Boleta' ||
@@ -5031,7 +5336,10 @@ const gastoMuestraNumeroDocto = computed(
 )
 
 const gastoRequiereNumeroDocto = computed(
-  () => gasto.tipo === 'Factura' || gasto.tipo === 'Guía Despacho'
+  () =>
+    gasto.tipo === 'Factura' ||
+    gasto.tipo === 'Guía Despacho' ||
+    gasto.tipo === 'Orden de compra'
 )
 
 const tarjetasParaGasto = computed(() => {
@@ -5986,6 +6294,11 @@ async function ejecutarVerificacionYGuardado() {
         comprobante_url: verifyResult.comprobante_url
       })
       await loadDashboardData()
+      if (pendingImportLoteRefreshId.value) {
+        await refreshImportLoteDetalle(pendingImportLoteRefreshId.value)
+        pendingImportLoteRefreshId.value = null
+        closeImportComprobanteModal()
+      }
       modalVerificar.open = false
       pendingVerifyKind.value = null
       pendingLegacyAttach.value = null
@@ -5997,6 +6310,11 @@ async function ejecutarVerificacionYGuardado() {
         comprobante_url: verifyResult.comprobante_url
       })
       await loadDashboardData()
+      if (pendingImportLoteRefreshId.value) {
+        await refreshImportLoteDetalle(pendingImportLoteRefreshId.value)
+        pendingImportLoteRefreshId.value = null
+        closeImportComprobanteModal()
+      }
       modalVerificar.open = false
       pendingVerifyKind.value = null
       pendingLegacyAttach.value = null
@@ -6454,7 +6772,9 @@ async function onSaveCorreccion() {
     ) {
       payload.numero_documento = modalCorregir.numeroLocked || null
       if (
-        (modalCorregir.tipo === 'Factura' || modalCorregir.tipo === 'Guía Despacho') &&
+        (modalCorregir.tipo === 'Factura' ||
+          modalCorregir.tipo === 'Guía Despacho' ||
+          modalCorregir.tipo === 'Orden de compra') &&
         !payload.numero_documento
       ) {
         saveError.value = `N° de documento es obligatorio para ${modalCorregir.tipo}.`
@@ -6502,7 +6822,8 @@ async function onSaveCorreccion() {
       if (
         (tipoCorr === 'Factura' ||
           tipoCorr === 'Guía Despacho' ||
-          tipoCorr === 'Boleta') &&
+          tipoCorr === 'Boleta' ||
+          tipoCorr === 'Orden de compra') &&
         modalCorregir.numeroLocked
       ) {
         fd.append('numero_documento', String(modalCorregir.numeroLocked))
@@ -7066,11 +7387,27 @@ function labelTipoImportacion(tipo) {
   return tipo || '—'
 }
 
+function labelEstadoImportacion(estado) {
+  const e = String(estado || '').toLowerCase()
+  if (e === 'pendiente') return 'Pendiente'
+  if (e === 'confirmado') return 'Confirmado'
+  if (e === 'anulado') return 'Anulado'
+  return estado || '—'
+}
+
 function badgeClassEstadoImport(estado) {
   const e = String(estado || '').toLowerCase()
-  if (e === 'completo') return 'dash-badge--ok'
-  if (e === 'parcial') return 'dash-badge--warn'
+  if (e === 'confirmado' || e === 'completo') return 'dash-badge--ok'
+  if (e === 'pendiente' || e === 'parcial') return 'dash-badge--warn'
   if (e === 'fallido' || e === 'anulado') return 'dash-badge--danger'
+  return 'dash-badge--neutral'
+}
+
+function badgeClassCalidadMov(calidad) {
+  const c = String(calidad || '').toLowerCase()
+  if (c === 'correcto') return 'dash-badge--ok'
+  if (c === 'parcial') return 'dash-badge--warn'
+  if (c === 'invalido') return 'dash-badge--danger'
   return 'dash-badge--neutral'
 }
 
@@ -7079,6 +7416,69 @@ function formatFechaHoraImport(value) {
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return String(value)
   return d.toLocaleString('es-CL')
+}
+
+function formatFechaCortaImport(value) {
+  if (!value) return '—'
+  const raw = String(value)
+  if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+    const [y, m, d] = raw.slice(0, 10).split('-')
+    return `${d}/${m}/${y}`
+  }
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return raw
+  return d.toLocaleDateString('es-CL')
+}
+
+function isImportLoteOpen(id) {
+  return Boolean(importLoteOpen[id])
+}
+
+async function toggleImportLote(lote) {
+  if (!lote?.id) return
+  const next = !isImportLoteOpen(lote.id)
+  importLoteOpen[lote.id] = next
+  if (next && !importLoteDetalles[lote.id]) {
+    await loadImportLoteDetalle(lote.id)
+  }
+}
+
+async function loadImportLoteDetalle(loteId) {
+  importLoteDetalleLoading[loteId] = true
+  try {
+    const data = await api.getImportacion(loteId)
+    importLoteDetalles[loteId] = data
+    // sincronizar contadores del listado
+    const idx = importacionesLotes.value.findIndex((l) => l.id === loteId)
+    if (idx >= 0) {
+      importacionesLotes.value[idx] = {
+        ...importacionesLotes.value[idx],
+        ...data,
+        movimientos: undefined,
+        filas_invalidas: undefined,
+        errores: undefined,
+        detalle_creados: undefined
+      }
+    }
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo cargar el detalle del lote'
+    importLoteOpen[loteId] = false
+  } finally {
+    importLoteDetalleLoading[loteId] = false
+  }
+}
+
+async function refreshImportLoteDetalle(loteId) {
+  if (!loteId) return
+  await Promise.all([loadImportacionesLotes(), loadImportLoteDetalle(loteId)])
+  if (importComprobanteModal.open && importComprobanteModal.lote?.id === loteId) {
+    const det = importLoteDetalles[loteId]
+    const movId = importComprobanteModal.mov?.id
+    const mov = (det?.movimientos || []).find((m) => m.id === movId)
+    if (mov) importComprobanteModal.mov = mov
+    const lote = importacionesLotes.value.find((l) => l.id === loteId)
+    if (lote) importComprobanteModal.lote = lote
+  }
 }
 
 async function loadImportacionesLotes() {
@@ -7094,30 +7494,40 @@ async function loadImportacionesLotes() {
   }
 }
 
-async function openImportacionDetalle(lote) {
+function openConfirmarImportacion(lote) {
+  if (!lote?.id || !lote.puede_confirmar) return
+  importConfirmModal.open = true
+  importConfirmModal.lote = lote
+}
+
+function closeConfirmarImportacion() {
+  if (importacionConfirmandoId.value) return
+  importConfirmModal.open = false
+  importConfirmModal.lote = null
+}
+
+async function submitConfirmarImportacion() {
+  const lote = importConfirmModal.lote
   if (!lote?.id) return
-  importacionDetalleOpen.value = true
-  importacionDetalleLoading.value = true
-  importacionDetalle.value = { ...lote, errores: [] }
+  importacionConfirmandoId.value = lote.id
+  saveError.value = ''
+  saveOk.value = ''
   try {
-    const data = await api.getImportacion(lote.id)
-    importacionDetalle.value = data
+    const data = await api.confirmarImportacion(lote.id)
+    importLoteDetalles[lote.id] = data
+    await loadImportacionesLotes()
+    saveOk.value = `Lote #${lote.id} confirmado.`
+    importConfirmModal.open = false
+    importConfirmModal.lote = null
   } catch (err) {
-    saveError.value = err?.message || 'No se pudo cargar el detalle del lote'
-    importacionDetalleOpen.value = false
+    saveError.value = err?.message || 'No se pudo confirmar el lote'
   } finally {
-    importacionDetalleLoading.value = false
+    importacionConfirmandoId.value = null
   }
 }
 
-function closeImportacionDetalle() {
-  importacionDetalleOpen.value = false
-  importacionDetalle.value = null
-  importacionDetalleLoading.value = false
-}
-
 async function onAnularImportacion(lote) {
-  if (!lote?.id) return
+  if (!lote?.id || !lote.puede_anular) return
   const tipo = labelTipoImportacion(lote.tipo)
   if (
     !confirm(
@@ -7131,13 +7541,103 @@ async function onAnularImportacion(lote) {
   saveOk.value = ''
   try {
     const data = await api.anularImportacion(lote.id)
+    delete importLoteDetalles[lote.id]
+    importLoteOpen[lote.id] = false
     await Promise.all([loadImportacionesLotes(), loadDashboardData()])
     saveOk.value = `Lote #${lote.id} anulado. ${data?.anulados ?? 0} registro(s) eliminados.`
-    if (importacionDetalle.value?.id === lote.id) closeImportacionDetalle()
   } catch (err) {
     saveError.value = err?.message || 'No se pudo anular el lote'
   } finally {
     importacionAnulandoId.value = null
+  }
+}
+
+function puedeSubirComprobanteImport({ lote, mov } = {}) {
+  if (!lote || !mov) return false
+  if (lote.estado === 'anulado' || lote.is_deleted) return false
+  const tiene = Boolean(String(mov.comprobante_url || '').trim())
+  if (lote.estado === 'confirmado') return !tiene
+  // pendiente: subir o reemplazar
+  return true
+}
+
+function openImportComprobanteModal(lote, mov) {
+  if (!lote || !mov) return
+  importComprobanteModal.open = true
+  importComprobanteModal.lote = lote
+  importComprobanteModal.mov = mov
+}
+
+function closeImportComprobanteModal() {
+  if (importComprobanteUploading.value) return
+  importComprobanteModal.open = false
+  importComprobanteModal.lote = null
+  importComprobanteModal.mov = null
+}
+
+function triggerImportComprobantePicker() {
+  if (!puedeSubirComprobanteImport(importComprobanteModal)) return
+  if (importComprobanteInputEl.value) {
+    importComprobanteInputEl.value.value = ''
+    importComprobanteInputEl.value.click()
+  }
+}
+
+function mapImportMovToAttachRow(lote, mov) {
+  if (lote?.tipo === 'asignaciones') {
+    return {
+      id: mov.id,
+      monto: mov.monto,
+      cajaId: mov.caja_id,
+      trabajadorId: mov.trabajador_id,
+      fechaSort: mov.fecha,
+      comprobanteNombre: mov.comprobante_url || '',
+      legacy: true
+    }
+  }
+  return {
+    id: mov.id,
+    monto: mov.monto,
+    tipoDocumento: mov.tipo_documento,
+    numeroDocumento: mov.numero_documento,
+    cajaId: mov.caja_id,
+    trabajadorId: mov.trabajador_id,
+    fechaSort: mov.fecha_documento,
+    comprobanteNombre: mov.comprobante_url || '',
+    legacy: true
+  }
+}
+
+async function onImportComprobanteFileChange(event) {
+  const file = event.target.files?.[0] || null
+  if (event.target) event.target.value = ''
+  const { lote, mov } = importComprobanteModal
+  if (!file || !lote || !mov?.id) return
+  if (!puedeSubirComprobanteImport(importComprobanteModal)) {
+    saveError.value = 'No se puede subir comprobante en este estado del lote.'
+    return
+  }
+
+  importComprobanteUploading.value = true
+  saveError.value = ''
+  try {
+    const kind = lote.tipo === 'asignaciones' ? 'anticipo' : 'gasto'
+    const row = mapImportMovToAttachRow(lote, mov)
+    pendingLegacyAttach.value = { kind, row }
+    pendingImportLoteRefreshId.value = lote.id
+    if (kind === 'anticipo') {
+      anticipoComprobanteFile.value = file
+      pendingVerifyKind.value = 'anticipo-adjunto'
+    } else {
+      gastoComprobanteFile.value = file
+      pendingVerifyKind.value = 'gasto-adjunto'
+    }
+    await ejecutarVerificacionYGuardado()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo subir el comprobante'
+    pendingImportLoteRefreshId.value = null
+  } finally {
+    importComprobanteUploading.value = false
   }
 }
 

@@ -42,6 +42,9 @@ async function indexExists(table, indexName) {
 
 /**
  * Lotes de importación Excel (gastos / asignaciones) + FK suave en filas creadas.
+ *
+ * estado (flujo): pendiente | confirmado | anulado
+ * (legado completo/parcial/fallido se migra a pendiente)
  */
 async function ensureImportacionesSchema() {
   if (!(await tableExists('importaciones_lotes'))) {
@@ -52,8 +55,11 @@ async function ensureImportacionesSchema() {
          archivo_nombre VARCHAR(255) NULL,
          usuario_id INT NULL,
          usuario_nombre VARCHAR(150) NULL,
-         estado VARCHAR(30) NOT NULL DEFAULT 'parcial'
-           COMMENT 'completo | parcial | fallido | anulado',
+         estado VARCHAR(30) NOT NULL DEFAULT 'pendiente'
+           COMMENT 'pendiente | confirmado | anulado',
+         confirmado_at DATETIME NULL,
+         confirmado_por_id INT NULL,
+         confirmado_por_nombre VARCHAR(150) NULL,
          creados INT NOT NULL DEFAULT 0,
          errores_count INT NOT NULL DEFAULT 0,
          errores_json JSON NULL,
@@ -62,6 +68,34 @@ async function ensureImportacionesSchema() {
          deleted_at DATETIME NULL,
          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
+    )
+  } else {
+    if (!(await columnExists('importaciones_lotes', 'confirmado_at'))) {
+      await query(
+        `ALTER TABLE importaciones_lotes
+         ADD COLUMN confirmado_at DATETIME NULL
+         COMMENT 'Momento de confirmación del lote'`
+      )
+    }
+    if (!(await columnExists('importaciones_lotes', 'confirmado_por_id'))) {
+      await query(
+        `ALTER TABLE importaciones_lotes
+         ADD COLUMN confirmado_por_id INT NULL`
+      )
+    }
+    if (!(await columnExists('importaciones_lotes', 'confirmado_por_nombre'))) {
+      await query(
+        `ALTER TABLE importaciones_lotes
+         ADD COLUMN confirmado_por_nombre VARCHAR(150) NULL`
+      )
+    }
+
+    // Migrar estados de calidad legacy → flujo pendiente
+    await query(
+      `UPDATE importaciones_lotes
+       SET estado = 'pendiente'
+       WHERE is_deleted = FALSE
+         AND estado IN ('completo', 'parcial', 'fallido', 'borrador', 'sin_confirmar')`
     )
   }
 

@@ -21,12 +21,12 @@ const {
   cellToString
 } = require('../utils/excelImport')
 const { ensureImportacionesSchema } = require('../utils/ensureImportacionesSchema')
-
-function estadoLoteImport(creadosCount, erroresCount) {
-  if (creadosCount === 0) return 'fallido'
-  if (erroresCount > 0) return 'parcial'
-  return 'completo'
-}
+const {
+  ESTADOS_FLUJO,
+  getImportacionLoteById,
+  isLoteConfirmado,
+  assertPuedeBorrarMovimientoImportado
+} = require('../utils/importacionLote')
 
 async function listAnticipos(req, res) {
   try {
@@ -206,6 +206,37 @@ async function updateAnticipo(req, res) {
       banco_origen
     } = req.body || {}
 
+    // Lote confirmado: no editar datos; solo subir comprobante si faltaba
+    if (existing[0].importacion_lote_id) {
+      const lote = await getImportacionLoteById(existing[0].importacion_lote_id)
+      if (lote && isLoteConfirmado(lote)) {
+        const tieneComprobante = Boolean(String(existing[0].comprobante_url || '').trim())
+        const nuevaUrl = String(comprobante_url || '').trim()
+        if (tieneComprobante || !nuevaUrl) {
+          return res.status(403).json({
+            error:
+              'El lote está confirmado: no se puede editar. Solo se permite subir comprobante si aún no lo tenía.'
+          })
+        }
+        await query(
+          `UPDATE anticipos SET comprobante_url = ? WHERE id = ? AND is_deleted = FALSE`,
+          [nuevaUrl, id]
+        )
+        await registrarAuditoria(
+          req.user.id,
+          req.user.nombre,
+          'MODIFICAR',
+          'Asignaciones',
+          `Comprobante adjunto a asignación importada (lote confirmado) ${existing[0].codigo_vale}`
+        )
+        const updated = await query(
+          `SELECT * FROM anticipos WHERE id = ? AND is_deleted = FALSE`,
+          [id]
+        )
+        return res.json(updated[0])
+      }
+    }
+
     let nextCuenta = existing[0].numero_cuenta
     if (numero_cuenta !== undefined) {
       nextCuenta = normalizeNumeroCuenta(numero_cuenta)
@@ -275,6 +306,11 @@ async function softDeleteAnticipo(req, res) {
       [id]
     )
     if (!existing[0]) return res.status(404).json({ error: 'Asignación no encontrada' })
+
+    const bloqueoLote = await assertPuedeBorrarMovimientoImportado(existing[0])
+    if (bloqueoLote) {
+      return res.status(bloqueoLote.status).json({ error: bloqueoLote.error })
+    }
 
     const allowHard = canDevHardDelete(req.user)
     if (allowHard) {
@@ -359,8 +395,8 @@ async function importAsignacionesExcel(req, res) {
     const loteInsert = await query(
       `INSERT INTO importaciones_lotes
         (tipo, archivo_nombre, usuario_id, usuario_nombre, estado, creados, errores_count)
-       VALUES ('asignaciones', ?, ?, ?, 'parcial', 0, 0)`,
-      [archivoNombre, req.user.id ?? null, req.user.nombre ?? null]
+       VALUES ('asignaciones', ?, ?, ?, ?, 0, 0)`,
+      [archivoNombre, req.user.id ?? null, req.user.nombre ?? null, ESTADOS_FLUJO.PENDIENTE]
     )
     const loteId = loteInsert.insertId
 
@@ -435,14 +471,13 @@ async function importAsignacionesExcel(req, res) {
       }
     }
 
-    const estado = estadoLoteImport(creados.length, errores.length)
     await query(
       `UPDATE importaciones_lotes
        SET estado = ?, creados = ?, errores_count = ?,
            errores_json = ?, detalle_creados_json = ?
        WHERE id = ?`,
       [
-        estado,
+        ESTADOS_FLUJO.PENDIENTE,
         creados.length,
         errores.length,
         JSON.stringify(errores),
@@ -462,7 +497,7 @@ async function importAsignacionesExcel(req, res) {
     return res.json({
       ok: errores.length === 0,
       lote_id: loteId,
-      estado,
+      estado: ESTADOS_FLUJO.PENDIENTE,
       creados: creados.length,
       errores,
       detalle_creados: creados

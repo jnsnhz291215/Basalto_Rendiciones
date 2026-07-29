@@ -317,7 +317,7 @@ export function descargarPlantillaGastos() {
     'tipo_documento',
     'numero_documento',
     'monto',
-    'origen_pago',
+    'forma_pago',
     'tarjeta_ultimos4',
     'patente',
     'descripcion'
@@ -325,9 +325,9 @@ export function descargarPlantillaGastos() {
 
   const dataTable = [headers, ...blankRows(headers.length, EMPTY_DATA_ROWS)]
 
-  const leyendaOrigen = [
-    ['origen_pago', 'Significado'],
-    ['e / E', 'Efectivo (sin tarjeta_ultimos4)'],
+  const leyendaFormaPago = [
+    ['forma_pago', 'Significado'],
+    ['e / E', 'Efectivo (tarjeta_ultimos4 opcional / vacío)'],
     ['d / D', 'Débito (requiere tarjeta_ultimos4)'],
     ['c / C', 'Crédito (requiere tarjeta_ultimos4)']
   ]
@@ -338,7 +338,7 @@ export function descargarPlantillaGastos() {
     ['f / F', 'Factura (requiere numero_documento)'],
     ['p / P', 'Peaje (sin N° docto)'],
     ['g / G', 'Guía Despacho (requiere numero_documento)'],
-    ['oc / OC', 'Orden de compra (N° docto opcional)']
+    ['oc / OC', 'Orden de compra (requiere numero_documento)']
   ]
 
   const notas = [
@@ -347,16 +347,17 @@ export function descargarPlantillaGastos() {
     ['cc: nombre del centro de cobro / empresa'],
     ['caja: clave interna de la caja'],
     ['monto: solo números (ej. 15000)'],
-    ['tarjeta_ultimos4: solo si d o c; vacío si e'],
+    ['tarjeta_ultimos4: obligatorio solo si d o c; vacío/opcional si e'],
     ['patente: opcional (ABCD12 o AB-CD-12 → ABCD12)'],
     ['descripcion: obligatoria (máx. 500)'],
     ['Letras e/d/c y b/f/p/g/oc: mayúscula o minúscula'],
+    ['Compat: columna origen_pago antigua también se acepta al importar'],
     ['Se crean como Legacy sin comprobante; adjuntar después en el sistema']
   ]
 
   const cells = [
     ...tableCells(1, 0, dataTable),
-    ...tableCells(1, 13, leyendaOrigen),
+    ...tableCells(1, 13, leyendaFormaPago),
     ...tableCells(7, 13, leyendaTipo),
     ...tableCells(15, 13, notas, { headerRows: 1 })
   ]
@@ -377,7 +378,7 @@ export function descargarPlantillaGastos() {
     instrHeaders,
     ['fecha', 'Sí', 'Fecha del documento. Formato DD/MM/AAAA'],
     ['trabajador_rut', 'Sí', 'RUT del trabajador (con o sin puntos)'],
-    ['trabajador_nombre', 'No', 'Solo referencia; se busca por RUT'],
+    ['trabajador_nombre', 'No (opcional)', 'Solo referencia; se busca por RUT'],
     ['cc', 'Sí', 'Centro de cobro / empresa (nombre como en el sistema)'],
     ['caja', 'Sí', 'Clave interna / nombre de la caja en el sistema'],
     [
@@ -388,12 +389,16 @@ export function descargarPlantillaGastos() {
     [
       'numero_documento',
       'Condicional',
-      'Obligatorio si tipo_documento = f o g; opcional en b/oc; vacío en p'
+      'Obligatorio si tipo_documento = f, g u oc; opcional en b; vacío en p'
     ],
     ['monto', 'Sí', 'Monto en pesos (sin $ ni puntos)'],
-    ['origen_pago', 'Sí', 'e = Efectivo | d = Débito | c = Crédito'],
-    ['tarjeta_ultimos4', 'Condicional', 'Obligatorio solo si origen_pago = d o c; vacío si e'],
-    ['patente', 'No', 'Opcional. Se normaliza a XXXXNN (ej. AB-CD-12 → ABCD12)'],
+    ['forma_pago', 'Sí', 'e = Efectivo | d = Débito | c = Crédito (alias import: origen_pago)'],
+    [
+      'tarjeta_ultimos4',
+      'Condicional',
+      'Obligatorio solo si forma_pago = d o c; opcional/vacío si e'
+    ],
+    ['patente', 'No (opcional)', 'Opcional. Se normaliza a XXXXNN (ej. AB-CD-12 → ABCD12)'],
     ['descripcion', 'Sí', 'Descripción / observación (máx. 500 caracteres)'],
     [
       'NOTA',

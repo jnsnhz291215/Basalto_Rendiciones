@@ -4,6 +4,7 @@ const express = require('express')
 const {
   listImportaciones,
   getImportacion,
+  confirmarImportacion,
   anularImportacion
 } = require('../controllers/importaciones.controller')
 const { authMiddleware } = require('../middlewares/auth.middleware')
@@ -16,6 +17,7 @@ router.use(checkRole(ADMINS))
 
 router.get('/', listImportaciones)
 router.get('/:id', getImportacion)
+router.post('/:id/confirmar', confirmarImportacion)
 router.delete('/:id', anularImportacion)
 
 module.exports = router
