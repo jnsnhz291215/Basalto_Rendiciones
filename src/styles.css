@@ -3470,3 +3470,7 @@ input[type='number'].dash-input-strong,
   background: #fee2e2;
   color: #991b1b;
 }
+.dash-banner--ok {
+  background: #d1fae5;
+  color: #065f46;
+}

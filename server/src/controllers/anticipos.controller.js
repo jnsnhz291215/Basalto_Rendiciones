@@ -9,12 +9,17 @@ const {
   normalizeBancoNombre,
   upsertBancoOrigen
 } = require('../utils/ensureAsignacionesSchema')
-
-function normalizeNumeroCuenta(value) {
-  return String(value || '')
-    .replace(/[^0-9]/g, '')
-    .slice(0, 40)
-}
+const {
+  HEADERS_ASIGNACIONES,
+  parseExcelConHeaders,
+  parseFechaToIso,
+  parseMonto,
+  cleanRut,
+  normalizeNumeroDocumento,
+  normalizeNumeroCuenta,
+  keysMatch,
+  cellToString
+} = require('../utils/excelImport')
 
 async function listAnticipos(req, res) {
   try {
@@ -118,7 +123,7 @@ async function createAnticipo(req, res) {
       return res.status(400).json({ error: 'Banco origen es obligatorio' })
     }
 
-    let codigo = codigo_vale?.trim()
+    let codigo = normalizeNumeroDocumento(codigo_vale)
     if (!codigo) {
       const maxRows = await query(
         `SELECT MAX(CAST(SUBSTRING_INDEX(codigo_vale, '-', -1) AS UNSIGNED)) AS max_num
@@ -140,7 +145,7 @@ async function createAnticipo(req, res) {
         Number(monto),
         cuenta,
         banco,
-        observacion || null,
+        cellToString(observacion) || null,
         comprobante_url || null
       ]
     )
@@ -288,10 +293,147 @@ async function softDeleteAnticipo(req, res) {
   }
 }
 
+async function findTrabajadorIdByRut(rutRaw) {
+  const rut = cleanRut(rutRaw)
+  if (!rut) return null
+  const rows = await query(
+    `SELECT id, rut FROM trabajadores WHERE is_deleted = FALSE`
+  )
+  const match = rows.find((t) => cleanRut(t.rut) === rut)
+  return match ? Number(match.id) : null
+}
+
+async function findCajaIdByCcYCaja(ccNombre, cajaClave) {
+  const ccRaw = cellToString(ccNombre)
+  const cajaRaw = cellToString(cajaClave)
+  if (!cajaRaw) return null
+  const rows = await query(
+    `SELECT c.id, c.clave_interna, c.nombre_exterior, COALESCE(cc.nombre, '') AS cc_nombre
+     FROM cajas_chicas c
+     LEFT JOIN centros_costo cc ON cc.id = c.centro_cobro_id AND cc.is_deleted = FALSE
+     WHERE c.is_deleted = FALSE`
+  )
+  const matches = rows.filter((r) => {
+    const cajaOk =
+      keysMatch(r.clave_interna, cajaRaw) || keysMatch(r.nombre_exterior, cajaRaw)
+    if (!cajaOk) return false
+    if (!ccRaw) return true
+    return keysMatch(r.cc_nombre, ccRaw)
+  })
+  if (!matches.length) return null
+  if (matches.length === 1) return Number(matches[0].id)
+  const byKey = matches.find((r) => keysMatch(r.clave_interna, cajaRaw))
+  return Number((byKey || matches[0]).id)
+}
+
+async function importAsignacionesExcel(req, res) {
+  try {
+    await ensureAsignacionesSchema()
+    const parsed = parseExcelConHeaders(req.file?.buffer, HEADERS_ASIGNACIONES, 'Asignaciones')
+    if (!parsed.ok) {
+      return res.status(400).json({
+        ok: false,
+        error: parsed.error,
+        faltantes: parsed.faltantes || []
+      })
+    }
+
+    const creados = []
+    const errores = []
+
+    for (const row of parsed.rows) {
+      const fila = row.__row
+      try {
+        // Mismas normalizaciones que gastos: fecha/monto crudos, RUT, CC/caja, n° doc
+        const fecha = parseFechaToIso(row.__raw?.fecha ?? row.fecha)
+        if (!fecha) throw new Error('fecha inválida (usa DD/MM/AAAA)')
+
+        const rut = cleanRut(row.trabajador_rut)
+        if (!rut) throw new Error('trabajador_rut es obligatorio')
+
+        const cc = cellToString(row.cc)
+        const caja = cellToString(row.caja)
+        if (!cc) throw new Error('cc (empresa) es obligatorio')
+        if (!caja) throw new Error('caja es obligatoria')
+
+        const monto = parseMonto(row.__raw?.monto ?? row.monto)
+        if (monto == null) throw new Error('monto inválido')
+
+        const cuenta = normalizeNumeroCuenta(row.__raw?.numero_cuenta ?? row.numero_cuenta)
+        if (!cuenta) throw new Error('numero_cuenta es obligatorio')
+
+        const banco = await upsertBancoOrigen(cellToString(row.banco_origen))
+        if (!banco) throw new Error('banco_origen es obligatorio')
+
+        const trabajadorId = await findTrabajadorIdByRut(rut)
+        if (!trabajadorId) {
+          throw new Error(`trabajador_rut no encontrado (${row.trabajador_rut})`)
+        }
+
+        const cajaId = await findCajaIdByCcYCaja(cc, caja)
+        if (!cajaId) throw new Error(`caja/cc no encontrados (${cc} / ${caja})`)
+
+        let codigo = normalizeNumeroDocumento(row.n_doc_vale)
+        if (!codigo) {
+          const maxRows = await query(
+            `SELECT MAX(CAST(SUBSTRING_INDEX(codigo_vale, '-', -1) AS UNSIGNED)) AS max_num
+             FROM anticipos`
+          )
+          codigo = nextCodigo('V', Number(maxRows[0]?.max_num) || 5500)
+        } else {
+          const dup = await query(
+            `SELECT id FROM anticipos
+             WHERE codigo_vale = ? AND is_deleted = FALSE
+             LIMIT 1`,
+            [codigo]
+          )
+          if (dup[0]) throw new Error(`n_doc_vale ya existe (${codigo})`)
+        }
+
+        const observacion = cellToString(row.observacion) || null
+        if (observacion && observacion.length > 500) {
+          throw new Error('observacion supera 500 caracteres')
+        }
+
+        const result = await query(
+          `INSERT INTO anticipos
+            (codigo_vale, caja_id, trabajador_id, fecha, monto, numero_cuenta, banco_origen,
+             observacion, comprobante_url)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+          [codigo, cajaId, trabajadorId, fecha, monto, cuenta, banco, observacion]
+        )
+
+        creados.push({ fila, id: result.insertId, codigo })
+      } catch (err) {
+        errores.push({ fila, error: err?.message || 'Error en fila' })
+      }
+    }
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      'CREAR',
+      'Asignaciones',
+      `Import Excel: ${creados.length} ok, ${errores.length} error(es)`
+    )
+
+    return res.json({
+      ok: errores.length === 0,
+      creados: creados.length,
+      errores,
+      detalle_creados: creados
+    })
+  } catch (err) {
+    console.error('[importAsignacionesExcel]', err)
+    return res.status(500).json({ error: err?.message || 'Error al importar Excel' })
+  }
+}
+
 module.exports = {
   listAnticipos,
   listBancosOrigen,
   createAnticipo,
   updateAnticipo,
-  softDeleteAnticipo
+  softDeleteAnticipo,
+  importAsignacionesExcel
 }

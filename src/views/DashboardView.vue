@@ -696,6 +696,7 @@
         <p v-if="dataLoading" class="dash-banner dash-banner--info">Cargando datos…</p>
         <p v-if="dataError" class="dash-banner dash-banner--danger">{{ dataError }}</p>
         <p v-if="saveError" class="dash-banner dash-banner--danger">{{ saveError }}</p>
+        <p v-if="saveOk" class="dash-banner dash-banner--ok">{{ saveOk }}</p>
         <template v-if="activeModule === 'caja'">
         <section class="dash-metrics">
           <div class="dash-metrics-head">
@@ -821,10 +822,24 @@
                 <span>📄</span>
                 <span>Descargar plantilla</span>
               </button>
-              <button v-if="isAdminSession" class="dash-btn-excel" type="button">
+              <button
+                v-if="isAdminSession"
+                class="dash-btn-excel"
+                type="button"
+                title="Importar gastos desde Excel (columnas de la plantilla obligatorias)"
+                :disabled="importExcelLoading"
+                @click="triggerImportGastosExcel"
+              >
                 <span>📥</span>
-                <span>Importar Excel</span>
+                <span>{{ importExcelLoading ? 'Importando…' : 'Importar Excel' }}</span>
               </button>
+              <input
+                ref="gastoImportInputEl"
+                type="file"
+                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                class="dash-sr-only"
+                @change="onImportGastosExcel"
+              />
               <button
                 class="dash-btn-primary dash-btn-toggle-caja"
                 type="button"
@@ -1745,10 +1760,23 @@
                 <span>📄</span>
                 <span>Descargar plantilla</span>
               </button>
-              <button class="dash-btn-excel" type="button">
+              <button
+                class="dash-btn-excel"
+                type="button"
+                title="Importar asignaciones desde Excel (columnas de la plantilla obligatorias)"
+                :disabled="importExcelLoading"
+                @click="triggerImportAsignacionesExcel"
+              >
                 <span>📥</span>
-                <span>Importar Excel</span>
+                <span>{{ importExcelLoading ? 'Importando…' : 'Importar Excel' }}</span>
               </button>
+              <input
+                ref="asignacionImportInputEl"
+                type="file"
+                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                class="dash-sr-only"
+                @change="onImportAsignacionesExcel"
+              />
               <button
                 class="dash-btn-primary dash-btn-toggle-caja"
                 type="button"
@@ -3640,6 +3668,10 @@ async function onSavePerfil() {
 const dataLoading = ref(false)
 const dataError = ref('')
 const saveError = ref('')
+const saveOk = ref('')
+const importExcelLoading = ref(false)
+const gastoImportInputEl = ref(null)
+const asignacionImportInputEl = ref(null)
 
 const cajaActiva = ref('')
 const mesActivo = ref('')
@@ -5973,6 +6005,85 @@ function onExportarCartolaExcel() {
     periodo: informeResultado.periodo,
     filename: `cartola_${mes}_${rows.length}reg.xlsx`
   })
+}
+
+function triggerImportGastosExcel() {
+  if (gastoImportInputEl.value) {
+    gastoImportInputEl.value.value = ''
+    gastoImportInputEl.value.click()
+  }
+}
+
+function triggerImportAsignacionesExcel() {
+  if (asignacionImportInputEl.value) {
+    asignacionImportInputEl.value.value = ''
+    asignacionImportInputEl.value.click()
+  }
+}
+
+function formatImportResultMessage(kind, data) {
+  const ok = Number(data?.creados) || 0
+  const errs = Array.isArray(data?.errores) ? data.errores : []
+  let msg = `${kind}: ${ok} fila(s) importada(s).`
+  if (errs.length) {
+    const sample = errs
+      .slice(0, 5)
+      .map((e) => `Fila ${e.fila}: ${e.error}`)
+      .join(' · ')
+    msg += ` ${errs.length} con error. ${sample}`
+    if (errs.length > 5) msg += '…'
+  }
+  return msg
+}
+
+async function onImportGastosExcel(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  importExcelLoading.value = true
+  saveError.value = ''
+  saveOk.value = ''
+  try {
+    const fd = new FormData()
+    fd.append('archivo', file)
+    const data = await api.importRendicionesExcel(fd)
+    await loadDashboardData()
+    const msg = formatImportResultMessage('Gastos', data)
+    if (data?.errores?.length) saveError.value = msg
+    else saveOk.value = msg
+  } catch (err) {
+    const faltan = Array.isArray(err?.faltantes) && err.faltantes.length
+      ? ` Faltan: ${err.faltantes.join(', ')}.`
+      : ''
+    saveError.value = `${err?.message || 'No se pudo importar el Excel.'}${faltan}`
+  } finally {
+    importExcelLoading.value = false
+    if (gastoImportInputEl.value) gastoImportInputEl.value.value = ''
+  }
+}
+
+async function onImportAsignacionesExcel(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  importExcelLoading.value = true
+  saveError.value = ''
+  saveOk.value = ''
+  try {
+    const fd = new FormData()
+    fd.append('archivo', file)
+    const data = await api.importAsignacionesExcel(fd)
+    await loadDashboardData()
+    const msg = formatImportResultMessage('Asignaciones', data)
+    if (data?.errores?.length) saveError.value = msg
+    else saveOk.value = msg
+  } catch (err) {
+    const faltan = Array.isArray(err?.faltantes) && err.faltantes.length
+      ? ` Faltan: ${err.faltantes.join(', ')}.`
+      : ''
+    saveError.value = `${err?.message || 'No se pudo importar el Excel.'}${faltan}`
+  } finally {
+    importExcelLoading.value = false
+    if (asignacionImportInputEl.value) asignacionImportInputEl.value.value = ''
+  }
 }
 
 function onAplicarFiltrosInforme() {

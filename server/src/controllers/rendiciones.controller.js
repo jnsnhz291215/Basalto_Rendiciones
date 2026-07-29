@@ -5,6 +5,19 @@ const { ROLES, ADMINS } = require('../middlewares/role.middleware')
 const { assertTarjetaPermitePago } = require('../utils/tarjetaPago')
 const { guardarYVerificarComprobante } = require('../utils/verificarComprobante')
 const { canDevHardDelete, canSkipComprobanteVerify } = require('../config/devFlags')
+const {
+  HEADERS_GASTOS,
+  parseExcelConHeaders,
+  parseFechaToIso,
+  parseMonto,
+  cleanRut,
+  normalizeNumeroDocumento,
+  normalizeTarjetaUltimos4,
+  mapTipoDocumento,
+  mapOrigenPago,
+  keysMatch,
+  cellToString
+} = require('../utils/excelImport')
 
 async function assertCajaAsignadaATrabajador(trabajadorId, cajaId) {
   const rows = await query(
@@ -505,10 +518,207 @@ async function softDeleteRendicion(req, res) {
   }
 }
 
+async function findTrabajadorIdByRut(rutRaw) {
+  const rut = cleanRut(rutRaw)
+  if (!rut) return null
+  const rows = await query(
+    `SELECT id, rut, nombre_completo
+     FROM trabajadores
+     WHERE is_deleted = FALSE`
+  )
+  const match = rows.find((t) => cleanRut(t.rut) === rut)
+  return match ? Number(match.id) : null
+}
+
+async function findCajaIdByCcYCaja(ccNombre, cajaClave) {
+  const ccRaw = cellToString(ccNombre)
+  const cajaRaw = cellToString(cajaClave)
+  if (!cajaRaw) return null
+
+  const rows = await query(
+    `SELECT c.id, c.clave_interna, c.nombre_exterior, COALESCE(cc.nombre, '') AS cc_nombre
+     FROM cajas_chicas c
+     LEFT JOIN centros_costo cc ON cc.id = c.centro_cobro_id AND cc.is_deleted = FALSE
+     WHERE c.is_deleted = FALSE`
+  )
+
+  const matches = rows.filter((r) => {
+    const cajaOk =
+      keysMatch(r.clave_interna, cajaRaw) || keysMatch(r.nombre_exterior, cajaRaw)
+    if (!cajaOk) return false
+    if (!ccRaw) return true
+    return keysMatch(r.cc_nombre, ccRaw)
+  })
+
+  if (!matches.length) return null
+  if (matches.length === 1) return Number(matches[0].id)
+
+  // Preferir match exacto de clave_interna normalizada
+  const byKey = matches.find((r) => keysMatch(r.clave_interna, cajaRaw))
+  return Number((byKey || matches[0]).id)
+}
+
+async function findTarjetaIdPorUltimos4(origenPago, ultimos4) {
+  const digits = String(ultimos4 || '').replace(/\D/g, '')
+  if (digits.length !== 4) return null
+  const tipoWanted = origenPago === 'Debito' ? 'Débito' : origenPago === 'Credito' ? 'Crédito' : null
+  if (!tipoWanted) return null
+  // tarjetas_empresa.tipo suele ser 'Débito'/'Crédito' o Debito/Credito
+  const rows = await query(
+    `SELECT id, tipo, ultimos_digitos, estado
+     FROM tarjetas_empresa
+     WHERE is_deleted = FALSE`
+  )
+  const match = rows.find((t) => {
+    const tipo = String(t.tipo || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+    const want = tipoWanted
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+    return tipo === want && String(t.ultimos_digitos || '') === digits
+  })
+  return match ? Number(match.id) : null
+}
+
+/**
+ * Importa gastos desde Excel. Exige todas las columnas de la plantilla.
+ * Comprobante queda pendiente (se adjunta después).
+ */
+async function importRendicionesExcel(req, res) {
+  try {
+    if (!ADMINS.includes(req.user.rol)) {
+      return res.status(403).json({ error: 'Solo administradores pueden importar Excel' })
+    }
+
+    const parsed = parseExcelConHeaders(req.file?.buffer, HEADERS_GASTOS, 'Gastos')
+    if (!parsed.ok) {
+      return res.status(400).json({
+        ok: false,
+        error: parsed.error,
+        faltantes: parsed.faltantes || []
+      })
+    }
+
+    const creados = []
+    const errores = []
+
+    for (const row of parsed.rows) {
+      const fila = row.__row
+      try {
+        const fecha = parseFechaToIso(row.__raw?.fecha ?? row.fecha)
+        if (!fecha) throw new Error('fecha inválida (usa DD/MM/AAAA)')
+
+        const rut = cleanRut(row.trabajador_rut)
+        if (!rut) throw new Error('trabajador_rut es obligatorio')
+
+        const cc = cellToString(row.cc)
+        const caja = cellToString(row.caja)
+        if (!cc) throw new Error('cc (empresa) es obligatorio')
+        if (!caja) throw new Error('caja es obligatoria')
+
+        const tipo = mapTipoDocumento(row.tipo_documento)
+        if (!tipo) throw new Error('tipo_documento inválido (b/f/p/g)')
+
+        const origen = mapOrigenPago(row.origen_pago)
+        if (!origen) throw new Error('origen_pago inválido (e/d/c)')
+
+        const monto = parseMonto(row.__raw?.monto ?? row.monto)
+        if (monto == null) throw new Error('monto inválido')
+
+        const descripcion = cellToString(row.descripcion)
+        if (!descripcion) throw new Error('descripcion es obligatoria')
+        if (descripcion.length > 500) throw new Error('descripcion supera 500 caracteres')
+
+        const numeroDoc = normalizeNumeroDocumento(row.numero_documento)
+        if (tipo === 'Factura' && !numeroDoc) {
+          throw new Error('numero_documento obligatorio para Factura (f)')
+        }
+
+        const trabajadorId = await findTrabajadorIdByRut(rut)
+        if (!trabajadorId) throw new Error(`trabajador_rut no encontrado (${row.trabajador_rut})`)
+
+        const cajaId = await findCajaIdByCcYCaja(cc, caja)
+        if (!cajaId) throw new Error(`caja/cc no encontrados (${cc} / ${caja})`)
+
+        let tarjetaId = null
+        if (origen === 'Debito' || origen === 'Credito') {
+          const ult4 = normalizeTarjetaUltimos4(row.tarjeta_ultimos4)
+          if (ult4.length !== 4) {
+            throw new Error('tarjeta_ultimos4 obligatorio (4 dígitos) si origen es d/c')
+          }
+          tarjetaId = await findTarjetaIdPorUltimos4(origen, ult4)
+          if (!tarjetaId) {
+            throw new Error(`No hay tarjeta ${origen} con finales ${ult4}`)
+          }
+          const tarjetaCheck = await assertTarjetaPermitePago({
+            tarjetaId,
+            origenPago: origen,
+            fechaDocumento: fecha
+          })
+          if (tarjetaCheck) throw new Error(tarjetaCheck.error)
+        }
+
+        const arrastre = calcularArrastreMes(fecha, mesActualYYYYMM())
+        const maxRows = await query(
+          `SELECT MAX(CAST(SUBSTRING_INDEX(codigo_rinde, '-', -1) AS UNSIGNED)) AS max_num
+           FROM rendiciones_gastos`
+        )
+        const codigo = nextCodigo('R', Number(maxRows[0]?.max_num) || 100)
+
+        const result = await query(
+          `INSERT INTO rendiciones_gastos
+            (codigo_rinde, caja_id, trabajador_id, fecha_documento, tipo_documento, numero_documento,
+             monto, origen_pago, tarjeta_id, comprobante_url, descripcion, estado, arrastre_mes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'Sin Devolución', ?)`,
+          [
+            codigo,
+            cajaId,
+            trabajadorId,
+            fecha,
+            tipo,
+            tipo === 'Factura' ? numeroDoc : null,
+            monto,
+            origen,
+            tarjetaId,
+            descripcion,
+            arrastre
+          ]
+        )
+
+        creados.push({ fila, id: result.insertId, codigo })
+      } catch (err) {
+        errores.push({ fila, error: err?.message || 'Error en fila' })
+      }
+    }
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      'CREAR',
+      'Gastos',
+      `Import Excel: ${creados.length} ok, ${errores.length} error(es)`
+    )
+
+    return res.json({
+      ok: errores.length === 0,
+      creados: creados.length,
+      errores,
+      detalle_creados: creados
+    })
+  } catch (err) {
+    console.error('[importRendicionesExcel]', err)
+    return res.status(500).json({ error: err?.message || 'Error al importar Excel' })
+  }
+}
+
 module.exports = {
   listRendiciones,
   createRendicion,
   updateRendicion,
   softDeleteRendicion,
-  verificarComprobanteHandler
+  verificarComprobanteHandler,
+  importRendicionesExcel
 }

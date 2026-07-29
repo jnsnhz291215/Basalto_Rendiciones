@@ -85,6 +85,60 @@ export async function createRendicion(payload) {
   })
 }
 
+/** Importa gastos desde Excel (FormData field: archivo). Exige columnas de la plantilla. */
+export async function importRendicionesExcel(formData) {
+  const headers = {}
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  const res = await fetch(apiUrl('/api/rendiciones/importar-excel'), {
+    method: 'POST',
+    headers,
+    body: formData,
+    credentials: 'omit'
+  })
+  let data = null
+  try {
+    data = await res.json()
+  } catch {
+    data = null
+  }
+  if (!res.ok) {
+    const err = new Error(data?.error || data?.message || `Error ${res.status}`)
+    err.faltantes = data?.faltantes || []
+    err.errores = data?.errores || []
+    throw err
+  }
+  return data
+}
+
+/** Importa asignaciones desde Excel (FormData field: archivo). */
+export async function importAsignacionesExcel(formData) {
+  const headers = {}
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  const res = await fetch(apiUrl('/api/anticipos/importar-excel'), {
+    method: 'POST',
+    headers,
+    body: formData,
+    credentials: 'omit'
+  })
+  let data = null
+  try {
+    data = await res.json()
+  } catch {
+    data = null
+  }
+  if (!res.ok) {
+    const err = new Error(data?.error || data?.message || `Error ${res.status}`)
+    err.faltantes = data?.faltantes || []
+    err.errores = data?.errores || []
+    throw err
+  }
+  return data
+}
+
 /** Verifica comprobante con IA (FormData: comprobante, monto, tipo_documento, numero_documento?) */
 export async function verificarComprobante(formData) {
   const headers = {}
