@@ -726,11 +726,12 @@
             </div>
 
             <div class="dash-metrics-controls">
-              <div class="dash-caja dash-caja--search">
+              <div class="dash-caja dash-caja--search" ref="ccFiltroRootEl">
                 <span class="dash-caja-label">CC:</span>
                 <div class="dash-combobox dash-combobox--metrics">
                   <div class="dash-caja-search-row">
                     <input
+                      ref="ccFiltroInputEl"
                       v-model="ccFiltroQuery"
                       type="text"
                       class="dash-caja-select dash-caja-search-input"
@@ -741,7 +742,7 @@
                       @keydown.down.prevent="highlightCcFiltro(1)"
                       @keydown.up.prevent="highlightCcFiltro(-1)"
                       @keydown.enter.prevent="confirmCcFiltroHighlight"
-                      @keydown.escape="ccFiltroOpen = false"
+                      @keydown.escape="onCcFiltroEscape"
                       @blur="onCcFiltroBlur"
                     />
                     <button
@@ -752,7 +753,19 @@
                       aria-label="Reiniciar CC a Todos"
                       @mousedown.prevent="resetCcFiltro"
                     >
-                      <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                      <svg
+                        class="dash-caja-clear-icon"
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          fill="currentColor"
+                          d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6a6 6 0 0 1-6 6 6 6 0 0 1-6-6H4a8 8 0 0 0 8 8 8 8 0 0 0 8-8c0-4.42-3.58-8-8-8z"
+                        />
+                      </svg>
                     </button>
                   </div>
                   <ul
@@ -774,11 +787,12 @@
                 </div>
               </div>
 
-              <div class="dash-caja dash-caja--search">
+              <div class="dash-caja dash-caja--search" ref="cajaFiltroRootEl">
                 <span class="dash-caja-label">Caja:</span>
                 <div class="dash-combobox dash-combobox--metrics">
                   <div class="dash-caja-search-row">
                     <input
+                      ref="cajaFiltroInputEl"
                       v-model="cajaFiltroQuery"
                       type="text"
                       class="dash-caja-select dash-caja-search-input"
@@ -800,7 +814,19 @@
                       aria-label="Borrar texto de caja"
                       @mousedown.prevent="clearCajaFiltroTexto"
                     >
-                      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                      <svg
+                        class="dash-caja-clear-icon"
+                        viewBox="0 0 16 16"
+                        width="11"
+                        height="11"
+                        aria-hidden="true"
+                        focusable="false"
+                      >
+                        <path
+                          fill="currentColor"
+                          d="M3.2 3.2a.75.75 0 0 1 1.06 0L8 6.94l3.74-3.74a.75.75 0 1 1 1.06 1.06L9.06 8l3.74 3.74a.75.75 0 1 1-1.06 1.06L8 9.06l-3.74 3.74a.75.75 0 0 1-1.06-1.06L6.94 8 3.2 4.26a.75.75 0 0 1 0-1.06z"
+                        />
+                      </svg>
                     </button>
                   </div>
                   <ul
@@ -900,16 +926,6 @@
               </p>
             </div>
             <div class="dash-toolbar-actions">
-              <button
-                v-if="isAdminSession"
-                class="dash-btn-excel dash-btn-excel--outline"
-                type="button"
-                title="Descargar plantilla Excel para importar gastos"
-                @click="descargarPlantillaGastos"
-              >
-                <span>📄</span>
-                <span>Descargar plantilla</span>
-              </button>
               <input
                 ref="legacyComprobanteInputEl"
                 type="file"
@@ -1895,15 +1911,6 @@
             </div>
             <div class="dash-toolbar-actions">
               <button
-                class="dash-btn-excel dash-btn-excel--outline"
-                type="button"
-                title="Descargar plantilla Excel para importar asignaciones"
-                @click="descargarPlantillaAsignaciones"
-              >
-                <span>📄</span>
-                <span>Descargar plantilla</span>
-              </button>
-              <button
                 class="dash-btn-primary dash-btn-toggle-caja"
                 type="button"
                 @click="toggleFormAnticipo"
@@ -2682,57 +2689,140 @@
           </div>
           <div class="dash-toolbar-actions">
             <button
-              class="dash-btn-excel dash-btn-excel--outline"
-              type="button"
-              title="Descargar plantilla Excel de gastos"
-              @click="descargarPlantillaGastos"
-            >
-              <span>📄</span>
-              <span>Plantilla gastos</span>
-            </button>
-            <button
-              class="dash-btn-excel dash-btn-excel--outline"
-              type="button"
-              title="Descargar plantilla Excel de asignaciones"
-              @click="descargarPlantillaAsignaciones"
-            >
-              <span>📄</span>
-              <span>Plantilla asignaciones</span>
-            </button>
-            <button
               class="dash-btn-excel"
               type="button"
-              title="Importar gastos desde Excel"
+              title="Importar gastos o asignaciones desde Excel"
               :disabled="importExcelLoading"
-              @click="triggerImportGastosExcel"
+              @click="openImportModal"
             >
               <span>📥</span>
-              <span>{{ importExcelLoading ? 'Importando…' : 'Importar gastos' }}</span>
+              <span>Importar</span>
             </button>
-            <button
-              class="dash-btn-excel"
-              type="button"
-              title="Importar asignaciones desde Excel"
-              :disabled="importExcelLoading"
-              @click="triggerImportAsignacionesExcel"
-            >
-              <span>📥</span>
-              <span>{{ importExcelLoading ? 'Importando…' : 'Importar asignaciones' }}</span>
-            </button>
-            <input
-              ref="gastoImportInputEl"
-              type="file"
-              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              class="dash-sr-only"
-              @change="onImportGastosExcel"
-            />
-            <input
-              ref="asignacionImportInputEl"
-              type="file"
-              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              class="dash-sr-only"
-              @change="onImportAsignacionesExcel"
-            />
+          </div>
+        </div>
+
+        <div
+          v-if="importModalOpen"
+          class="dash-modal-backdrop"
+          @click.self="closeImportModal"
+        >
+          <div class="dash-modal dash-modal--import" role="dialog" aria-modal="true" aria-labelledby="modal-import-title">
+            <div class="dash-modal-head">
+              <h3 id="modal-import-title">Importar Excel</h3>
+              <button
+                class="dash-modal-close"
+                type="button"
+                aria-label="Cerrar"
+                @click="closeImportModal"
+              >
+                ×
+              </button>
+            </div>
+
+            <div class="dash-import-modal-body">
+              <div class="dash-segmented" role="tablist" aria-label="Tipo de importación">
+                <button
+                  type="button"
+                  role="tab"
+                  class="dash-segmented-btn"
+                  :class="{ 'dash-segmented-btn--active': importModalTipo === 'gastos' }"
+                  :aria-selected="importModalTipo === 'gastos'"
+                  @click="setImportModalTipo('gastos')"
+                >
+                  Gastos
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  class="dash-segmented-btn"
+                  :class="{ 'dash-segmented-btn--active': importModalTipo === 'asignaciones' }"
+                  :aria-selected="importModalTipo === 'asignaciones'"
+                  @click="setImportModalTipo('asignaciones')"
+                >
+                  Asignaciones
+                </button>
+              </div>
+
+              <div class="dash-import-modal-section">
+                <p class="dash-import-modal-hint">
+                  {{
+                    importModalTipo === 'gastos'
+                      ? 'Descarga la plantilla de gastos, completa las filas y súbela aquí.'
+                      : 'Descarga la plantilla de asignaciones, completa las filas y súbela aquí.'
+                  }}
+                </p>
+                <button
+                  class="dash-btn-excel dash-btn-excel--outline"
+                  type="button"
+                  :title="
+                    importModalTipo === 'gastos'
+                      ? 'Descargar plantilla Excel de gastos'
+                      : 'Descargar plantilla Excel de asignaciones'
+                  "
+                  @click="descargarPlantillaImportModal"
+                >
+                  <span>📄</span>
+                  <span>Descargar plantilla</span>
+                </button>
+              </div>
+
+              <div class="dash-import-modal-section">
+                <input
+                  ref="importModalInputEl"
+                  type="file"
+                  accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  class="dash-sr-only"
+                  @change="onImportModalFileChange"
+                />
+                <div
+                  class="dash-import-dropzone"
+                  :class="{
+                    'dash-import-dropzone--active': importModalDragOver,
+                    'dash-import-dropzone--has-file': !!importModalFile
+                  }"
+                  @click="triggerImportModalFilePicker"
+                  @dragenter.prevent="onImportModalDragEnter"
+                  @dragover.prevent="onImportModalDragOver"
+                  @dragleave.prevent="onImportModalDragLeave"
+                  @drop.prevent="onImportModalDrop"
+                >
+                  <template v-if="importModalFile">
+                    <p class="dash-import-dropzone-file">
+                      <strong>{{ importModalFile.name }}</strong>
+                    </p>
+                    <p class="dash-import-dropzone-meta">
+                      {{ formatImportFileSize(importModalFile.size) }} · clic o arrastra otro archivo para reemplazar
+                    </p>
+                  </template>
+                  <template v-else>
+                    <p class="dash-import-dropzone-title">Arrastra un archivo Excel aquí</p>
+                    <p class="dash-import-dropzone-meta">o haz clic para seleccionar (.xlsx / .xls)</p>
+                  </template>
+                </div>
+                <button
+                  v-if="importModalFile"
+                  class="dash-btn-ghost-sm dash-import-clear-file"
+                  type="button"
+                  @click.stop="clearImportModalFile"
+                >
+                  Quitar archivo
+                </button>
+              </div>
+            </div>
+
+            <div class="dash-modal-actions">
+              <button class="dash-btn-secondary" type="button" @click="closeImportModal">
+                Cancelar
+              </button>
+              <button
+                class="dash-btn-excel"
+                type="button"
+                :disabled="!importModalFile || importExcelLoading"
+                @click="submitImportModal"
+              >
+                {{ importExcelLoading ? 'Importando…' : 'Importar' }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -3946,9 +4036,21 @@ const modalEditAdmin = reactive({
 })
 
 function onDocClick(event) {
-  if (!userMenuOpen.value) return
-  if (userMenuEl.value && !userMenuEl.value.contains(event.target)) {
+  if (userMenuOpen.value && userMenuEl.value && !userMenuEl.value.contains(event.target)) {
     userMenuOpen.value = false
+  }
+}
+
+/** Cierra combobox CC/Caja al pointerdown fuera (no depende del blur del input). */
+function onDocPointerDown(event) {
+  const t = event.target
+  if (ccFiltroOpen.value && ccFiltroRootEl.value && !ccFiltroRootEl.value.contains(t)) {
+    ccFiltroOpen.value = false
+    syncCcFiltroQueryFromSelection()
+  }
+  if (cajaFiltroOpen.value && cajaFiltroRootEl.value && !cajaFiltroRootEl.value.contains(t)) {
+    cajaFiltroOpen.value = false
+    syncCajaFiltroQueryFromSelection()
   }
 }
 
@@ -4018,8 +4120,11 @@ const dataError = ref('')
 const saveError = ref('')
 const saveOk = ref('')
 const importExcelLoading = ref(false)
-const gastoImportInputEl = ref(null)
-const asignacionImportInputEl = ref(null)
+const importModalOpen = ref(false)
+const importModalTipo = ref('gastos')
+const importModalFile = ref(null)
+const importModalDragOver = ref(false)
+const importModalInputEl = ref(null)
 const legacyComprobanteInputEl = ref(null)
 const pendingLegacyAttach = ref(null)
 
@@ -4038,9 +4143,13 @@ const mesActivo = ref('')
 const ccFiltroQuery = ref('Todos')
 const ccFiltroOpen = ref(false)
 const ccFiltroHighlight = ref(0)
+const ccFiltroRootEl = ref(null)
+const ccFiltroInputEl = ref(null)
 const cajaFiltroQuery = ref('')
 const cajaFiltroOpen = ref(false)
 const cajaFiltroHighlight = ref(0)
+const cajaFiltroRootEl = ref(null)
+const cajaFiltroInputEl = ref(null)
 
 const resumenLoading = ref(false)
 const resumenCaja = reactive({
@@ -5272,8 +5381,14 @@ const ccFiltroMuestraReset = computed(() => {
   return Boolean(q) && q !== 'todos'
 })
 
+function onCcFiltroEscape() {
+  ccFiltroOpen.value = false
+  syncCcFiltroQueryFromSelection()
+}
+
 function onCcFiltroBlur() {
   setTimeout(() => {
+    if (ccFiltroRootEl.value?.contains(document.activeElement)) return
     ccFiltroOpen.value = false
     syncCcFiltroQueryFromSelection()
   }, 120)
@@ -5309,8 +5424,13 @@ function selectCajaFiltro(opt) {
 /** Solo limpia el texto de búsqueda; la caja activa se conserva hasta elegir otra. */
 function clearCajaFiltroTexto() {
   cajaFiltroQuery.value = ''
-  cajaFiltroOpen.value = true
   cajaFiltroHighlight.value = 0
+  // Enfocar el input: la X se usa a menudo sin foco previo; sin foco el blur
+  // no cierra el listado y la UI queda “bloqueada” hasta elegir una caja.
+  nextTick(() => {
+    cajaFiltroInputEl.value?.focus()
+    cajaFiltroOpen.value = cajaFiltroOpcionesVisibles.value.length > 0
+  })
 }
 
 function onCajaFiltroEscape() {
@@ -5320,8 +5440,9 @@ function onCajaFiltroEscape() {
 
 function onCajaFiltroBlur() {
   setTimeout(() => {
+    if (cajaFiltroRootEl.value?.contains(document.activeElement)) return
     cajaFiltroOpen.value = false
-    // Sin nueva selección → restaurar etiqueta de la caja activa (ej. CENTINELA)
+    // Sin nueva selección → restaurar etiqueta de la caja activa (ej. HOSTAL EL ABRA)
     syncCajaFiltroQueryFromSelection()
   }, 120)
 }
@@ -5708,6 +5829,7 @@ const asignaciones = ref([])
 
 onMounted(async () => {
   document.addEventListener('click', onDocClick)
+  document.addEventListener('pointerdown', onDocPointerDown)
   await bootstrap()
   syncGastoLockedFields()
   await loadDashboardData()
@@ -5715,6 +5837,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   document.removeEventListener('click', onDocClick)
+  document.removeEventListener('pointerdown', onDocPointerDown)
 })
 
 function peekNextRinde() {
@@ -6803,17 +6926,121 @@ function onExportarCartolaExcel() {
   })
 }
 
-function triggerImportGastosExcel() {
-  if (gastoImportInputEl.value) {
-    gastoImportInputEl.value.value = ''
-    gastoImportInputEl.value.click()
+function openImportModal() {
+  importModalOpen.value = true
+  importModalTipo.value = 'gastos'
+  clearImportModalFile()
+  importModalDragOver.value = false
+}
+
+function closeImportModal() {
+  if (importExcelLoading.value) return
+  importModalOpen.value = false
+  clearImportModalFile()
+  importModalDragOver.value = false
+}
+
+function setImportModalTipo(tipo) {
+  if (tipo === importModalTipo.value) return
+  importModalTipo.value = tipo
+  clearImportModalFile()
+}
+
+function descargarPlantillaImportModal() {
+  if (importModalTipo.value === 'asignaciones') descargarPlantillaAsignaciones()
+  else descargarPlantillaGastos()
+}
+
+function clearImportModalFile() {
+  importModalFile.value = null
+  if (importModalInputEl.value) importModalInputEl.value.value = ''
+}
+
+function isExcelImportFile(file) {
+  if (!file) return false
+  const name = String(file.name || '').toLowerCase()
+  return name.endsWith('.xlsx') || name.endsWith('.xls')
+}
+
+function setImportModalFile(file) {
+  if (!file) return
+  if (!isExcelImportFile(file)) {
+    saveError.value = 'Selecciona un archivo Excel (.xlsx o .xls).'
+    return
+  }
+  importModalFile.value = file
+  saveError.value = ''
+}
+
+function triggerImportModalFilePicker() {
+  if (importExcelLoading.value) return
+  if (importModalInputEl.value) {
+    importModalInputEl.value.value = ''
+    importModalInputEl.value.click()
   }
 }
 
-function triggerImportAsignacionesExcel() {
-  if (asignacionImportInputEl.value) {
-    asignacionImportInputEl.value.value = ''
-    asignacionImportInputEl.value.click()
+function onImportModalFileChange(event) {
+  const file = event.target.files?.[0]
+  if (file) setImportModalFile(file)
+}
+
+function onImportModalDragEnter() {
+  importModalDragOver.value = true
+}
+
+function onImportModalDragOver() {
+  importModalDragOver.value = true
+}
+
+function onImportModalDragLeave(event) {
+  const related = event.relatedTarget
+  if (related && event.currentTarget?.contains?.(related)) return
+  importModalDragOver.value = false
+}
+
+function onImportModalDrop(event) {
+  importModalDragOver.value = false
+  const file = event.dataTransfer?.files?.[0]
+  if (file) setImportModalFile(file)
+}
+
+function formatImportFileSize(bytes) {
+  const n = Number(bytes)
+  if (!Number.isFinite(n) || n < 0) return ''
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+async function submitImportModal() {
+  const file = importModalFile.value
+  if (!file || importExcelLoading.value) return
+  const kind = importModalTipo.value === 'asignaciones' ? 'Asignaciones' : 'Gastos'
+  importExcelLoading.value = true
+  saveError.value = ''
+  saveOk.value = ''
+  try {
+    const fd = new FormData()
+    fd.append('archivo', file)
+    const data =
+      importModalTipo.value === 'asignaciones'
+        ? await api.importAsignacionesExcel(fd)
+        : await api.importRendicionesExcel(fd)
+    await Promise.all([loadDashboardData(), loadImportacionesLotes()])
+    const msg = formatImportResultMessage(kind, data)
+    if (data?.errores?.length) saveError.value = msg
+    else saveOk.value = msg
+    importModalOpen.value = false
+    clearImportModalFile()
+    importModalDragOver.value = false
+  } catch (err) {
+    const faltan = Array.isArray(err?.faltantes) && err.faltantes.length
+      ? ` Faltan: ${err.faltantes.join(', ')}.`
+      : ''
+    saveError.value = `${err?.message || 'No se pudo importar el Excel.'}${faltan}`
+  } finally {
+    importExcelLoading.value = false
   }
 }
 
@@ -6911,56 +7138,6 @@ async function onAnularImportacion(lote) {
     saveError.value = err?.message || 'No se pudo anular el lote'
   } finally {
     importacionAnulandoId.value = null
-  }
-}
-
-async function onImportGastosExcel(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
-  importExcelLoading.value = true
-  saveError.value = ''
-  saveOk.value = ''
-  try {
-    const fd = new FormData()
-    fd.append('archivo', file)
-    const data = await api.importRendicionesExcel(fd)
-    await Promise.all([loadDashboardData(), loadImportacionesLotes()])
-    const msg = formatImportResultMessage('Gastos', data)
-    if (data?.errores?.length) saveError.value = msg
-    else saveOk.value = msg
-  } catch (err) {
-    const faltan = Array.isArray(err?.faltantes) && err.faltantes.length
-      ? ` Faltan: ${err.faltantes.join(', ')}.`
-      : ''
-    saveError.value = `${err?.message || 'No se pudo importar el Excel.'}${faltan}`
-  } finally {
-    importExcelLoading.value = false
-    if (gastoImportInputEl.value) gastoImportInputEl.value.value = ''
-  }
-}
-
-async function onImportAsignacionesExcel(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
-  importExcelLoading.value = true
-  saveError.value = ''
-  saveOk.value = ''
-  try {
-    const fd = new FormData()
-    fd.append('archivo', file)
-    const data = await api.importAsignacionesExcel(fd)
-    await Promise.all([loadDashboardData(), loadImportacionesLotes()])
-    const msg = formatImportResultMessage('Asignaciones', data)
-    if (data?.errores?.length) saveError.value = msg
-    else saveOk.value = msg
-  } catch (err) {
-    const faltan = Array.isArray(err?.faltantes) && err.faltantes.length
-      ? ` Faltan: ${err.faltantes.join(', ')}.`
-      : ''
-    saveError.value = `${err?.message || 'No se pudo importar el Excel.'}${faltan}`
-  } finally {
-    importExcelLoading.value = false
-    if (asignacionImportInputEl.value) asignacionImportInputEl.value.value = ''
   }
 }
 
