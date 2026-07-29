@@ -24,6 +24,7 @@ const {
   listAuditLogs,
   syncBidireccionalHandler
 } = require('../controllers/admin.controller')
+const { triggerReload } = require('../controllers/system.controller')
 const { authMiddleware } = require('../middlewares/auth.middleware')
 const { checkRole, ADMINS, SUPER_ADMINS } = require('../middlewares/role.middleware')
 
@@ -68,5 +69,8 @@ router.get('/audit-logs', checkRole(SUPER_ADMINS), listAuditLogs)
 
 /* Sync Turnos ↔ Rendiciones - solo Super Admins */
 router.post('/sync-bidireccional', checkRole(SUPER_ADMINS), syncBidireccionalHandler)
+
+/* Notifica a clientes que deben recargar (bump SYSTEM_VERSION) */
+router.post('/trigger-reload', checkRole(SUPER_ADMINS), triggerReload)
 
 module.exports = router

@@ -365,6 +365,20 @@ export async function syncBidireccional(payload = {}) {
   })
 }
 
+/** Versión de sistema (público). Preferir `{ silent: true }` en polling. */
+export async function getSystemVersion(fetchOpts = {}) {
+  return jsonOrThrow('/api/system/version', {
+    auth: false,
+    silent: true,
+    ...fetchOpts
+  })
+}
+
+/** Solo Super Admin: bump SYSTEM_VERSION para notificar recarga a clientes. */
+export async function triggerSystemReload() {
+  return jsonOrThrow('/api/admin/trigger-reload', { method: 'POST' })
+}
+
 export async function listLegacy(params = {}) {
   const qs = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {

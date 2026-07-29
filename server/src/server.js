@@ -20,6 +20,8 @@ const anticiposRoutes = require('./routes/anticipos.routes')
 const adminRoutes = require('./routes/admin.routes')
 const legacyRoutes = require('./routes/legacy.routes')
 const importacionesRoutes = require('./routes/importaciones.routes')
+const systemRoutes = require('./routes/system.routes')
+const { initSystemVersion } = require('./utils/systemVersion')
 
 const app = express()
 const PORT = Number(process.env.PORT) || 3002
@@ -59,6 +61,13 @@ app.get('/api/health', (_req, res) => {
   })
 })
 
+try {
+  initSystemVersion()
+} catch (err) {
+  console.warn('[system-version] init:', err.message)
+}
+
+app.use('/api/system', systemRoutes)
 app.use('/api/auth', authRoutes)
 app.use('/api/cajas', cajasRoutes)
 app.use('/api/rendiciones', rendicionesRoutes)

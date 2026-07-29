@@ -18,3 +18,6 @@ Rendiciones_Storage/
 **/Rendiciones_Storage/
 uploads/
 server/uploads/
+
+# Versión de sistema (persistencia runtime)
+server/data/system-version.json

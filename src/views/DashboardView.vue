@@ -4577,7 +4577,7 @@ import {
   exportarCartolaVisible
 } from '../utils/excelPlantillas'
 import * as api from '../api/resources'
-import { apiUrl } from '../api/client'
+import { apiUrl, withSilentApi } from '../api/client'
 import { persistSessionProfile } from '../api/auth'
 import {
   buildCartola,
@@ -5777,97 +5777,108 @@ function rebuildCartola() {
   })
 }
 
-async function loadDashboardData() {
-  dataLoading.value = true
-  dataError.value = ''
-  saveError.value = ''
-  try {
-    const hostNow = new Date()
-    const hostMes = `${hostNow.getFullYear()}-${String(hostNow.getMonth() + 1).padStart(2, '0')}`
-    const hostAnio = String(hostNow.getFullYear())
+async function loadDashboardData(opts = {}) {
+  const silent = opts.silent === true
 
-    const [cajasRaw, rendRaw, trabRaw, legRaw, personalRaw, ccRaw] = await Promise.all([
-      safeList(() => api.listCajas({ mes: hostMes, anio: hostAnio })),
-      safeList(api.listRendiciones),
-      safeList(api.listTrabajadores),
-      safeList(api.listLegacy),
-      safeList(api.listPersonal),
-      safeList(api.listCentrosCosto)
-    ])
+  const run = async () => {
+    if (!silent) dataLoading.value = true
+    dataError.value = ''
+    saveError.value = ''
+    try {
+      const hostNow = new Date()
+      const hostMes = `${hostNow.getFullYear()}-${String(hostNow.getMonth() + 1).padStart(2, '0')}`
+      const hostAnio = String(hostNow.getFullYear())
 
-    cajas.value = cajasRaw.map(mapCaja)
-    centrosCosto.value = ccRaw.map(mapCentroCobro)
-    for (const cc of centrosCosto.value) {
-      const key = `cc-${cc.id}`
-      if (ccAccordionOpen[key] === undefined) ccAccordionOpen[key] = true
+      const [cajasRaw, rendRaw, trabRaw, legRaw, personalRaw, ccRaw] = await Promise.all([
+        safeList(() => api.listCajas({ mes: hostMes, anio: hostAnio })),
+        safeList(api.listRendiciones),
+        safeList(api.listTrabajadores),
+        safeList(api.listLegacy),
+        safeList(api.listPersonal),
+        safeList(api.listCentrosCosto)
+      ])
+
+      cajas.value = cajasRaw.map(mapCaja)
+      centrosCosto.value = ccRaw.map(mapCentroCobro)
+      for (const cc of centrosCosto.value) {
+        const key = `cc-${cc.id}`
+        if (ccAccordionOpen[key] === undefined) ccAccordionOpen[key] = true
+      }
+      trabajadores.value = trabRaw.map(mapTrabajador)
+      personal.value = personalRaw.map(mapPersonal)
+      applyTieneUsuario(
+        trabajadores.value,
+        personal.value
+          .filter((p) => p.usuarioId != null)
+          .map((p) => ({ trabajadorId: p.id }))
+      )
+
+      const movOps = rendRaw.map(mapRendicion)
+      const legOps = legRaw.map(mapLegacy)
+      movimientos.value = [...movOps, ...legOps]
+
+      const anticiposRaw = await safeList(api.listAnticipos)
+      asignaciones.value = anticiposRaw.map(mapAnticipo)
+      const bancosRaw = await safeList(api.listBancosOrigen)
+      bancosOrigen.value = bancosRaw
+        .map((b) => String(b.nombre || b).trim().toUpperCase())
+        .filter(Boolean)
+
+      const usuariosRaw = await safeList(api.listUsuarios)
+      const mappedUsers = usuariosRaw.map(mapUsuario)
+
+      if (isSuperAdminSession.value) {
+        admins.value = mappedUsers
+          .filter((u) =>
+            ['SUPER_ADMIN_DEV', 'SUPER_ADMIN', 'ADMIN_CAJA'].includes(u.rol)
+          )
+          .map((u) =>
+            mapAdminFromUsuario({
+              id: u.id,
+              rut: u.rut,
+              correo: u.correo,
+              rol: u.rol,
+              estado: u.estadoApi,
+              trabajador_nombre: u.nombre || null,
+              trabajador_id: u.trabajadorId
+            })
+          )
+      } else {
+        admins.value = []
+      }
+
+      usuarios.value = mappedUsers.filter((u) => u.rol === 'USER_RENDIDOR')
+
+      const tarjetasRaw = await safeList(api.listTarjetas)
+      tarjetasEmpresa.value = tarjetasRaw.map(mapTarjeta)
+
+      const cuentasRaw = await safeList(api.listCuentasBanco)
+      cuentasBanco.value = cuentasRaw.map(mapCuentaBanco)
+
+      if (isSuperAdminSession.value) {
+        const logsRaw = await safeList(api.listAuditLogs)
+        auditoriaLogs.value = logsRaw.map(mapAuditLog)
+      } else {
+        auditoriaLogs.value = []
+      }
+
+      syncSelectoresCajaMes()
+      rebuildCartola()
+      syncInformeResultado()
+      await loadResumenCaja()
+    } catch (err) {
+      if (!silent) {
+        dataError.value = err?.message || 'No se pudieron cargar los datos'
+      }
+    } finally {
+      if (!silent) dataLoading.value = false
     }
-    trabajadores.value = trabRaw.map(mapTrabajador)
-    personal.value = personalRaw.map(mapPersonal)
-    applyTieneUsuario(
-      trabajadores.value,
-      personal.value
-        .filter((p) => p.usuarioId != null)
-        .map((p) => ({ trabajadorId: p.id }))
-    )
-
-    const movOps = rendRaw.map(mapRendicion)
-    const legOps = legRaw.map(mapLegacy)
-    movimientos.value = [...movOps, ...legOps]
-
-    const anticiposRaw = await safeList(api.listAnticipos)
-    asignaciones.value = anticiposRaw.map(mapAnticipo)
-    const bancosRaw = await safeList(api.listBancosOrigen)
-    bancosOrigen.value = bancosRaw
-      .map((b) => String(b.nombre || b).trim().toUpperCase())
-      .filter(Boolean)
-
-    const usuariosRaw = await safeList(api.listUsuarios)
-    const mappedUsers = usuariosRaw.map(mapUsuario)
-
-    if (isSuperAdminSession.value) {
-      admins.value = mappedUsers
-        .filter((u) =>
-          ['SUPER_ADMIN_DEV', 'SUPER_ADMIN', 'ADMIN_CAJA'].includes(u.rol)
-        )
-        .map((u) =>
-          mapAdminFromUsuario({
-            id: u.id,
-            rut: u.rut,
-            correo: u.correo,
-            rol: u.rol,
-            estado: u.estadoApi,
-            trabajador_nombre: u.nombre || null,
-            trabajador_id: u.trabajadorId
-          })
-        )
-    } else {
-      admins.value = []
-    }
-
-    usuarios.value = mappedUsers.filter((u) => u.rol === 'USER_RENDIDOR')
-
-    const tarjetasRaw = await safeList(api.listTarjetas)
-    tarjetasEmpresa.value = tarjetasRaw.map(mapTarjeta)
-
-    const cuentasRaw = await safeList(api.listCuentasBanco)
-    cuentasBanco.value = cuentasRaw.map(mapCuentaBanco)
-
-    if (isSuperAdminSession.value) {
-      const logsRaw = await safeList(api.listAuditLogs)
-      auditoriaLogs.value = logsRaw.map(mapAuditLog)
-    } else {
-      auditoriaLogs.value = []
-    }
-
-    syncSelectoresCajaMes()
-    rebuildCartola()
-    syncInformeResultado()
-    await loadResumenCaja()
-  } catch (err) {
-    dataError.value = err?.message || 'No se pudieron cargar los datos'
-  } finally {
-    dataLoading.value = false
   }
+
+  if (silent) {
+    return withSilentApi(run)
+  }
+  return run()
 }
 
 function findCajaIdByGroupKey(groupKey) {
@@ -6470,18 +6481,49 @@ const movimientos = ref([])
 
 const asignaciones = ref([])
 
+const DASHBOARD_SILENT_REFRESH_MS = 45_000
+let dashboardSilentRefreshTimer = null
+let dashboardSilentRefreshInFlight = false
+
+async function silentRefreshDashboard() {
+  if (dashboardSilentRefreshInFlight || dataLoading.value) return
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+  dashboardSilentRefreshInFlight = true
+  try {
+    await loadDashboardData({ silent: true })
+  } finally {
+    dashboardSilentRefreshInFlight = false
+  }
+}
+
 onMounted(async () => {
   document.addEventListener('click', onDocClick)
   document.addEventListener('pointerdown', onDocPointerDown)
+  document.addEventListener('visibilitychange', onDashboardVisibilityRefresh)
   await bootstrap()
   syncGastoLockedFields()
   await loadDashboardData()
+  dashboardSilentRefreshTimer = window.setInterval(
+    silentRefreshDashboard,
+    DASHBOARD_SILENT_REFRESH_MS
+  )
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', onDocClick)
   document.removeEventListener('pointerdown', onDocPointerDown)
+  document.removeEventListener('visibilitychange', onDashboardVisibilityRefresh)
+  if (dashboardSilentRefreshTimer != null) {
+    window.clearInterval(dashboardSilentRefreshTimer)
+    dashboardSilentRefreshTimer = null
+  }
 })
+
+function onDashboardVisibilityRefresh() {
+  if (document.visibilityState === 'visible') {
+    silentRefreshDashboard()
+  }
+}
 
 function peekNextRinde() {
   const nums = movimientos.value

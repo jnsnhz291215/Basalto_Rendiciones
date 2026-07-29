@@ -5,7 +5,27 @@
  * - Producción (mismo dominio): paths relativos `/api/...` (ignora localhost del build)
  */
 
+import { beginApiLoading, endApiLoading } from '../composables/useApiLoading'
+
 const TOKEN_KEY = 'rendiciones_token'
+
+/** Profundidad de contexto silent anidado (p. ej. refresh en background). */
+let silentDepth = 0
+
+/**
+ * Ejecuta `fn` forzando silent en todas las llamadas apiFetch anidadas.
+ * @template T
+ * @param {() => T | Promise<T>} fn
+ * @returns {Promise<T>}
+ */
+export async function withSilentApi(fn) {
+  silentDepth += 1
+  try {
+    return await fn()
+  } finally {
+    silentDepth = Math.max(0, silentDepth - 1)
+  }
+}
 
 function normalizeApiBase(raw) {
   const base = String(raw || '')
@@ -67,10 +87,12 @@ async function parseJson(res) {
 /**
  * fetch JSON con Bearer opcional.
  * @param {string} path
- * @param {RequestInit & { auth?: boolean }} options
+ * @param {RequestInit & { auth?: boolean, silent?: boolean }} options
+ *   - `silent: true` omite el contador de loading global (sin spinners de pantalla).
  */
 export async function apiFetch(path, options = {}) {
-  const { auth = true, headers: extraHeaders, ...rest } = options
+  const { auth = true, silent = false, headers: extraHeaders, ...rest } = options
+  const isSilent = silent === true || silentDepth > 0
   const headers = {
     'Content-Type': 'application/json',
     ...(extraHeaders || {})
@@ -81,12 +103,17 @@ export async function apiFetch(path, options = {}) {
     if (token) headers.Authorization = `Bearer ${token}`
   }
 
-  const res = await fetch(apiUrl(path), {
-    ...rest,
-    headers,
-    credentials: 'omit'
-  })
+  if (!isSilent) beginApiLoading()
+  try {
+    const res = await fetch(apiUrl(path), {
+      ...rest,
+      headers,
+      credentials: 'omit'
+    })
 
-  const data = await parseJson(res)
-  return { res, data }
+    const data = await parseJson(res)
+    return { res, data }
+  } finally {
+    if (!isSilent) endApiLoading()
+  }
 }
