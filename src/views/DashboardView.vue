@@ -961,13 +961,26 @@
                     <option>Guía Despacho</option>
                   </select>
                 </div>
-                <div v-if="gastoMuestraNumeroDocto" class="dash-field">
+                <div class="dash-field">
                   <label>
                     N° Docto
-                    <span v-if="!gastoRequiereNumeroDocto" class="dash-field-hint">(opcional)</span>
+                    <span v-if="gasto.tipo === 'Peaje'" class="dash-field-hint">(no aplica)</span>
+                    <span
+                      v-else-if="!gastoRequiereNumeroDocto"
+                      class="dash-field-hint"
+                    >(opcional)</span>
                   </label>
-                  <input v-model="gasto.numero" type="text" placeholder="12345" />
+                  <input
+                    v-model="gasto.numero"
+                    type="text"
+                    placeholder="12345"
+                    :disabled="gasto.tipo === 'Peaje'"
+                    :class="{ 'dash-input-locked': gasto.tipo === 'Peaje' }"
+                  />
                 </div>
+              </div>
+
+              <div class="dash-form dash-gasto-grid-4 dash-form--section">
                 <div class="dash-field">
                   <label>Monto Total ($)</label>
                   <input
@@ -980,9 +993,7 @@
                     @input="onGastoMontoInput"
                   />
                 </div>
-              </div>
 
-              <div class="dash-form dash-gasto-grid-4 dash-form--section">
                 <div class="dash-field">
                   <label>Caja / Fondo</label>
                   <select v-model="gasto.cajaGroupKey">
@@ -1012,10 +1023,7 @@
                   </select>
                 </div>
 
-                <div
-                  v-if="gastoRequiereTarjetaDigits"
-                  class="dash-field"
-                >
+                <div v-if="gastoRequiereTarjetaDigits" class="dash-field">
                   <label>Últimos 4 dígitos *</label>
                   <input
                     v-model="gasto.tarjetaUltimos4"
@@ -1041,7 +1049,7 @@
 
                 <div
                   class="dash-field"
-                  :class="{ 'dash-gasto-span-2': !gastoRequiereTarjetaDigits }"
+                  :class="{ 'dash-gasto-span-4': gastoRequiereTarjetaDigits }"
                 >
                   <label>Adjuntar Comprobante (PDF / PNG / JPG) *</label>
                   <input

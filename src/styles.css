@@ -2848,6 +2848,7 @@ input[type='number'].dash-input-strong,
 /* Grilla 4 columnas del formulario de gasto (mock) */
 .dash-form.dash-gasto-grid-4 {
   grid-template-columns: 1fr;
+  align-items: start;
 }
 
 .dash-gasto-span-2 {
@@ -2855,6 +2856,10 @@ input[type='number'].dash-input-strong,
 }
 
 .dash-gasto-span-3 {
+  grid-column: span 1;
+}
+
+.dash-gasto-span-4 {
   grid-column: span 1;
 }
 
@@ -3402,6 +3407,10 @@ input[type='number'].dash-input-strong,
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .dash-gasto-grid-4 .dash-gasto-span-4 {
+    grid-column: span 2;
+  }
+
   .dash-form--six {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3442,6 +3451,10 @@ input[type='number'].dash-input-strong,
 
   .dash-gasto-grid-4 .dash-gasto-span-3 {
     grid-column: span 3;
+  }
+
+  .dash-gasto-grid-4 .dash-gasto-span-4 {
+    grid-column: span 4;
   }
 
   .dash-form--five {
