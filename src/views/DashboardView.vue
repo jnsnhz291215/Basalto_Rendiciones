@@ -909,7 +909,7 @@
                 </p>
               </div>
               <span class="dash-chip dash-chip--accent">
-                {{ resumenCaja.anticipos_pendientes.cantidad }} Pendientes
+                {{ resumenCaja.anticipos_pendientes.cantidad }} Asignaciones
               </span>
             </div>
           </div>
