@@ -3,6 +3,7 @@
 const { query } = require('../config/db')
 const { registrarAuditoria } = require('../utils/audit')
 const { ensureImportacionesSchema } = require('../utils/ensureImportacionesSchema')
+const { calcularArrastreMes, mesActualYYYYMM } = require('../utils/helpers')
 const {
   ESTADOS_FLUJO,
   normalizeEstadoFlujo,
@@ -11,6 +12,10 @@ const {
   isLotePendiente,
   buildContadores
 } = require('../utils/importacionLote')
+const {
+  numeroDocumentoLiberado,
+  valorNumeroDocumentoPersistible
+} = require('../utils/numeroDocumentoUnico')
 
 function parseJsonField(value, fallback = []) {
   if (value == null || value === '') return fallback
@@ -20,6 +25,11 @@ function parseJsonField(value, fallback = []) {
   } catch {
     return fallback
   }
+}
+
+function countConflictosPendientes(conflictos) {
+  if (!Array.isArray(conflictos)) return 0
+  return conflictos.filter((c) => String(c?.estado || 'pendiente') === 'pendiente').length
 }
 
 async function countConComprobante(tipo, loteId) {
@@ -119,11 +129,16 @@ async function mapLote(row, { withMovimientos = false } = {}) {
   const estado = normalizeEstadoFlujo(row.estado)
   const errores = parseJsonField(row.errores_json, [])
   const detalleCreados = parseJsonField(row.detalle_creados_json, [])
+  const conflictos = parseJsonField(row.conflictos_json, [])
+  const omitidos = parseJsonField(row.omitidos_json, [])
+  const conflictosPendientes = countConflictosPendientes(conflictos)
   const conComprobante = await countConComprobante(row.tipo, row.id)
   const contadores = buildContadores({
     creados: row.creados,
     erroresCount: row.errores_count,
-    conComprobante
+    conComprobante,
+    omitidosCount: row.omitidos_count ?? omitidos.length,
+    conflictosPendientes
   })
 
   const base = {
@@ -131,9 +146,16 @@ async function mapLote(row, { withMovimientos = false } = {}) {
     estado,
     errores,
     detalle_creados: detalleCreados,
+    conflictos,
+    omitidos,
+    conflictos_pendientes: conflictosPendientes,
     is_deleted: Boolean(row.is_deleted),
     contadores,
-    puede_confirmar: estado === ESTADOS_FLUJO.PENDIENTE && !row.is_deleted && Number(row.creados) > 0,
+    puede_confirmar:
+      estado === ESTADOS_FLUJO.PENDIENTE &&
+      !row.is_deleted &&
+      Number(row.creados) > 0 &&
+      conflictosPendientes === 0,
     puede_anular: estado === ESTADOS_FLUJO.PENDIENTE && !row.is_deleted
   }
 
@@ -147,6 +169,8 @@ async function mapLote(row, { withMovimientos = false } = {}) {
     }))
     base.movimientos = movimientos
     base.filas_invalidas = invalidos
+    base.filas_omitidas = Array.isArray(omitidos) ? omitidos : []
+    base.filas_conflicto = Array.isArray(conflictos) ? conflictos : []
   }
 
   return base
@@ -158,7 +182,8 @@ async function listImportaciones(req, res) {
     const rows = await query(
       `SELECT id, tipo, archivo_nombre, usuario_id, usuario_nombre, estado,
               confirmado_at, confirmado_por_id, confirmado_por_nombre,
-              creados, errores_count, is_deleted, deleted_at, created_at
+              creados, errores_count, omitidos_count, is_deleted, deleted_at, created_at,
+              conflictos_json, omitidos_json
        FROM importaciones_lotes
        ORDER BY id DESC`
     )
@@ -212,6 +237,14 @@ async function confirmarImportacion(req, res) {
       })
     }
 
+    const conflictos = parseJsonField(lote.conflictos_json, [])
+    const pendientes = countConflictosPendientes(conflictos)
+    if (pendientes > 0) {
+      return res.status(400).json({
+        error: `Hay ${pendientes} conflicto(s) de N° documento pendientes de resolución`
+      })
+    }
+
     await query(
       `UPDATE importaciones_lotes
        SET estado = ?,
@@ -262,20 +295,35 @@ async function anularImportacion(req, res) {
     }
 
     const tipo = String(lote.tipo || '')
-    let tabla = null
-    if (tipo === 'gastos') tabla = 'rendiciones_gastos'
-    else if (tipo === 'asignaciones') tabla = 'anticipos'
-    else {
+    let anulados = 0
+
+    if (tipo === 'gastos') {
+      const movs = await query(
+        `SELECT id, numero_documento
+         FROM rendiciones_gastos
+         WHERE importacion_lote_id = ? AND is_deleted = FALSE`,
+        [id]
+      )
+      for (const m of movs) {
+        await query(
+          `UPDATE rendiciones_gastos
+           SET is_deleted = TRUE, deleted_at = NOW(), numero_documento = ?
+           WHERE id = ? AND is_deleted = FALSE`,
+          [numeroDocumentoLiberado(m.numero_documento, m.id), m.id]
+        )
+        anulados += 1
+      }
+    } else if (tipo === 'asignaciones') {
+      const soft = await query(
+        `UPDATE anticipos
+         SET is_deleted = TRUE, deleted_at = NOW()
+         WHERE importacion_lote_id = ? AND is_deleted = FALSE`,
+        [id]
+      )
+      anulados = Number(soft.affectedRows) || 0
+    } else {
       return res.status(400).json({ error: `Tipo de lote inválido: ${tipo}` })
     }
-
-    const soft = await query(
-      `UPDATE ${tabla}
-       SET is_deleted = TRUE, deleted_at = NOW()
-       WHERE importacion_lote_id = ? AND is_deleted = FALSE`,
-      [id]
-    )
-    const anulados = Number(soft.affectedRows) || 0
 
     await query(
       `UPDATE importaciones_lotes
@@ -299,10 +347,201 @@ async function anularImportacion(req, res) {
   }
 }
 
+/**
+ * Resuelve un conflicto de N° documento del lote.
+ * body: { conflicto_id, accion: 'ignorar' | 'mantener_existente' | 'usar_importado' }
+ *
+ * - ignorar / mantener_existente: no crea fila; marca resuelto + suma omitido
+ * - usar_importado: actualiza el gasto existente con el payload del Excel (soft-replace)
+ */
+async function resolverConflictoImportacion(req, res) {
+  try {
+    await ensureImportacionesSchema()
+    const loteId = Number(req.params.id)
+    const { conflicto_id: conflictoId, accion } = req.body || {}
+    const accionNorm = String(accion || '')
+      .trim()
+      .toLowerCase()
+
+    if (!conflictoId) {
+      return res.status(400).json({ error: 'conflicto_id es obligatorio' })
+    }
+    if (
+      !['ignorar', 'mantener_existente', 'usar_importado'].includes(accionNorm)
+    ) {
+      return res.status(400).json({
+        error: 'accion inválida (ignorar | mantener_existente | usar_importado)'
+      })
+    }
+
+    const rows = await query(`SELECT * FROM importaciones_lotes WHERE id = ? LIMIT 1`, [
+      loteId
+    ])
+    const lote = rows[0]
+    if (!lote) {
+      return res.status(404).json({ error: 'Lote de importación no encontrado' })
+    }
+    if (String(lote.tipo) !== 'gastos') {
+      return res.status(400).json({ error: 'Solo aplica a lotes de gastos' })
+    }
+    if (isLoteAnulado(lote) || lote.is_deleted) {
+      return res.status(400).json({ error: 'El lote está anulado' })
+    }
+    if (isLoteConfirmado(lote)) {
+      return res.status(400).json({ error: 'El lote ya está confirmado' })
+    }
+    if (!isLotePendiente(lote)) {
+      return res.status(400).json({ error: 'Solo se pueden resolver conflictos en lotes pendientes' })
+    }
+
+    const conflictos = parseJsonField(lote.conflictos_json, [])
+    const omitidos = parseJsonField(lote.omitidos_json, [])
+    const detalleCreados = parseJsonField(lote.detalle_creados_json, [])
+    const idx = conflictos.findIndex((c) => String(c.id) === String(conflictoId))
+    if (idx < 0) {
+      return res.status(404).json({ error: 'Conflicto no encontrado' })
+    }
+    const conflicto = conflictos[idx]
+    if (String(conflicto.estado || 'pendiente') !== 'pendiente') {
+      return res.status(400).json({ error: 'El conflicto ya fue resuelto' })
+    }
+
+    let creados = Number(lote.creados) || 0
+    let omitidosCount = Number(lote.omitidos_count) || omitidos.length
+
+    if (accionNorm === 'usar_importado') {
+      const payload = conflicto.payload
+      if (!payload || !conflicto.existente_id) {
+        return res.status(400).json({ error: 'Conflicto sin payload o existente_id' })
+      }
+
+      const existing = await query(
+        `SELECT * FROM rendiciones_gastos WHERE id = ? AND is_deleted = FALSE LIMIT 1`,
+        [Number(conflicto.existente_id)]
+      )
+      if (!existing[0]) {
+        return res.status(404).json({
+          error: 'El gasto existente del conflicto ya no está activo'
+        })
+      }
+
+      const tipo = payload.tipo_documento
+      const num = valorNumeroDocumentoPersistible(tipo, payload.numero_documento)
+      const arrastre = calcularArrastreMes(
+        payload.fecha_documento,
+        mesActualYYYYMM()
+      )
+
+      await query(
+        `UPDATE rendiciones_gastos
+         SET caja_id = ?,
+             trabajador_id = ?,
+             fecha_documento = ?,
+             tipo_documento = ?,
+             numero_documento = ?,
+             patente = ?,
+             monto = ?,
+             origen_pago = ?,
+             tarjeta_id = ?,
+             descripcion = ?,
+             arrastre_mes = ?,
+             importacion_lote_id = COALESCE(importacion_lote_id, ?)
+         WHERE id = ? AND is_deleted = FALSE`,
+        [
+          payload.caja_id,
+          payload.trabajador_id,
+          payload.fecha_documento,
+          tipo,
+          num,
+          payload.patente || null,
+          Number(payload.monto),
+          payload.origen_pago,
+          payload.tarjeta_id || null,
+          String(payload.descripcion || '').trim(),
+          arrastre,
+          loteId,
+          Number(conflicto.existente_id)
+        ]
+      )
+
+      // Si el existente no estaba en el lote, contarlo como creado del lote
+      const yaEnDetalle = detalleCreados.some(
+        (d) => Number(d.id) === Number(conflicto.existente_id)
+      )
+      if (!yaEnDetalle) {
+        detalleCreados.push({
+          fila: conflicto.fila,
+          id: Number(conflicto.existente_id),
+          codigo: existing[0].codigo_rinde,
+          via: 'conflicto_usar_importado'
+        })
+        creados += 1
+      }
+
+      conflicto.estado = 'resuelto'
+      conflicto.resolucion = 'usar_importado'
+      conflicto.resuelto_at = new Date().toISOString()
+    } else {
+      // ignorar | mantener_existente
+      omitidos.push({
+        fila: conflicto.fila,
+        motivo:
+          accionNorm === 'ignorar' ? 'conflicto_ignorado' : 'mantener_existente',
+        numero_documento: conflicto.numero_documento,
+        existente_id: conflicto.existente_id,
+        mensaje:
+          accionNorm === 'ignorar'
+            ? 'Conflicto omitido: no se importó la fila'
+            : 'Se mantuvo el gasto existente; fila de import omitida'
+      })
+      omitidosCount += 1
+      conflicto.estado = 'resuelto'
+      conflicto.resolucion = accionNorm
+      conflicto.resuelto_at = new Date().toISOString()
+    }
+
+    conflictos[idx] = conflicto
+
+    await query(
+      `UPDATE importaciones_lotes
+       SET creados = ?, omitidos_count = ?,
+           conflictos_json = ?, omitidos_json = ?, detalle_creados_json = ?
+       WHERE id = ?`,
+      [
+        creados,
+        omitidosCount,
+        JSON.stringify(conflictos),
+        JSON.stringify(omitidos),
+        JSON.stringify(detalleCreados),
+        loteId
+      ]
+    )
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      'MODIFICAR',
+      'Importaciones',
+      `Resolver conflicto ${conflictoId} lote=${loteId}: ${accionNorm}`
+    )
+
+    const updated = await query(`SELECT * FROM importaciones_lotes WHERE id = ? LIMIT 1`, [
+      loteId
+    ])
+    return res.json(await mapLote(updated[0], { withMovimientos: true }))
+  } catch (err) {
+    console.error('[resolverConflictoImportacion]', err)
+    return res.status(500).json({
+      error: err?.message || 'Error al resolver conflicto'
+    })
+  }
+}
+
 module.exports = {
   listImportaciones,
   getImportacion,
   confirmarImportacion,
   anularImportacion,
+  resolverConflictoImportacion,
   parseJsonField
 }

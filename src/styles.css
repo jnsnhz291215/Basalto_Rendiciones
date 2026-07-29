@@ -2057,6 +2057,12 @@ input[type='number'].dash-input-strong,
   background: rgba(153, 27, 27, 0.25);
 }
 
+.dash-import-counter--muted {
+  color: #94a3b8;
+  border-color: #475569;
+  background: rgba(71, 85, 105, 0.25);
+}
+
 .dash-import-lote-actions {
   display: flex;
   align-items: center;
@@ -2078,6 +2084,93 @@ input[type='number'].dash-input-strong,
   padding: 0.75rem 1rem;
   border-bottom: 1px solid #334155;
   background: rgba(153, 27, 27, 0.12);
+}
+
+.dash-import-omitidos {
+  background: rgba(71, 85, 105, 0.18);
+}
+
+.dash-import-omitidos .dash-import-invalidos-title,
+.dash-import-omitidos .dash-import-invalidos-list {
+  color: #cbd5e1;
+}
+
+.dash-import-conflictos {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #334155;
+  background: rgba(146, 64, 14, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.dash-import-conflictos .dash-import-invalidos-title {
+  color: #fdba74;
+}
+
+.dash-import-conflicto-card {
+  border: 1px solid #9a3412;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.dash-import-conflicto-head {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  color: #fed7aa;
+}
+
+.dash-import-conflicto-diff {
+  margin: 0 0 0.5rem;
+  font-size: 0.75rem;
+}
+
+.dash-import-conflicto-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+}
+
+.dash-import-conflicto-col strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.75rem;
+  color: #e2e8f0;
+}
+
+.dash-import-conflicto-fields {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.72rem;
+  color: #cbd5e1;
+}
+
+.dash-import-conflicto-fields li {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  gap: 0.35rem;
+  padding: 0.15rem 0;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.6);
+}
+
+.dash-import-conflicto-field--diff {
+  color: #fdba74;
+  font-weight: 600;
+}
+
+.dash-import-conflicto-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+@media (max-width: 720px) {
+  .dash-import-conflicto-compare {
+    grid-template-columns: 1fr;
+  }
 }
 
 .dash-import-invalidos-title {

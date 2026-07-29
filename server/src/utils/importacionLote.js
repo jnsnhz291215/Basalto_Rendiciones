@@ -104,17 +104,29 @@ async function assertPuedeBorrarMovimientoImportado(row) {
  * - inválidos: filas que fallaron en el Excel (errores_json)
  * - parcial: creados sin comprobante
  * - correctos: creados con comprobante
+ * - omitidos: duplicados idénticos / resueltos como omitir
+ * - conflictos: N° documento con discrepancias pendientes
  */
-function buildContadores({ creados = 0, erroresCount = 0, conComprobante = 0 } = {}) {
+function buildContadores({
+  creados = 0,
+  erroresCount = 0,
+  conComprobante = 0,
+  omitidosCount = 0,
+  conflictosPendientes = 0
+} = {}) {
   const creadosN = Number(creados) || 0
   const invalidos = Number(erroresCount) || 0
+  const omitidos = Number(omitidosCount) || 0
+  const conflictos = Number(conflictosPendientes) || 0
   const correctos = Math.min(Number(conComprobante) || 0, creadosN)
   const parcial = Math.max(0, creadosN - correctos)
   return {
-    movimientos: creadosN + invalidos,
+    movimientos: creadosN + invalidos + omitidos + conflictos,
     correctos,
     parcial,
-    invalidos
+    invalidos,
+    omitidos,
+    conflictos
   }
 }
 

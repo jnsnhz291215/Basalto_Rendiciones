@@ -17,7 +17,6 @@ const {
   keysMatch,
   cellToString,
   tipoRequiereNumeroDocumento,
-  resolveNumeroDocumentoForTipo,
   normalizePatente
 } = require('../utils/excelImport')
 const { ensureImportacionesSchema } = require('../utils/ensureImportacionesSchema')
@@ -27,6 +26,15 @@ const {
   isLoteConfirmado,
   assertPuedeBorrarMovimientoImportado
 } = require('../utils/importacionLote')
+const {
+  assertNumeroDocumentoUnico,
+  findGastoActivoByNumeroDocumento,
+  gastosSonIdenticos,
+  listarDiferenciasGasto,
+  numeroDocumentoLiberado,
+  snapshotParaUi,
+  valorNumeroDocumentoPersistible
+} = require('../utils/numeroDocumentoUnico')
 
 async function assertCajaAsignadaATrabajador(trabajadorId, cajaId) {
   const rows = await query(
@@ -209,9 +217,10 @@ async function createRendicion(req, res) {
       return res.status(400).json({ error: 'La descripción / observación es obligatoria.' })
     }
 
+    const numeroDoc = valorNumeroDocumentoPersistible(tipo_documento, numero_documento)
     if (
       tipoRequiereNumeroDocumento(tipo_documento) &&
-      !resolveNumeroDocumentoForTipo(tipo_documento, numero_documento) &&
+      !numeroDoc &&
       !canSkipComprobanteVerify(req.user)
     ) {
       return res.status(400).json({
@@ -249,6 +258,11 @@ async function createRendicion(req, res) {
       return res.status(tarjetaCheck.status).json({ error: tarjetaCheck.error })
     }
 
+    const dup = await assertNumeroDocumentoUnico(numeroDoc)
+    if (dup) {
+      return res.status(dup.status).json({ error: dup.error, existente_id: dup.existente_id })
+    }
+
     const arrastre = calcularArrastreMes(fecha_documento, mesActualYYYYMM())
 
     const maxRows = await query(
@@ -268,7 +282,7 @@ async function createRendicion(req, res) {
         trabajadorId,
         fecha_documento,
         tipo_documento,
-        resolveNumeroDocumentoForTipo(tipo_documento, numero_documento),
+        numeroDoc,
         normalizePatente(patente) || null,
         Number(monto),
         origen_pago,
@@ -293,6 +307,11 @@ async function createRendicion(req, res) {
     )
     return res.status(201).json(created[0])
   } catch (err) {
+    if (err?.code === 'ER_DUP_ENTRY' || err?.errno === 1062) {
+      return res.status(400).json({
+        error: 'ya existe un gasto con el mismo numero de documento, imposible guardar'
+      })
+    }
     console.error('[createRendicion]', err)
     return res.status(500).json({ error: 'Internal Server Error' })
   }
@@ -401,12 +420,19 @@ async function updateRendicion(req, res) {
         numero_documento !== undefined
           ? numero_documento
           : existing[0].numero_documento
-      const num = resolveNumeroDocumentoForTipo(tipo, numRaw)
+      const num = valorNumeroDocumentoPersistible(tipo, numRaw)
 
       if (tipoRequiereNumeroDocumento(tipo) && !num) {
         return res.status(400).json({
           error: `numero_documento es obligatorio para ${tipo}`
         })
+      }
+
+      const dupUser = await assertNumeroDocumentoUnico(num, id)
+      if (dupUser) {
+        return res
+          .status(dupUser.status)
+          .json({ error: dupUser.error, existente_id: dupUser.existente_id })
       }
 
       const nextOrigen = origen_pago || existing[0].origen_pago
@@ -470,12 +496,19 @@ async function updateRendicion(req, res) {
       numero_documento !== undefined
         ? numero_documento
         : existing[0].numero_documento
-    const num = resolveNumeroDocumentoForTipo(tipo, numRaw)
+    const num = valorNumeroDocumentoPersistible(tipo, numRaw)
 
     if (tipoRequiereNumeroDocumento(tipo) && !num) {
       return res.status(400).json({
         error: `numero_documento es obligatorio para ${tipo}`
       })
+    }
+
+    const dupAdmin = await assertNumeroDocumentoUnico(num, id)
+    if (dupAdmin) {
+      return res
+        .status(dupAdmin.status)
+        .json({ error: dupAdmin.error, existente_id: dupAdmin.existente_id })
     }
 
     const nextOrigen = origen_pago || existing[0].origen_pago
@@ -542,6 +575,11 @@ async function updateRendicion(req, res) {
     )
     return res.json(updated[0])
   } catch (err) {
+    if (err?.code === 'ER_DUP_ENTRY' || err?.errno === 1062) {
+      return res.status(400).json({
+        error: 'ya existe un gasto con el mismo numero de documento, imposible guardar'
+      })
+    }
     console.error('[updateRendicion]', err)
     return res.status(500).json({ error: 'Internal Server Error' })
   }
@@ -587,9 +625,9 @@ async function softDeleteRendicion(req, res) {
 
     await query(
       `UPDATE rendiciones_gastos
-       SET is_deleted = TRUE, deleted_at = NOW()
+       SET is_deleted = TRUE, deleted_at = NOW(), numero_documento = ?
        WHERE id = ? AND is_deleted = FALSE`,
-      [id]
+      [numeroDocumentoLiberado(existing[0].numero_documento, id), id]
     )
 
     await registrarAuditoria(
@@ -671,9 +709,54 @@ async function findTarjetaIdPorUltimos4(origenPago, ultimos4) {
   return match ? Number(match.id) : null
 }
 
+async function enrichGastoExtras(row) {
+  const extras = {
+    trabajador_rut: null,
+    trabajador_nombre: null,
+    caja: null,
+    cc: null,
+    tarjeta_ultimos4: null
+  }
+  if (row.trabajador_id) {
+    const t = await query(
+      `SELECT rut, nombre_completo FROM trabajadores WHERE id = ? LIMIT 1`,
+      [Number(row.trabajador_id)]
+    )
+    if (t[0]) {
+      extras.trabajador_rut = t[0].rut || null
+      extras.trabajador_nombre = t[0].nombre_completo || null
+    }
+  }
+  if (row.caja_id) {
+    const c = await query(
+      `SELECT c.clave_interna, COALESCE(cc.nombre, '') AS cc_nombre
+       FROM cajas_chicas c
+       LEFT JOIN centros_costo cc ON cc.id = c.centro_cobro_id AND cc.is_deleted = FALSE
+       WHERE c.id = ? LIMIT 1`,
+      [Number(row.caja_id)]
+    )
+    if (c[0]) {
+      extras.caja = c[0].clave_interna || null
+      extras.cc = c[0].cc_nombre || null
+    }
+  }
+  if (row.tarjeta_id) {
+    const tar = await query(
+      `SELECT ultimos_digitos FROM tarjetas_empresa WHERE id = ? LIMIT 1`,
+      [Number(row.tarjeta_id)]
+    )
+    if (tar[0]) extras.tarjeta_ultimos4 = String(tar[0].ultimos_digitos || '')
+  }
+  return extras
+}
+
 /**
  * Importa gastos desde Excel. Exige todas las columnas de la plantilla.
  * Comprobante queda pendiente (se adjunta después).
+ *
+ * N° documento único:
+ * - Duplicado idéntico (BD o dentro del Excel) → auto-omitido (omitidos_json)
+ * - Duplicado con discrepancias → no inserta; queda en conflictos_json pendiente
  */
 async function importRendicionesExcel(req, res) {
   try {
@@ -695,14 +778,19 @@ async function importRendicionesExcel(req, res) {
     const archivoNombre = String(req.file?.originalname || '').slice(0, 255) || null
     const loteInsert = await query(
       `INSERT INTO importaciones_lotes
-        (tipo, archivo_nombre, usuario_id, usuario_nombre, estado, creados, errores_count)
-       VALUES ('gastos', ?, ?, ?, ?, 0, 0)`,
+        (tipo, archivo_nombre, usuario_id, usuario_nombre, estado, creados, errores_count, omitidos_count)
+       VALUES ('gastos', ?, ?, ?, ?, 0, 0, 0)`,
       [archivoNombre, req.user.id ?? null, req.user.nombre ?? null, ESTADOS_FLUJO.PENDIENTE]
     )
     const loteId = loteInsert.insertId
 
     const creados = []
     const errores = []
+    const omitidos = []
+    const conflictos = []
+    /** @type {Map<string, { id: number, codigo: string, fila: number, payload: object }>} */
+    const numerosEnLote = new Map()
+    let conflictoSeq = 0
 
     for (const row of parsed.rows) {
       const fila = row.__row
@@ -732,7 +820,7 @@ async function importRendicionesExcel(req, res) {
         if (!descripcion) throw new Error('descripcion es obligatoria')
         if (descripcion.length > 500) throw new Error('descripcion supera 500 caracteres')
 
-        const numeroDoc = resolveNumeroDocumentoForTipo(tipo, row.numero_documento)
+        const numeroDoc = valorNumeroDocumentoPersistible(tipo, row.numero_documento)
         if (tipoRequiereNumeroDocumento(tipo) && !numeroDoc) {
           throw new Error(`numero_documento obligatorio para ${tipo}`)
         }
@@ -747,14 +835,15 @@ async function importRendicionesExcel(req, res) {
         if (!cajaId) throw new Error(`caja/cc no encontrados (${cc} / ${caja})`)
 
         let tarjetaId = null
+        let tarjetaUltimos4 = null
         if (origen === 'Efectivo') {
-          // Efectivo: tarjeta_ultimos4 puede ir vacío (se ignora si viene)
           tarjetaId = null
         } else if (origen === 'Debito' || origen === 'Credito') {
           const ult4 = normalizeTarjetaUltimos4(row.tarjeta_ultimos4)
           if (ult4.length !== 4) {
             throw new Error('tarjeta_ultimos4 obligatorio (4 dígitos) si forma_pago es d/c')
           }
+          tarjetaUltimos4 = ult4
           tarjetaId = await findTarjetaIdPorUltimos4(origen, ult4)
           if (!tarjetaId) {
             throw new Error(`No hay tarjeta ${origen} con finales ${ult4}`)
@@ -765,6 +854,87 @@ async function importRendicionesExcel(req, res) {
             fechaDocumento: fecha
           })
           if (tarjetaCheck) throw new Error(tarjetaCheck.error)
+        }
+
+        const payload = {
+          caja_id: cajaId,
+          trabajador_id: trabajadorId,
+          fecha_documento: fecha,
+          tipo_documento: tipo,
+          numero_documento: numeroDoc,
+          patente,
+          monto,
+          origen_pago: origen,
+          tarjeta_id: tarjetaId,
+          descripcion
+        }
+
+        const uiExtras = {
+          trabajador_rut: rut,
+          caja,
+          cc,
+          tarjeta_ultimos4: tarjetaUltimos4
+        }
+
+        // Conflicto N° documento (BD o fila previa del mismo Excel)
+        if (numeroDoc) {
+          const enLote = numerosEnLote.get(numeroDoc)
+          const enBd = enLote
+            ? null
+            : await findGastoActivoByNumeroDocumento(numeroDoc)
+
+          if (enLote || enBd) {
+            const existenteRow = enLote
+              ? { ...enLote.payload, id: enLote.id, codigo_rinde: enLote.codigo }
+              : enBd
+            const identico = gastosSonIdenticos(existenteRow, payload)
+
+            if (identico) {
+              omitidos.push({
+                fila,
+                motivo: 'duplicado_identico',
+                numero_documento: numeroDoc,
+                existente_id: Number(existenteRow.id),
+                existente_codigo: existenteRow.codigo_rinde || null,
+                origen: enLote ? 'excel' : 'bd',
+                mensaje:
+                  'Duplicado idéntico (mismo N° documento y mismos datos relevantes): omitido'
+              })
+              continue
+            }
+
+            let existenteExtras = uiExtras
+            if (!enLote && enBd) {
+              existenteExtras = await enrichGastoExtras(enBd)
+            } else if (enLote) {
+              existenteExtras = {
+                trabajador_rut: enLote.payload._rut || null,
+                caja: enLote.payload._caja || null,
+                cc: enLote.payload._cc || null,
+                tarjeta_ultimos4: enLote.payload._tarjeta_ultimos4 || null
+              }
+            }
+
+            conflictoSeq += 1
+            const diferencias = listarDiferenciasGasto(existenteRow, payload)
+            conflictos.push({
+              id: `c${conflictoSeq}`,
+              fila,
+              tipo: 'discrepancia',
+              estado: 'pendiente',
+              numero_documento: numeroDoc,
+              origen: enLote ? 'excel' : 'bd',
+              existente_id: Number(existenteRow.id),
+              diferencias,
+              existente: snapshotParaUi(existenteRow, existenteExtras),
+              importado: snapshotParaUi(
+                { ...payload, numero_documento: numeroDoc },
+                uiExtras
+              ),
+              payload
+            })
+            continue
+          }
         }
 
         const arrastre = calcularArrastreMes(fecha, mesActualYYYYMM())
@@ -798,6 +968,22 @@ async function importRendicionesExcel(req, res) {
         )
 
         creados.push({ fila, id: result.insertId, codigo })
+        if (numeroDoc) {
+          numerosEnLote.set(numeroDoc, {
+            id: result.insertId,
+            codigo,
+            fila,
+            payload: {
+              ...payload,
+              id: result.insertId,
+              codigo_rinde: codigo,
+              _rut: rut,
+              _caja: caja,
+              _cc: cc,
+              _tarjeta_ultimos4: tarjetaUltimos4
+            }
+          })
+        }
       } catch (err) {
         errores.push({ fila, error: err?.message || 'Error en fila' })
       }
@@ -805,15 +991,19 @@ async function importRendicionesExcel(req, res) {
 
     await query(
       `UPDATE importaciones_lotes
-       SET estado = ?, creados = ?, errores_count = ?,
-           errores_json = ?, detalle_creados_json = ?
+       SET estado = ?, creados = ?, errores_count = ?, omitidos_count = ?,
+           errores_json = ?, detalle_creados_json = ?,
+           conflictos_json = ?, omitidos_json = ?
        WHERE id = ?`,
       [
         ESTADOS_FLUJO.PENDIENTE,
         creados.length,
         errores.length,
+        omitidos.length,
         JSON.stringify(errores),
         JSON.stringify(creados),
+        JSON.stringify(conflictos),
+        JSON.stringify(omitidos),
         loteId
       ]
     )
@@ -823,16 +1013,21 @@ async function importRendicionesExcel(req, res) {
       req.user.nombre,
       'CREAR',
       'Gastos',
-      `Import Excel lote=${loteId}: ${creados.length} ok, ${errores.length} error(es)`
+      `Import Excel lote=${loteId}: ${creados.length} ok, ${omitidos.length} omitido(s), ` +
+        `${conflictos.length} conflicto(s), ${errores.length} error(es)`
     )
 
     return res.json({
-      ok: errores.length === 0,
+      ok: errores.length === 0 && conflictos.length === 0,
       lote_id: loteId,
       estado: ESTADOS_FLUJO.PENDIENTE,
       creados: creados.length,
+      omitidos: omitidos.length,
+      conflictos: conflictos.length,
       errores,
-      detalle_creados: creados
+      detalle_creados: creados,
+      detalle_omitidos: omitidos,
+      detalle_conflictos: conflictos
     })
   } catch (err) {
     console.error('[importRendicionesExcel]', err)

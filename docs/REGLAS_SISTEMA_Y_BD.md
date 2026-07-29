@@ -248,13 +248,51 @@ Al crear/editar asignaciones se hace upsert del par con el CC de la caja; si el 
 | `trabajador_id` | FK → `trabajadores` |
 | `tarjeta_id` | Opcional |
 | `tipo_docto` | Boleta / Factura / Ticket Peaje / … |
-| `numero_docto` | **Solo obligatorio si Factura**; nullable en resto |
+| `numero_documento` | Normalizado (`normalizeNumeroDocumento`). **UNIQUE** entre gastos activos (`is_deleted = FALSE`). NULL/vacío no participa (Peaje, boleta sin N°). Soft delete libera UNIQUE renombrando a `{num}#DEL{id}`. |
 | `monto`, `descripcion`, `comprobante_url` | |
 | `estado` | Ej. `SIN_DEVOLUCION`, `DEVUELTO`, `POR_CORREGIR`, `RECHAZADO`, `APROBADO` |
 | `rinde_codigo` / `codigo_rinde` | ID visible tipo `R-103` |
 | — | **Sin** flag legacy: los migrados van a `rendiciones_legacy` (§6.9 / §8) |
 
-**Validación:** Núcleo correcto. Completar campos de docto, monto, estado y comprobante que ya usa la UI. N° docto solo para Factura.
+**Unicidad `numero_documento`:**
+
+1. Al guardar se normaliza (mayúsculas, solo alfanuméricos) y vacío → `NULL`.
+2. Create/update (manual): si otro gasto activo tiene el mismo N° → **400** con mensaje *«ya existe un gasto con el mismo numero de documento, imposible guardar»*. En update se permite el mismo N° del propio registro.
+3. Índice `uq_rendiciones_numero_documento`: `ensureIndexes` convierte vacíos a NULL, libera soft-deleted, y **solo aplica UNIQUE si no hay duplicados activos legacy** (si hay, loguea y no rompe el arranque; el chequeo en API sigue vigente).
+4. Import Excel: ver §6.5b.
+
+**Validación:** Núcleo correcto. Completar campos de docto, monto, estado y comprobante que ya usa la UI. N° docto obligatorio para Factura / Guía / OC; opcional en Boleta; N/A en Peaje.
+
+---
+
+### 6.5b Import Excel de gastos — conflictos de N° documento
+
+Al importar, si una fila trae un `numero_documento` que ya existe en BD **o** se repite en el mismo Excel:
+
+**Igualdad de movimientos** (todos deben coincidir tras normalizar):
+
+| Campo | Normalización |
+|-------|----------------|
+| `fecha_documento` | Solo fecha ISO `YYYY-MM-DD` |
+| `tipo_documento` | Exacto |
+| `trabajador_id` | Numérico |
+| `caja_id` | Numérico |
+| `monto` | 2 decimales |
+| `origen_pago` | Exacto (forma de pago) |
+| `descripcion` | Trim + minúsculas + espacios colapsados |
+| `patente` | Normalizada (o null) |
+| `tarjeta_id` | Numérico o null |
+
+No se comparan: comprobante, estado, `codigo_rinde`, lote.
+
+| Caso | Comportamiento |
+|------|----------------|
+| **Idéntico** | Auto-omitir fila → `omitidos_json` / contador omitidos (no es inválido duro) |
+| **Discrepancia** | No inserta; queda en `conflictos_json` pendiente. UI: comparación side-by-side + **Mantener existente** / **Usar importado** / **Ignorar** |
+| Mantener / Ignorar | Marca resuelto + suma omitido |
+| Usar importado | Actualiza el gasto existente con el payload del Excel (soft-replace); no crea duplicado |
+
+No se puede **confirmar** el lote mientras haya conflictos pendientes. Endpoint: `POST /api/importaciones/:id/resolver-conflicto` body `{ conflicto_id, accion }`.
 
 ---
 
@@ -630,3 +668,4 @@ Objetivo: backend **sin atajos de desarrollo** en producción / staging.
 | 2026-07-24 | Legacy separado: DROP es_legacy + tabla `rendiciones_legacy` |
 | 2026-07-24 | Índices: trabajador+is_deleted, fecha_documento, audit; DROP idx_cajas_clave_mes duplicado |
 | 2026-07-24 | §9 Plan seguridad API: cierre bypass, JWT, RBAC, prepared statements |
+| 2026-07-29 | §6.5 / §6.5b: UNIQUE `numero_documento` + conflictos import Excel |

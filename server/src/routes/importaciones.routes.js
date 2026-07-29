@@ -5,7 +5,8 @@ const {
   listImportaciones,
   getImportacion,
   confirmarImportacion,
-  anularImportacion
+  anularImportacion,
+  resolverConflictoImportacion
 } = require('../controllers/importaciones.controller')
 const { authMiddleware } = require('../middlewares/auth.middleware')
 const { checkRole, ADMINS } = require('../middlewares/role.middleware')
@@ -18,6 +19,7 @@ router.use(checkRole(ADMINS))
 router.get('/', listImportaciones)
 router.get('/:id', getImportacion)
 router.post('/:id/confirmar', confirmarImportacion)
+router.post('/:id/resolver-conflicto', resolverConflictoImportacion)
 router.delete('/:id', anularImportacion)
 
 module.exports = router

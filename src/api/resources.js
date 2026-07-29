@@ -386,6 +386,14 @@ export async function confirmarImportacion(id) {
   return jsonOrThrow(`/api/importaciones/${id}/confirmar`, { method: 'POST' })
 }
 
+export async function resolverConflictoImportacion(id, payload) {
+  return jsonOrThrow(`/api/importaciones/${id}/resolver-conflicto`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  })
+}
+
 export async function anularImportacion(id) {
   return jsonOrThrow(`/api/importaciones/${id}`, { method: 'DELETE' })
 }

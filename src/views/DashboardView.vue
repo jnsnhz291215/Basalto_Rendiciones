@@ -2913,6 +2913,20 @@
                   <span class="dash-import-counter dash-import-counter--warn" title="Parcial">
                     {{ lote.contadores?.parcial ?? 0 }} parcial
                   </span>
+                  <span
+                    v-if="(lote.contadores?.omitidos ?? 0) > 0"
+                    class="dash-import-counter dash-import-counter--muted"
+                    title="Omitidos (duplicado idéntico)"
+                  >
+                    {{ lote.contadores?.omitidos ?? 0 }} omitidos
+                  </span>
+                  <span
+                    v-if="(lote.contadores?.conflictos ?? 0) > 0"
+                    class="dash-import-counter dash-import-counter--danger"
+                    title="Conflictos N° documento"
+                  >
+                    {{ lote.contadores?.conflictos ?? 0 }} conflictos
+                  </span>
                   <span class="dash-import-counter dash-import-counter--danger" title="Inválidos">
                     {{ lote.contadores?.invalidos ?? 0 }} inválidos
                   </span>
@@ -2955,6 +2969,116 @@
                   Cargando movimientos…
                 </div>
                 <template v-else-if="importLoteDetalles[lote.id]">
+                  <div
+                    v-if="(importLoteDetalles[lote.id].filas_conflicto || []).some((c) => c.estado === 'pendiente')"
+                    class="dash-import-conflictos"
+                  >
+                    <p class="dash-import-invalidos-title">
+                      Conflictos N° documento ({{
+                        (importLoteDetalles[lote.id].filas_conflicto || []).filter(
+                          (c) => c.estado === 'pendiente'
+                        ).length
+                      }})
+                    </p>
+                    <div
+                      v-for="conf in (importLoteDetalles[lote.id].filas_conflicto || []).filter(
+                        (c) => c.estado === 'pendiente'
+                      )"
+                      :key="`conf-${lote.id}-${conf.id}`"
+                      class="dash-import-conflicto-card"
+                    >
+                      <p class="dash-import-conflicto-head">
+                        Fila {{ conf.fila }} · N°
+                        <span class="dash-mono">{{ conf.numero_documento }}</span>
+                        <span class="dash-muted">
+                          · {{ conf.origen === 'excel' ? 'duplicado en Excel' : 'ya existe en BD' }}
+                        </span>
+                      </p>
+                      <p
+                        v-if="(conf.diferencias || []).length"
+                        class="dash-muted dash-import-conflicto-diff"
+                      >
+                        Diferencias:
+                        {{ (conf.diferencias || []).join(', ') }}
+                      </p>
+                      <div class="dash-import-conflicto-compare">
+                        <div class="dash-import-conflicto-col">
+                          <strong>Existente</strong>
+                          <ul class="dash-import-conflicto-fields">
+                            <li
+                              v-for="row in conflictCompareRows(conf)"
+                              :key="`ex-${conf.id}-${row.key}`"
+                              :class="{ 'dash-import-conflicto-field--diff': row.diff }"
+                            >
+                              <span>{{ row.label }}</span>
+                              <span>{{ row.existente }}</span>
+                            </li>
+                          </ul>
+                        </div>
+                        <div class="dash-import-conflicto-col">
+                          <strong>Importado</strong>
+                          <ul class="dash-import-conflicto-fields">
+                            <li
+                              v-for="row in conflictCompareRows(conf)"
+                              :key="`im-${conf.id}-${row.key}`"
+                              :class="{ 'dash-import-conflicto-field--diff': row.diff }"
+                            >
+                              <span>{{ row.label }}</span>
+                              <span>{{ row.importado }}</span>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                      <div class="dash-import-conflicto-actions">
+                        <button
+                          class="dash-btn-secondary"
+                          type="button"
+                          :disabled="importConflictoResolviendo === `${lote.id}:${conf.id}`"
+                          @click="resolverConflictoLote(lote, conf, 'mantener_existente')"
+                        >
+                          Mantener existente
+                        </button>
+                        <button
+                          class="dash-btn-primary"
+                          type="button"
+                          :disabled="importConflictoResolviendo === `${lote.id}:${conf.id}`"
+                          @click="resolverConflictoLote(lote, conf, 'usar_importado')"
+                        >
+                          Usar importado
+                        </button>
+                        <button
+                          class="dash-btn-ghost-sm"
+                          type="button"
+                          :disabled="importConflictoResolviendo === `${lote.id}:${conf.id}`"
+                          @click="resolverConflictoLote(lote, conf, 'ignorar')"
+                        >
+                          Ignorar
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div
+                    v-if="(importLoteDetalles[lote.id].filas_omitidas || []).length"
+                    class="dash-import-invalidos dash-import-omitidos"
+                  >
+                    <p class="dash-import-invalidos-title">
+                      Filas omitidas ({{ importLoteDetalles[lote.id].filas_omitidas.length }})
+                    </p>
+                    <ul class="dash-import-invalidos-list">
+                      <li
+                        v-for="(om, idx) in importLoteDetalles[lote.id].filas_omitidas"
+                        :key="`om-${lote.id}-${om.fila}-${idx}`"
+                      >
+                        Fila {{ om.fila }}:
+                        {{ om.mensaje || om.motivo || 'Omitida' }}
+                        <span v-if="om.numero_documento" class="dash-muted">
+                          (N° {{ om.numero_documento }})
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+
                   <div
                     v-if="(importLoteDetalles[lote.id].filas_invalidas || []).length"
                     class="dash-import-invalidos"
@@ -4626,6 +4750,7 @@ const importacionesLotes = ref([])
 const importacionesLoading = ref(false)
 const importacionAnulandoId = ref(null)
 const importacionConfirmandoId = ref(null)
+const importConflictoResolviendo = ref(null)
 const importLoteOpen = reactive({})
 const importLoteDetalles = reactive({})
 const importLoteDetalleLoading = reactive({})
@@ -7562,8 +7687,12 @@ async function submitImportModal() {
         : await api.importRendicionesExcel(fd)
     await Promise.all([loadDashboardData(), loadImportacionesLotes()])
     const msg = formatImportResultMessage(kind, data)
-    if (data?.errores?.length) saveError.value = msg
+    if (data?.errores?.length || data?.conflictos) saveError.value = msg
     else saveOk.value = msg
+    if (data?.lote_id && data?.conflictos) {
+      importLoteOpen[data.lote_id] = true
+      await loadImportLoteDetalle(data.lote_id)
+    }
     importModalOpen.value = false
     clearImportModalFile()
     importModalDragOver.value = false
@@ -7580,7 +7709,13 @@ async function submitImportModal() {
 function formatImportResultMessage(kind, data) {
   const ok = Number(data?.creados) || 0
   const errs = Array.isArray(data?.errores) ? data.errores : []
+  const omitidos = Number(data?.omitidos) || 0
+  const conflictos = Number(data?.conflictos) || 0
   let msg = `${kind}: ${ok} fila(s) importada(s).`
+  if (omitidos) msg += ` ${omitidos} omitida(s) (duplicado idéntico).`
+  if (conflictos) {
+    msg += ` ${conflictos} conflicto(s) de N° documento: resuélvelos en el lote antes de confirmar.`
+  }
   if (errs.length) {
     const sample = errs
       .slice(0, 5)
@@ -7591,6 +7726,85 @@ function formatImportResultMessage(kind, data) {
   }
   if (data?.lote_id) msg += ` (lote #${data.lote_id})`
   return msg
+}
+
+const CONFLICT_COMPARE_FIELDS = [
+  { key: 'fecha_documento', label: 'Fecha' },
+  { key: 'tipo_documento', label: 'Tipo' },
+  { key: 'monto', label: 'Monto' },
+  { key: 'origen_pago', label: 'Forma de pago' },
+  { key: 'descripcion', label: 'Descripción' },
+  { key: 'patente', label: 'Patente' },
+  { key: 'trabajador_rut', label: 'RUT' },
+  { key: 'caja', label: 'Caja' },
+  { key: 'cc', label: 'CC' },
+  { key: 'tarjeta_ultimos4', label: 'Tarjeta' }
+]
+
+function conflictFieldDisplay(side, key) {
+  if (!side) return '—'
+  const v = side[key]
+  if (v == null || v === '') return '—'
+  if (key === 'monto') return formatMontoCl(v)
+  if (key === 'fecha_documento') return formatFechaCortaImport(v)
+  return String(v)
+}
+
+function conflictCompareRows(conf) {
+  const diffs = new Set(conf?.diferencias || [])
+  const keyAlias = {
+    trabajador_id: 'trabajador_rut',
+    caja_id: 'caja',
+    tarjeta_id: 'tarjeta_ultimos4'
+  }
+  return CONFLICT_COMPARE_FIELDS.map((f) => {
+    const diffKeys = [f.key]
+    for (const [canon, alias] of Object.entries(keyAlias)) {
+      if (alias === f.key) diffKeys.push(canon)
+    }
+    return {
+      key: f.key,
+      label: f.label,
+      existente: conflictFieldDisplay(conf?.existente, f.key),
+      importado: conflictFieldDisplay(conf?.importado, f.key),
+      diff: diffKeys.some((k) => diffs.has(k))
+    }
+  })
+}
+
+async function resolverConflictoLote(lote, conf, accion) {
+  if (!lote?.id || !conf?.id || importConflictoResolviendo.value) return
+  const key = `${lote.id}:${conf.id}`
+  importConflictoResolviendo.value = key
+  saveError.value = ''
+  try {
+    const data = await api.resolverConflictoImportacion(lote.id, {
+      conflicto_id: conf.id,
+      accion
+    })
+    importLoteDetalles[lote.id] = data
+    const idx = importacionesLotes.value.findIndex((l) => l.id === lote.id)
+    if (idx >= 0) {
+      importacionesLotes.value[idx] = {
+        ...importacionesLotes.value[idx],
+        ...data,
+        movimientos: undefined,
+        filas_invalidas: undefined,
+        filas_omitidas: undefined,
+        filas_conflicto: undefined,
+        errores: undefined,
+        detalle_creados: undefined,
+        conflictos: undefined,
+        omitidos: undefined
+      }
+    }
+    await loadDashboardData()
+    saveOk.value = `Conflicto N° ${conf.numero_documento} resuelto (${accion.replace(/_/g, ' ')})`
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo resolver el conflicto'
+  } finally {
+    importConflictoResolviendo.value = null
+  }
 }
 
 function labelTipoImportacion(tipo) {

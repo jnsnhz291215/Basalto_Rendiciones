@@ -140,6 +140,96 @@ async function ensureIndexes() {
     )
     if (ok) console.log('[indexes] ADD rendiciones_gastos.idx_rendiciones_caja_fecha')
   }
+
+  // --- rendiciones_gastos.numero_documento UNIQUE (NULL/vacío no participa) ---
+  await ensureUniqueNumeroDocumento()
+}
+
+/**
+ * UNIQUE en numero_documento entre gastos activos:
+ * - Vacío → NULL (varios NULL OK en MySQL UNIQUE)
+ * - Soft-deleted: libera UNIQUE renombrando a {num}#DEL{id} (conservador)
+ * - Si hay duplicados activos legacy: solo loguea; NO aplica UNIQUE (arranque seguro)
+ * - Chequeo en código sigue siendo la fuente de verdad en create/update/import
+ */
+async function ensureUniqueNumeroDocumento() {
+  if (
+    !(await tableExists('rendiciones_gastos')) ||
+    !(await columnExists('rendiciones_gastos', 'numero_documento'))
+  ) {
+    return
+  }
+
+  // Strings vacíos → NULL para que no choquen entre sí ni con el UNIQUE
+  const emptied = await query(
+    `UPDATE rendiciones_gastos
+     SET numero_documento = NULL
+     WHERE numero_documento IS NOT NULL
+       AND TRIM(numero_documento) = ''`
+  )
+  if (Number(emptied.affectedRows) > 0) {
+    console.log(
+      `[indexes] numero_documento: ${emptied.affectedRows} vacío(s) → NULL`
+    )
+  }
+
+  // Soft-deleted: liberar valor para reutilizar el N° en activos
+  const softRows = await query(
+    `SELECT id, numero_documento
+     FROM rendiciones_gastos
+     WHERE is_deleted = TRUE
+       AND numero_documento IS NOT NULL
+       AND TRIM(numero_documento) <> ''
+       AND numero_documento NOT LIKE '%#DEL%'`
+  )
+  for (const row of softRows) {
+    const freed = `${String(row.numero_documento)}#DEL${row.id}`.slice(0, 50)
+    await query(
+      `UPDATE rendiciones_gastos SET numero_documento = ? WHERE id = ?`,
+      [freed, row.id]
+    )
+  }
+  if (softRows.length) {
+    console.log(
+      `[indexes] numero_documento: liberados ${softRows.length} soft-deleted`
+    )
+  }
+
+  if (await indexExists('rendiciones_gastos', 'uq_rendiciones_numero_documento')) {
+    return
+  }
+
+  const dups = await query(
+    `SELECT numero_documento AS num, COUNT(*) AS n, GROUP_CONCAT(id ORDER BY id) AS ids
+     FROM rendiciones_gastos
+     WHERE is_deleted = FALSE
+       AND numero_documento IS NOT NULL
+       AND TRIM(numero_documento) <> ''
+     GROUP BY numero_documento
+     HAVING n > 1
+     LIMIT 20`
+  )
+
+  if (dups.length) {
+    console.warn(
+      '[indexes] uq_rendiciones_numero_documento NO aplicado: hay duplicados activos. ' +
+        'Resuélvelos manualmente; el chequeo en API igual bloquea nuevos duplicados.'
+    )
+    for (const d of dups) {
+      console.warn(
+        `[indexes]   duplicado numero_documento="${d.num}" x${d.n} ids=${d.ids}`
+      )
+    }
+    return
+  }
+
+  const ok = await tryQuery(
+    `ALTER TABLE rendiciones_gastos
+     ADD UNIQUE KEY uq_rendiciones_numero_documento (numero_documento)`
+  )
+  if (ok) {
+    console.log('[indexes] ADD rendiciones_gastos.uq_rendiciones_numero_documento')
+  }
 }
 
 module.exports = { ensureIndexes }

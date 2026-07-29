@@ -62,8 +62,11 @@ async function ensureImportacionesSchema() {
          confirmado_por_nombre VARCHAR(150) NULL,
          creados INT NOT NULL DEFAULT 0,
          errores_count INT NOT NULL DEFAULT 0,
+         omitidos_count INT NOT NULL DEFAULT 0,
          errores_json JSON NULL,
          detalle_creados_json JSON NULL,
+         conflictos_json JSON NULL,
+         omitidos_json JSON NULL,
          is_deleted BOOLEAN DEFAULT FALSE,
          deleted_at DATETIME NULL,
          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -87,6 +90,26 @@ async function ensureImportacionesSchema() {
       await query(
         `ALTER TABLE importaciones_lotes
          ADD COLUMN confirmado_por_nombre VARCHAR(150) NULL`
+      )
+    }
+    if (!(await columnExists('importaciones_lotes', 'conflictos_json'))) {
+      await query(
+        `ALTER TABLE importaciones_lotes
+         ADD COLUMN conflictos_json JSON NULL
+         COMMENT 'Conflictos N° documento pendientes de resolución'`
+      )
+    }
+    if (!(await columnExists('importaciones_lotes', 'omitidos_json'))) {
+      await query(
+        `ALTER TABLE importaciones_lotes
+         ADD COLUMN omitidos_json JSON NULL
+         COMMENT 'Filas omitidas (duplicado idéntico u omitidas por resolución)'`
+      )
+    }
+    if (!(await columnExists('importaciones_lotes', 'omitidos_count'))) {
+      await query(
+        `ALTER TABLE importaciones_lotes
+         ADD COLUMN omitidos_count INT NOT NULL DEFAULT 0`
       )
     }
 
