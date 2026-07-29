@@ -83,7 +83,7 @@
                   autocorrect="off"
                   spellcheck="false"
                   :inputmode="loginMode === 'rut' ? 'text' : 'email'"
-                  :placeholder="loginMode === 'rut' ? '12345678K' : 'usuario@empresa.cl'"
+                  :placeholder="loginMode === 'rut' ? '12.345.678-9' : 'usuario@empresa.cl'"
                   @input="onIdentifierInput"
                 />
               </div>
@@ -135,21 +135,18 @@ import { onMounted, ref } from 'vue'
 import { useAuth } from '../composables/useAuth'
 // TEMP_AUTH_BYPASS - revertir antes de commit
 import { TEMP_AUTH_BYPASS } from '../TEMP_AUTH_BYPASS'
+import { cleanRut, fromRutInput } from '../utils/rut'
 
 const { user, loading, error, bootstrapped, bootstrap, login } = useAuth()
 
 /** 'rut' | 'correo' */
 const loginMode = ref('rut')
+/** Display (RUT con puntos/guión o correo filtrado) */
 const identifier = ref('')
+/** RUT limpio para API (solo dígitos+K) */
+const rutClean = ref('')
 const password = ref('')
 const formError = ref('')
-
-function filterRutChars(value) {
-  return String(value || '')
-    .replace(/[^0-9kK]/g, '')
-    .toUpperCase()
-    .slice(0, 9)
-}
 
 /** Solo letras, números, @ y . */
 function filterCorreoChars(value) {
@@ -160,14 +157,22 @@ function filterCorreoChars(value) {
 
 function onIdentifierInput(event) {
   const raw = event.target.value
-  identifier.value =
-    loginMode.value === 'rut' ? filterRutChars(raw) : filterCorreoChars(raw)
+  if (loginMode.value === 'rut') {
+    // Solo acepta 0-9/K; el display vuelve a formatear con puntos y guión
+    const { clean, display } = fromRutInput(raw)
+    rutClean.value = clean
+    identifier.value = display
+  } else {
+    rutClean.value = ''
+    identifier.value = filterCorreoChars(raw)
+  }
 }
 
 function setLoginMode(mode) {
   if (loginMode.value === mode) return
   loginMode.value = mode
   identifier.value = ''
+  rutClean.value = ''
   formError.value = ''
 }
 
@@ -178,7 +183,10 @@ onMounted(async () => {
 
 async function handleLogin() {
   formError.value = ''
-  const value = identifier.value.trim()
+  const value =
+    loginMode.value === 'rut'
+      ? rutClean.value || cleanRut(identifier.value)
+      : identifier.value.trim()
   if (!value) {
     formError.value =
       loginMode.value === 'rut' ? 'Ingresa tu RUT.' : 'Ingresa tu correo.'
