@@ -628,10 +628,40 @@ a:hover {
   max-width: 14rem;
 }
 
+.dash-caja-search-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
 .dash-caja-search-input {
   width: 100%;
   min-width: 7rem;
   cursor: text;
+  flex: 1;
+}
+
+.dash-caja-clear-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.dash-caja-clear-btn:hover {
+  color: #fff;
+  background: rgba(148, 163, 184, 0.2);
 }
 
 .dash-combobox-list--metrics {

@@ -355,14 +355,19 @@ async function setTrabajadorCajas(req, res) {
 
 async function listUsuarios(req, res) {
   try {
-    const rows = await query(
-      `SELECT u.id, u.trabajador_id, u.rut, u.correo, u.rol, u.estado, u.created_at,
+    const params = []
+    let sql = `SELECT u.id, u.trabajador_id, u.rut, u.correo, u.rol, u.estado, u.created_at,
               t.nombre_completo AS trabajador_nombre, t.cargo
        FROM usuarios u
        LEFT JOIN trabajadores t ON t.id = u.trabajador_id
-       WHERE u.is_deleted = FALSE
-       ORDER BY u.id DESC`
-    )
+       WHERE u.is_deleted = FALSE`
+    // Solo Super Admins pueden listar cuentas de administradores
+    if (!SUPER_ADMINS.includes(req.user.rol)) {
+      sql += ' AND u.rol = ?'
+      params.push(ROLES.USER_RENDIDOR)
+    }
+    sql += ' ORDER BY u.id DESC'
+    const rows = await query(sql, params)
     return res.json(rows)
   } catch (err) {
     console.error('[listUsuarios]', err)
@@ -383,8 +388,12 @@ async function createUsuario(req, res) {
         error: 'No se puede crear el rol Super Admin - Dev'
       })
     }
-    // Solo Super Admins crean SUPER_ADMIN
-    if (rol === ROLES.SUPER_ADMIN && !SUPER_ADMINS.includes(req.user.rol)) {
+    // Solo Super Admins pueden crear cuentas de administrador
+    if (ADMINS.includes(rol) && !SUPER_ADMINS.includes(req.user.rol)) {
+      return res.status(403).json({ error: 'No puedes crear administradores' })
+    }
+    // Solo Super Admin - Dev crea SUPER_ADMIN; Super Admin crea ADMIN_CAJA
+    if (rol === ROLES.SUPER_ADMIN && req.user.rol !== ROLES.SUPER_ADMIN_DEV) {
       return res.status(403).json({ error: 'No puedes crear ese rol' })
     }
 
@@ -510,7 +519,7 @@ async function updateUsuario(req, res) {
           error: 'El rol Super Admin - Dev no se puede asignar ni modificar'
         })
       }
-      if (nextRol === ROLES.SUPER_ADMIN && !SUPER_ADMINS.includes(req.user.rol)) {
+      if (nextRol === ROLES.SUPER_ADMIN && req.user.rol !== ROLES.SUPER_ADMIN_DEV) {
         return res.status(403).json({ error: 'No puedes asignar ese rol' })
       }
       if (
@@ -1258,6 +1267,12 @@ async function softDeleteTarjeta(req, res) {
 
 async function listAuditLogs(req, res) {
   try {
+    if (!SUPER_ADMINS.includes(req.user.rol)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Solo Super Admin puede consultar auditoría'
+      })
+    }
     const { modulo, desde, hasta } = req.query
     const params = []
     let sql = `SELECT * FROM audit_logs WHERE 1=1`

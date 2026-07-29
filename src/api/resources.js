@@ -346,3 +346,15 @@ export async function listLegacy(params = {}) {
   const q = qs.toString()
   return unwrapList(await jsonOrThrow(`/api/legacy${q ? `?${q}` : ''}`))
 }
+
+export async function listImportaciones() {
+  return unwrapList(await jsonOrThrow('/api/importaciones'))
+}
+
+export async function getImportacion(id) {
+  return jsonOrThrow(`/api/importaciones/${id}`)
+}
+
+export async function anularImportacion(id) {
+  return jsonOrThrow(`/api/importaciones/${id}`, { method: 'DELETE' })
+}

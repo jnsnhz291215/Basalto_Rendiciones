@@ -20,6 +20,13 @@ const {
   resolveNumeroDocumentoForTipo,
   normalizePatente
 } = require('../utils/excelImport')
+const { ensureImportacionesSchema } = require('../utils/ensureImportacionesSchema')
+
+function estadoLoteImport(creadosCount, erroresCount) {
+  if (creadosCount === 0) return 'fallido'
+  if (erroresCount > 0) return 'parcial'
+  return 'completo'
+}
 
 async function assertCajaAsignadaATrabajador(trabajadorId, cajaId) {
   const rows = await query(
@@ -636,6 +643,8 @@ async function importRendicionesExcel(req, res) {
       return res.status(403).json({ error: 'Solo administradores pueden importar Excel' })
     }
 
+    await ensureImportacionesSchema()
+
     const parsed = parseExcelConHeaders(req.file?.buffer, HEADERS_GASTOS, 'Gastos')
     if (!parsed.ok) {
       return res.status(400).json({
@@ -644,6 +653,15 @@ async function importRendicionesExcel(req, res) {
         faltantes: parsed.faltantes || []
       })
     }
+
+    const archivoNombre = String(req.file?.originalname || '').slice(0, 255) || null
+    const loteInsert = await query(
+      `INSERT INTO importaciones_lotes
+        (tipo, archivo_nombre, usuario_id, usuario_nombre, estado, creados, errores_count)
+       VALUES ('gastos', ?, ?, ?, 'parcial', 0, 0)`,
+      [archivoNombre, req.user.id ?? null, req.user.nombre ?? null]
+    )
+    const loteId = loteInsert.insertId
 
     const creados = []
     const errores = []
@@ -719,8 +737,8 @@ async function importRendicionesExcel(req, res) {
           `INSERT INTO rendiciones_gastos
             (codigo_rinde, caja_id, trabajador_id, fecha_documento, tipo_documento, numero_documento,
              patente, monto, origen_pago, tarjeta_id, comprobante_url, descripcion, estado,
-             arrastre_mes, es_legacy)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'Sin Devolución', ?, 1)`,
+             arrastre_mes, es_legacy, importacion_lote_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'Sin Devolución', ?, 1, ?)`,
           [
             codigo,
             cajaId,
@@ -733,7 +751,8 @@ async function importRendicionesExcel(req, res) {
             origen,
             tarjetaId,
             descripcion,
-            arrastre
+            arrastre,
+            loteId
           ]
         )
 
@@ -743,16 +762,34 @@ async function importRendicionesExcel(req, res) {
       }
     }
 
+    const estado = estadoLoteImport(creados.length, errores.length)
+    await query(
+      `UPDATE importaciones_lotes
+       SET estado = ?, creados = ?, errores_count = ?,
+           errores_json = ?, detalle_creados_json = ?
+       WHERE id = ?`,
+      [
+        estado,
+        creados.length,
+        errores.length,
+        JSON.stringify(errores),
+        JSON.stringify(creados),
+        loteId
+      ]
+    )
+
     await registrarAuditoria(
       req.user.id,
       req.user.nombre,
       'CREAR',
       'Gastos',
-      `Import Excel: ${creados.length} ok, ${errores.length} error(es)`
+      `Import Excel lote=${loteId}: ${creados.length} ok, ${errores.length} error(es)`
     )
 
     return res.json({
       ok: errores.length === 0,
+      lote_id: loteId,
+      estado,
       creados: creados.length,
       errores,
       detalle_creados: creados

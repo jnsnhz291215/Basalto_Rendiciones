@@ -9,6 +9,7 @@ const { STORAGE_ROOT, ensureStorageDirs } = require('./config/storage')
 const { ensureCajasSchema } = require('./utils/ensureCajasSchema')
 const { ensureAsignacionesSchema } = require('./utils/ensureAsignacionesSchema')
 const { ensureRendicionesTipoDocto } = require('./utils/ensureRendicionesTipoDocto')
+const { ensureImportacionesSchema } = require('./utils/ensureImportacionesSchema')
 const { ensureIndexes } = require('./utils/ensureIndexes')
 
 const authRoutes = require('./routes/auth.routes')
@@ -17,6 +18,7 @@ const rendicionesRoutes = require('./routes/rendiciones.routes')
 const anticiposRoutes = require('./routes/anticipos.routes')
 const adminRoutes = require('./routes/admin.routes')
 const legacyRoutes = require('./routes/legacy.routes')
+const importacionesRoutes = require('./routes/importaciones.routes')
 
 const app = express()
 const PORT = Number(process.env.PORT) || 3002
@@ -62,6 +64,7 @@ app.use('/api/rendiciones', rendicionesRoutes)
 app.use('/api/anticipos', anticiposRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/legacy', legacyRoutes)
+app.use('/api/importaciones', importacionesRoutes)
 
 // Archivos de storage (comprobantes, etc.) - lectura vía /api/files/*
 app.use(
@@ -118,6 +121,12 @@ app.listen(PORT, async () => {
     console.log('[schema] rendiciones tipo_documento OK')
   } catch (err) {
     console.warn('[schema] ensureRendicionesTipoDocto:', err.message)
+  }
+  try {
+    await ensureImportacionesSchema()
+    console.log('[schema] importaciones_lotes OK')
+  } catch (err) {
+    console.warn('[schema] ensureImportacionesSchema:', err.message)
   }
   try {
     await ensureIndexes()

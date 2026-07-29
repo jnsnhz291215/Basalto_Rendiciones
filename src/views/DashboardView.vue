@@ -690,7 +690,7 @@
                 Administración
               </span>
               <button
-                v-for="item in administracionNavItems"
+                v-for="item in administracionNavItemsVisibles"
                 :key="item.id"
                 type="button"
                 class="dash-nav-item"
@@ -729,20 +729,32 @@
               <div class="dash-caja dash-caja--search">
                 <span class="dash-caja-label">CC:</span>
                 <div class="dash-combobox dash-combobox--metrics">
-                  <input
-                    v-model="ccFiltroQuery"
-                    type="text"
-                    class="dash-caja-select dash-caja-search-input"
-                    placeholder="Todos"
-                    autocomplete="off"
-                    @focus="onCcFiltroFocus"
-                    @input="onCcFiltroQueryInput"
-                    @keydown.down.prevent="highlightCcFiltro(1)"
-                    @keydown.up.prevent="highlightCcFiltro(-1)"
-                    @keydown.enter.prevent="confirmCcFiltroHighlight"
-                    @keydown.escape="ccFiltroOpen = false"
-                    @blur="onCcFiltroBlur"
-                  />
+                  <div class="dash-caja-search-row">
+                    <input
+                      v-model="ccFiltroQuery"
+                      type="text"
+                      class="dash-caja-select dash-caja-search-input"
+                      placeholder="Todos"
+                      autocomplete="off"
+                      @focus="onCcFiltroFocus"
+                      @input="onCcFiltroQueryInput"
+                      @keydown.down.prevent="highlightCcFiltro(1)"
+                      @keydown.up.prevent="highlightCcFiltro(-1)"
+                      @keydown.enter.prevent="confirmCcFiltroHighlight"
+                      @keydown.escape="ccFiltroOpen = false"
+                      @blur="onCcFiltroBlur"
+                    />
+                    <button
+                      v-if="ccFiltroMuestraReset"
+                      type="button"
+                      class="dash-caja-clear-btn"
+                      title="Reiniciar a Todos"
+                      aria-label="Reiniciar CC a Todos"
+                      @mousedown.prevent="resetCcFiltro"
+                    >
+                      <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+                    </button>
+                  </div>
                   <ul
                     v-if="ccFiltroOpen && ccFiltroOpcionesVisibles.length"
                     class="dash-combobox-list dash-combobox-list--metrics"
@@ -765,20 +777,32 @@
               <div class="dash-caja dash-caja--search">
                 <span class="dash-caja-label">Caja:</span>
                 <div class="dash-combobox dash-combobox--metrics">
-                  <input
-                    v-model="cajaFiltroQuery"
-                    type="text"
-                    class="dash-caja-select dash-caja-search-input"
-                    placeholder="Buscar caja…"
-                    autocomplete="off"
-                    @focus="onCajaFiltroFocus"
-                    @input="onCajaFiltroQueryInput"
-                    @keydown.down.prevent="highlightCajaFiltro(1)"
-                    @keydown.up.prevent="highlightCajaFiltro(-1)"
-                    @keydown.enter.prevent="confirmCajaFiltroHighlight"
-                    @keydown.escape="cajaFiltroOpen = false"
-                    @blur="onCajaFiltroBlur"
-                  />
+                  <div class="dash-caja-search-row">
+                    <input
+                      v-model="cajaFiltroQuery"
+                      type="text"
+                      class="dash-caja-select dash-caja-search-input"
+                      placeholder="Buscar caja…"
+                      autocomplete="off"
+                      @focus="onCajaFiltroFocus"
+                      @input="onCajaFiltroQueryInput"
+                      @keydown.down.prevent="highlightCajaFiltro(1)"
+                      @keydown.up.prevent="highlightCajaFiltro(-1)"
+                      @keydown.enter.prevent="confirmCajaFiltroHighlight"
+                      @keydown.escape="onCajaFiltroEscape"
+                      @blur="onCajaFiltroBlur"
+                    />
+                    <button
+                      v-if="cajaFiltroQuery.trim()"
+                      type="button"
+                      class="dash-caja-clear-btn"
+                      title="Borrar texto"
+                      aria-label="Borrar texto de caja"
+                      @mousedown.prevent="clearCajaFiltroTexto"
+                    >
+                      <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                    </button>
+                  </div>
                   <ul
                     v-if="cajaFiltroOpen && cajaFiltroOpcionesVisibles.length"
                     class="dash-combobox-list dash-combobox-list--metrics"
@@ -886,24 +910,6 @@
                 <span>📄</span>
                 <span>Descargar plantilla</span>
               </button>
-              <button
-                v-if="isAdminSession"
-                class="dash-btn-excel"
-                type="button"
-                title="Importar gastos desde Excel (columnas de la plantilla obligatorias)"
-                :disabled="importExcelLoading"
-                @click="triggerImportGastosExcel"
-              >
-                <span>📥</span>
-                <span>{{ importExcelLoading ? 'Importando…' : 'Importar Excel' }}</span>
-              </button>
-              <input
-                ref="gastoImportInputEl"
-                type="file"
-                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                class="dash-sr-only"
-                @change="onImportGastosExcel"
-              />
               <input
                 ref="legacyComprobanteInputEl"
                 type="file"
@@ -1898,23 +1904,6 @@
                 <span>Descargar plantilla</span>
               </button>
               <button
-                class="dash-btn-excel"
-                type="button"
-                title="Importar asignaciones desde Excel (columnas de la plantilla obligatorias)"
-                :disabled="importExcelLoading"
-                @click="triggerImportAsignacionesExcel"
-              >
-                <span>📥</span>
-                <span>{{ importExcelLoading ? 'Importando…' : 'Importar Excel' }}</span>
-              </button>
-              <input
-                ref="asignacionImportInputEl"
-                type="file"
-                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                class="dash-sr-only"
-                @change="onImportAsignacionesExcel"
-              />
-              <button
                 class="dash-btn-primary dash-btn-toggle-caja"
                 type="button"
                 @click="toggleFormAnticipo"
@@ -2682,6 +2671,184 @@
         </div>
       </div>
 
+      <!-- Importaciones Excel -->
+      <div v-else-if="activeView === 'importaciones' && isAdminSession" class="dash-importaciones">
+        <div class="dash-cajas-toolbar">
+          <div>
+            <h3 class="dash-cajas-toolbar-title">Importaciones</h3>
+            <p class="dash-cajas-toolbar-hint">
+              Importación masiva de gastos y asignaciones por lote (Excel).
+            </p>
+          </div>
+          <div class="dash-toolbar-actions">
+            <button
+              class="dash-btn-excel dash-btn-excel--outline"
+              type="button"
+              title="Descargar plantilla Excel de gastos"
+              @click="descargarPlantillaGastos"
+            >
+              <span>📄</span>
+              <span>Plantilla gastos</span>
+            </button>
+            <button
+              class="dash-btn-excel dash-btn-excel--outline"
+              type="button"
+              title="Descargar plantilla Excel de asignaciones"
+              @click="descargarPlantillaAsignaciones"
+            >
+              <span>📄</span>
+              <span>Plantilla asignaciones</span>
+            </button>
+            <button
+              class="dash-btn-excel"
+              type="button"
+              title="Importar gastos desde Excel"
+              :disabled="importExcelLoading"
+              @click="triggerImportGastosExcel"
+            >
+              <span>📥</span>
+              <span>{{ importExcelLoading ? 'Importando…' : 'Importar gastos' }}</span>
+            </button>
+            <button
+              class="dash-btn-excel"
+              type="button"
+              title="Importar asignaciones desde Excel"
+              :disabled="importExcelLoading"
+              @click="triggerImportAsignacionesExcel"
+            >
+              <span>📥</span>
+              <span>{{ importExcelLoading ? 'Importando…' : 'Importar asignaciones' }}</span>
+            </button>
+            <input
+              ref="gastoImportInputEl"
+              type="file"
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              class="dash-sr-only"
+              @change="onImportGastosExcel"
+            />
+            <input
+              ref="asignacionImportInputEl"
+              type="file"
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              class="dash-sr-only"
+              @change="onImportAsignacionesExcel"
+            />
+          </div>
+        </div>
+
+        <div v-if="importacionesLoading" class="dash-cajas-empty">Cargando lotes…</div>
+        <div v-else-if="!importacionesLotes.length" class="dash-cajas-empty">
+          No hay importaciones registradas.
+        </div>
+        <div v-else class="dash-table-wrap">
+          <table class="dash-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Archivo</th>
+                <th>Usuario</th>
+                <th class="dash-table-center">Creados</th>
+                <th class="dash-table-center">Errores</th>
+                <th class="dash-table-center">Estado</th>
+                <th class="dash-table-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="lote in importacionesLotes" :key="lote.id">
+                <td>{{ formatFechaHoraImport(lote.created_at) }}</td>
+                <td class="dash-table-strong">{{ labelTipoImportacion(lote.tipo) }}</td>
+                <td>{{ lote.archivo_nombre || '—' }}</td>
+                <td>{{ lote.usuario_nombre || '—' }}</td>
+                <td class="dash-table-center">{{ lote.creados ?? 0 }}</td>
+                <td class="dash-table-center">{{ lote.errores_count ?? 0 }}</td>
+                <td class="dash-table-center">
+                  <span class="dash-badge" :class="badgeClassEstadoImport(lote.estado)">
+                    {{ lote.estado || '—' }}
+                  </span>
+                </td>
+                <td class="dash-table-center dash-table-actions">
+                  <button
+                    class="dash-btn-ghost-sm"
+                    type="button"
+                    title="Ver detalle / errores del lote"
+                    @click="openImportacionDetalle(lote)"
+                  >
+                    Ver errores
+                  </button>
+                  <button
+                    v-if="lote.estado !== 'anulado' && !lote.is_deleted"
+                    class="dash-btn-icon dash-btn-icon--danger"
+                    type="button"
+                    title="Anular lote (soft-delete de registros creados)"
+                    :disabled="importacionAnulandoId === lote.id"
+                    @click="onAnularImportacion(lote)"
+                  >
+                    <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div
+          v-if="importacionDetalleOpen"
+          class="dash-modal-backdrop"
+          @click.self="closeImportacionDetalle"
+        >
+          <div class="dash-modal dash-modal--wide" role="dialog" aria-modal="true">
+            <div class="dash-modal-head">
+              <h3>
+                Errores lote #{{ importacionDetalle?.id }}
+                <span v-if="importacionDetalle?.archivo_nombre">
+                  — {{ importacionDetalle.archivo_nombre }}
+                </span>
+              </h3>
+              <button
+                class="dash-modal-close"
+                type="button"
+                aria-label="Cerrar"
+                @click="closeImportacionDetalle"
+              >
+                ×
+              </button>
+            </div>
+            <div v-if="importacionDetalleLoading" class="dash-cajas-empty">Cargando…</div>
+            <div
+              v-else-if="!(importacionDetalle?.errores || []).length"
+              class="dash-cajas-empty"
+            >
+              Sin errores registrados en este lote.
+            </div>
+            <div v-else class="dash-table-wrap">
+              <table class="dash-table">
+                <thead>
+                  <tr>
+                    <th class="dash-table-center">Fila</th>
+                    <th>Error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(err, idx) in importacionDetalle.errores"
+                    :key="`${err.fila}-${idx}`"
+                  >
+                    <td class="dash-table-center">{{ err.fila }}</td>
+                    <td>{{ err.error }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="dash-modal-actions">
+              <button class="dash-btn-ghost-sm" type="button" @click="closeImportacionDetalle">
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Cajas -->
       <div v-else-if="activeView === 'cajas' && isAdminSession" class="dash-cajas-gestion">
         <div class="dash-cajas-toolbar">
@@ -2985,6 +3152,7 @@
               Personal
             </button>
             <button
+              v-if="showPersonalAdminsToggle"
               type="button"
               class="dash-personal-subview-tab"
               :class="{ 'dash-personal-subview-tab--active': personalSubview === 'admins' }"
@@ -3588,8 +3756,8 @@
             </div>
       </div>
 
-      <!-- Auditoría -->
-      <div v-else-if="activeView === 'auditoria' && isAdminSession" class="dash-informes">
+      <!-- Auditoría (solo Super Admin / Super Admin Dev) -->
+      <div v-else-if="activeView === 'auditoria' && isSuperAdminSession" class="dash-informes">
             <div class="dash-panel">
               <div class="dash-panel-head">
                 <div>
@@ -3855,6 +4023,13 @@ const asignacionImportInputEl = ref(null)
 const legacyComprobanteInputEl = ref(null)
 const pendingLegacyAttach = ref(null)
 
+const importacionesLotes = ref([])
+const importacionesLoading = ref(false)
+const importacionDetalleOpen = ref(false)
+const importacionDetalleLoading = ref(false)
+const importacionDetalle = ref(null)
+const importacionAnulandoId = ref(null)
+
 const cajaActiva = ref('')
 /** '' = Todos los centros de cobro */
 const ccActivo = ref('')
@@ -4003,7 +4178,8 @@ const OPERACION_VIEW_IDS = ['rendicion', 'asignacion', 'informes']
 const operacionNavItems = [
   { id: 'rendicion', label: 'Rendición de Gastos', icon: 'fa-file-invoice-dollar' },
   { id: 'asignacion', label: 'Asignaciones', icon: 'fa-hand-holding-dollar', adminOnly: true },
-  { id: 'informes', label: 'Informes y Cartola', icon: 'fa-chart-line', adminOnly: true }
+  { id: 'informes', label: 'Informes y Cartola', icon: 'fa-chart-line', adminOnly: true },
+  { id: 'importaciones', label: 'Importaciones', icon: 'fa-file-import', adminOnly: true }
 ]
 
 const configuracionNavItems = [
@@ -4014,7 +4190,7 @@ const configuracionNavItems = [
 
 const administracionNavItems = [
   { id: 'personal', label: 'Personal / Usuarios', icon: 'fa-users' },
-  { id: 'auditoria', label: 'Auditoría', icon: 'fa-clipboard-list' }
+  { id: 'auditoria', label: 'Auditoría', icon: 'fa-clipboard-list', superAdminOnly: true }
 ]
 
 const isOperacionView = computed(() => OPERACION_VIEW_IDS.includes(activeView.value))
@@ -4306,21 +4482,58 @@ watch(
   { immediate: true }
 )
 
-const canCreateAdmins = computed(() => {
+/** Super Admin o Super Admin - Dev (gestión de admins + auditoría) */
+const isSuperAdminSession = computed(() => {
+  if (TEMP_AUTH_BYPASS) return true
+  const rol = user.value?.rol
+  if (rol === 'SUPER_ADMIN_DEV' || rol === 'SUPER_ADMIN') return true
   const nivel = sessionAdminNivel.value
   return nivel === ROLE_DEV || nivel === ROLE_SUPER
 })
 
+const canCreateAdmins = isSuperAdminSession
+
+const administracionNavItemsVisibles = computed(() =>
+  administracionNavItems.filter((item) => !item.superAdminOnly || isSuperAdminSession.value)
+)
+
 function canAccessView(id) {
   if (id === 'rendicion') return true
+  if (id === 'auditoria') return isSuperAdminSession.value
   return isAdminSession.value
 }
 
-const showPersonalAdminsToggle = computed(() => isAdminSession.value && canCreateAdmins.value)
+const showPersonalAdminsToggle = computed(
+  () => isAdminSession.value && isSuperAdminSession.value
+)
 
 watch(activeView, (view) => {
+  if (view === 'auditoria' && !isSuperAdminSession.value) {
+    activeView.value = isAdminSession.value ? 'personal' : 'rendicion'
+    return
+  }
   if (view === 'personal' && !showPersonalAdminsToggle.value) {
     personalSubview.value = 'personal'
+  }
+  if (view === 'importaciones' && isAdminSession.value) {
+    loadImportacionesLotes()
+  }
+})
+
+watch(personalSubview, (sub) => {
+  if (sub === 'admins' && !showPersonalAdminsToggle.value) {
+    personalSubview.value = 'personal'
+  }
+})
+
+watch(isSuperAdminSession, (ok) => {
+  if (!ok) {
+    if (activeView.value === 'auditoria') {
+      activeView.value = isAdminSession.value ? 'personal' : 'rendicion'
+    }
+    if (personalSubview.value === 'admins') {
+      personalSubview.value = 'personal'
+    }
   }
 })
 
@@ -4862,29 +5075,37 @@ async function loadDashboardData() {
     const usuariosRaw = await safeList(api.listUsuarios)
     const mappedUsers = usuariosRaw.map(mapUsuario)
 
-    admins.value = mappedUsers
-      .filter((u) =>
-        ['SUPER_ADMIN_DEV', 'SUPER_ADMIN', 'ADMIN_CAJA'].includes(u.rol)
-      )
-      .map((u) =>
-        mapAdminFromUsuario({
-          id: u.id,
-          rut: u.rut,
-          correo: u.correo,
-          rol: u.rol,
-          estado: u.estadoApi,
-          trabajador_nombre: u.nombre || null,
-          trabajador_id: u.trabajadorId
-        })
-      )
+    if (isSuperAdminSession.value) {
+      admins.value = mappedUsers
+        .filter((u) =>
+          ['SUPER_ADMIN_DEV', 'SUPER_ADMIN', 'ADMIN_CAJA'].includes(u.rol)
+        )
+        .map((u) =>
+          mapAdminFromUsuario({
+            id: u.id,
+            rut: u.rut,
+            correo: u.correo,
+            rol: u.rol,
+            estado: u.estadoApi,
+            trabajador_nombre: u.nombre || null,
+            trabajador_id: u.trabajadorId
+          })
+        )
+    } else {
+      admins.value = []
+    }
 
     usuarios.value = mappedUsers.filter((u) => u.rol === 'USER_RENDIDOR')
 
     const tarjetasRaw = await safeList(api.listTarjetas)
     tarjetasEmpresa.value = tarjetasRaw.map(mapTarjeta)
 
-    const logsRaw = await safeList(api.listAuditLogs)
-    auditoriaLogs.value = logsRaw.map(mapAuditLog)
+    if (isSuperAdminSession.value) {
+      const logsRaw = await safeList(api.listAuditLogs)
+      auditoriaLogs.value = logsRaw.map(mapAuditLog)
+    } else {
+      auditoriaLogs.value = []
+    }
 
     syncSelectoresCajaMes()
     rebuildCartola()
@@ -5041,6 +5262,16 @@ function selectCcFiltro(opt) {
   syncCajaFiltroQueryFromSelection()
 }
 
+function resetCcFiltro() {
+  selectCcFiltro({ id: '', label: 'Todos' })
+}
+
+const ccFiltroMuestraReset = computed(() => {
+  if (ccActivo.value) return true
+  const q = ccFiltroQuery.value.trim().toLowerCase()
+  return Boolean(q) && q !== 'todos'
+})
+
 function onCcFiltroBlur() {
   setTimeout(() => {
     ccFiltroOpen.value = false
@@ -5075,9 +5306,22 @@ function selectCajaFiltro(opt) {
   cajaFiltroOpen.value = false
 }
 
+/** Solo limpia el texto de búsqueda; la caja activa se conserva hasta elegir otra. */
+function clearCajaFiltroTexto() {
+  cajaFiltroQuery.value = ''
+  cajaFiltroOpen.value = true
+  cajaFiltroHighlight.value = 0
+}
+
+function onCajaFiltroEscape() {
+  cajaFiltroOpen.value = false
+  syncCajaFiltroQueryFromSelection()
+}
+
 function onCajaFiltroBlur() {
   setTimeout(() => {
     cajaFiltroOpen.value = false
+    // Sin nueva selección → restaurar etiqueta de la caja activa (ej. CENTINELA)
     syncCajaFiltroQueryFromSelection()
   }, 120)
 }
@@ -6183,6 +6427,9 @@ function selectView(id) {
   if (id === 'personal') {
     personalSubview.value = 'personal'
   }
+  if (id === 'importaciones' && isAdminSession.value) {
+    loadImportacionesLotes()
+  }
 }
 
 async function onSaveGasto() {
@@ -6582,7 +6829,89 @@ function formatImportResultMessage(kind, data) {
     msg += ` ${errs.length} con error. ${sample}`
     if (errs.length > 5) msg += '…'
   }
+  if (data?.lote_id) msg += ` (lote #${data.lote_id})`
   return msg
+}
+
+function labelTipoImportacion(tipo) {
+  if (tipo === 'gastos') return 'Gastos'
+  if (tipo === 'asignaciones') return 'Asignaciones'
+  return tipo || '—'
+}
+
+function badgeClassEstadoImport(estado) {
+  const e = String(estado || '').toLowerCase()
+  if (e === 'completo') return 'dash-badge--ok'
+  if (e === 'parcial') return 'dash-badge--warn'
+  if (e === 'fallido' || e === 'anulado') return 'dash-badge--danger'
+  return 'dash-badge--neutral'
+}
+
+function formatFechaHoraImport(value) {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return String(value)
+  return d.toLocaleString('es-CL')
+}
+
+async function loadImportacionesLotes() {
+  if (!isAdminSession.value) return
+  importacionesLoading.value = true
+  try {
+    importacionesLotes.value = await api.listImportaciones()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudieron cargar las importaciones'
+    importacionesLotes.value = []
+  } finally {
+    importacionesLoading.value = false
+  }
+}
+
+async function openImportacionDetalle(lote) {
+  if (!lote?.id) return
+  importacionDetalleOpen.value = true
+  importacionDetalleLoading.value = true
+  importacionDetalle.value = { ...lote, errores: [] }
+  try {
+    const data = await api.getImportacion(lote.id)
+    importacionDetalle.value = data
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo cargar el detalle del lote'
+    importacionDetalleOpen.value = false
+  } finally {
+    importacionDetalleLoading.value = false
+  }
+}
+
+function closeImportacionDetalle() {
+  importacionDetalleOpen.value = false
+  importacionDetalle.value = null
+  importacionDetalleLoading.value = false
+}
+
+async function onAnularImportacion(lote) {
+  if (!lote?.id) return
+  const tipo = labelTipoImportacion(lote.tipo)
+  if (
+    !confirm(
+      `¿Anular el lote #${lote.id} (${tipo})?\nSe eliminarán (soft-delete) los ${lote.creados || 0} registro(s) creados por esta importación.`
+    )
+  ) {
+    return
+  }
+  importacionAnulandoId.value = lote.id
+  saveError.value = ''
+  saveOk.value = ''
+  try {
+    const data = await api.anularImportacion(lote.id)
+    await Promise.all([loadImportacionesLotes(), loadDashboardData()])
+    saveOk.value = `Lote #${lote.id} anulado. ${data?.anulados ?? 0} registro(s) eliminados.`
+    if (importacionDetalle.value?.id === lote.id) closeImportacionDetalle()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo anular el lote'
+  } finally {
+    importacionAnulandoId.value = null
+  }
 }
 
 async function onImportGastosExcel(event) {
@@ -6595,7 +6924,7 @@ async function onImportGastosExcel(event) {
     const fd = new FormData()
     fd.append('archivo', file)
     const data = await api.importRendicionesExcel(fd)
-    await loadDashboardData()
+    await Promise.all([loadDashboardData(), loadImportacionesLotes()])
     const msg = formatImportResultMessage('Gastos', data)
     if (data?.errores?.length) saveError.value = msg
     else saveOk.value = msg
@@ -6620,7 +6949,7 @@ async function onImportAsignacionesExcel(event) {
     const fd = new FormData()
     fd.append('archivo', file)
     const data = await api.importAsignacionesExcel(fd)
-    await loadDashboardData()
+    await Promise.all([loadDashboardData(), loadImportacionesLotes()])
     const msg = formatImportResultMessage('Asignaciones', data)
     if (data?.errores?.length) saveError.value = msg
     else saveOk.value = msg

@@ -20,6 +20,13 @@ const {
   keysMatch,
   cellToString
 } = require('../utils/excelImport')
+const { ensureImportacionesSchema } = require('../utils/ensureImportacionesSchema')
+
+function estadoLoteImport(creadosCount, erroresCount) {
+  if (creadosCount === 0) return 'fallido'
+  if (erroresCount > 0) return 'parcial'
+  return 'completo'
+}
 
 async function listAnticipos(req, res) {
   try {
@@ -338,6 +345,7 @@ async function findCajaIdByCcYCaja(ccNombre, cajaClave) {
 async function importAsignacionesExcel(req, res) {
   try {
     await ensureAsignacionesSchema()
+    await ensureImportacionesSchema()
     const parsed = parseExcelConHeaders(req.file?.buffer, HEADERS_ASIGNACIONES, 'Asignaciones')
     if (!parsed.ok) {
       return res.status(400).json({
@@ -346,6 +354,15 @@ async function importAsignacionesExcel(req, res) {
         faltantes: parsed.faltantes || []
       })
     }
+
+    const archivoNombre = String(req.file?.originalname || '').slice(0, 255) || null
+    const loteInsert = await query(
+      `INSERT INTO importaciones_lotes
+        (tipo, archivo_nombre, usuario_id, usuario_nombre, estado, creados, errores_count)
+       VALUES ('asignaciones', ?, ?, ?, 'parcial', 0, 0)`,
+      [archivoNombre, req.user.id ?? null, req.user.nombre ?? null]
+    )
+    const loteId = loteInsert.insertId
 
     const creados = []
     const errores = []
@@ -407,9 +424,9 @@ async function importAsignacionesExcel(req, res) {
         const result = await query(
           `INSERT INTO anticipos
             (codigo_vale, caja_id, trabajador_id, fecha, monto, numero_cuenta, banco_origen,
-             observacion, comprobante_url, es_legacy)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 1)`,
-          [codigo, cajaId, trabajadorId, fecha, monto, cuenta, banco, observacion]
+             observacion, comprobante_url, es_legacy, importacion_lote_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?)`,
+          [codigo, cajaId, trabajadorId, fecha, monto, cuenta, banco, observacion, loteId]
         )
 
         creados.push({ fila, id: result.insertId, codigo })
@@ -418,16 +435,34 @@ async function importAsignacionesExcel(req, res) {
       }
     }
 
+    const estado = estadoLoteImport(creados.length, errores.length)
+    await query(
+      `UPDATE importaciones_lotes
+       SET estado = ?, creados = ?, errores_count = ?,
+           errores_json = ?, detalle_creados_json = ?
+       WHERE id = ?`,
+      [
+        estado,
+        creados.length,
+        errores.length,
+        JSON.stringify(errores),
+        JSON.stringify(creados),
+        loteId
+      ]
+    )
+
     await registrarAuditoria(
       req.user.id,
       req.user.nombre,
       'CREAR',
       'Asignaciones',
-      `Import Excel: ${creados.length} ok, ${errores.length} error(es)`
+      `Import Excel lote=${loteId}: ${creados.length} ok, ${errores.length} error(es)`
     )
 
     return res.json({
       ok: errores.length === 0,
+      lote_id: loteId,
+      estado,
       creados: creados.length,
       errores,
       detalle_creados: creados

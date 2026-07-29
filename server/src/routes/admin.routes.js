@@ -42,7 +42,7 @@ router.put('/trabajadores/:id/cajas', setTrabajadorCajas)
 
 /* Usuarios (legacy / Admins) */
 router.get('/usuarios', listUsuarios)
-router.post('/usuarios', createUsuario)
+router.post('/usuarios', checkRole(SUPER_ADMINS), createUsuario)
 router.put('/usuarios/:id', updateUsuario)
 router.post('/usuarios/:id/reset-password', checkRole(SUPER_ADMINS), resetPasswordUsuario)
 router.delete('/usuarios/:id', checkRole(SUPER_ADMINS), softDeleteUsuario)
