@@ -718,11 +718,11 @@
         <p v-if="dataError" class="dash-banner dash-banner--danger">{{ dataError }}</p>
         <p v-if="saveError" class="dash-banner dash-banner--danger">{{ saveError }}</p>
         <p v-if="saveOk" class="dash-banner dash-banner--ok">{{ saveOk }}</p>
-        <section v-if="isOperacionView" class="dash-metrics">
+        <section v-if="isOperacionView && isAdminSession" class="dash-metrics">
           <div class="dash-metrics-head">
             <div class="dash-metrics-title">
               <span class="dash-metrics-dot" aria-hidden="true"></span>
-              <span>Estado de Caja y Presupuesto</span>
+              <span>Estado de Caja</span>
             </div>
 
             <div class="dash-metrics-controls">
