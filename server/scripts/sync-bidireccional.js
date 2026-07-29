@@ -12,9 +12,18 @@
 const path = require('path')
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
 
+const {
+  isSyncBidireccionalEnabled,
+  SYNC_BIDIRECCIONAL_DISABLED_MSG
+} = require('../src/config/devFlags')
 const { syncBidireccional } = require('../src/utils/syncBidireccional')
 
 async function main() {
+  if (!isSyncBidireccionalEnabled()) {
+    console.error(`[sync] ${SYNC_BIDIRECCIONAL_DISABLED_MSG}`)
+    process.exit(1)
+  }
+
   const dryRun = process.argv.includes('--dry-run')
   console.log(`[sync] Inicio${dryRun ? ' (dry-run)' : ''}…`)
   const result = await syncBidireccional({ dryRun })

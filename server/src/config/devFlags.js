@@ -6,6 +6,7 @@
  *   DEV_RUT_BYPASS=0              → desactiva bypass de RUT
  *   DEV_HARD_DELETE=0             → desactiva hard delete
  *   DEV_COMPROBANTE_VERIFY_BYPASS=0 → exige IA monto/N° documento
+ *   SYNC_BIDIRECCIONAL_ENABLED=1    → activa sync Turnos ↔ Rendiciones (default off)
  *
  * Buscar: DEV_FLAGS
  */
@@ -22,7 +23,15 @@ const DEV_FLAGS = {
     .replace(/[^0-9kK]/g, '')
     .toUpperCase(),
   HARD_DELETE_ENABLED: envEnabled('DEV_HARD_DELETE', true),
-  COMPROBANTE_VERIFY_BYPASS: envEnabled('DEV_COMPROBANTE_VERIFY_BYPASS', true)
+  COMPROBANTE_VERIFY_BYPASS: envEnabled('DEV_COMPROBANTE_VERIFY_BYPASS', true),
+  SYNC_BIDIRECCIONAL_ENABLED: envEnabled('SYNC_BIDIRECCIONAL_ENABLED', false)
+}
+
+const SYNC_BIDIRECCIONAL_DISABLED_MSG =
+  'Sincronización bidireccional desactivada temporalmente'
+
+function isSyncBidireccionalEnabled() {
+  return DEV_FLAGS.SYNC_BIDIRECCIONAL_ENABLED
 }
 
 function cleanRut(rut) {
@@ -66,6 +75,8 @@ function canSkipComprobanteVerify(user) {
 
 module.exports = {
   DEV_FLAGS,
+  SYNC_BIDIRECCIONAL_DISABLED_MSG,
+  isSyncBidireccionalEnabled,
   isDevRutBypass,
   normalizeDevRut,
   canDevHardDelete,

@@ -1534,6 +1534,14 @@ async function listAuditLogs(req, res) {
 /* --- Sync bidireccional Turnos ↔ Rendiciones --- */
 
 async function syncBidireccionalHandler(req, res) {
+  const {
+    isSyncBidireccionalEnabled,
+    SYNC_BIDIRECCIONAL_DISABLED_MSG
+  } = require('../config/devFlags')
+  if (!isSyncBidireccionalEnabled()) {
+    return res.status(503).json({ error: SYNC_BIDIRECCIONAL_DISABLED_MSG })
+  }
+
   try {
     const dryRun = Boolean(req.body?.dryRun || req.query?.dryRun)
     const { syncBidireccional } = require('../utils/syncBidireccional')
