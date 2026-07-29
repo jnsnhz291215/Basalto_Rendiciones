@@ -44,7 +44,7 @@ async function login(req, res) {
           `SELECT u.*, t.nombre_completo
            FROM usuarios u
            LEFT JOIN trabajadores t ON t.id = u.trabajador_id AND t.is_deleted = FALSE
-           WHERE u.correo = ? AND u.is_deleted = FALSE
+           WHERE LOWER(u.correo) = LOWER(?) AND u.is_deleted = FALSE
            LIMIT 1`,
           [correo.trim()]
         )

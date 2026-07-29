@@ -54,7 +54,7 @@ export function useAuth() {
     }
   }
 
-  async function login(rut, password) {
+  async function login(identifier, password, mode = 'rut') {
     state.loading = true
     state.error = ''
     try {
@@ -71,7 +71,7 @@ export function useAuth() {
         return state.user
       }
 
-      const data = await authApi.login(rut, password)
+      const data = await authApi.login(identifier, password, mode)
       state.user = authApi.persistSessionProfile(data)
       return data
     } catch (e) {

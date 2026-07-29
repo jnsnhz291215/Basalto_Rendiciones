@@ -147,12 +147,16 @@ export function loginRedirectUrl(returnTo = window.location.href) {
   return url.toString()
 }
 
-export async function login(rut, password) {
-  const rutLimpio = cleanRut(rut)
+export async function login(identifier, password, mode = 'rut') {
+  const body =
+    mode === 'correo'
+      ? { correo: String(identifier || '').trim(), password }
+      : { rut: cleanRut(identifier), password }
+
   const { res, data } = await apiFetch('/api/auth/login', {
     method: 'POST',
     auth: false,
-    body: JSON.stringify({ rut: rutLimpio, password })
+    body: JSON.stringify(body)
   })
 
   if (!res.ok || !data?.token || !data?.user) {
