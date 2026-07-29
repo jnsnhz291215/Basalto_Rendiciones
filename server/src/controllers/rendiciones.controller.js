@@ -11,12 +11,13 @@ const {
   parseFechaToIso,
   parseMonto,
   cleanRut,
-  normalizeNumeroDocumento,
   normalizeTarjetaUltimos4,
   mapTipoDocumento,
   mapOrigenPago,
   keysMatch,
-  cellToString
+  cellToString,
+  tipoRequiereNumeroDocumento,
+  resolveNumeroDocumentoForTipo
 } = require('../utils/excelImport')
 
 async function assertCajaAsignadaATrabajador(trabajadorId, cajaId) {
@@ -200,11 +201,13 @@ async function createRendicion(req, res) {
     }
 
     if (
-      tipo_documento === 'Factura' &&
-      !String(numero_documento || '').trim() &&
+      tipoRequiereNumeroDocumento(tipo_documento) &&
+      !resolveNumeroDocumentoForTipo(tipo_documento, numero_documento) &&
       !canSkipComprobanteVerify(req.user)
     ) {
-      return res.status(400).json({ error: 'numero_documento es obligatorio para Factura' })
+      return res.status(400).json({
+        error: `numero_documento es obligatorio para ${tipo_documento}`
+      })
     }
 
     let trabajadorId = trabajador_id
@@ -256,7 +259,7 @@ async function createRendicion(req, res) {
         trabajadorId,
         fecha_documento,
         tipo_documento,
-        tipo_documento === 'Factura' ? String(numero_documento).trim() : numero_documento || null,
+        resolveNumeroDocumentoForTipo(tipo_documento, numero_documento),
         Number(monto),
         origen_pago,
         tarjeta_id || null,
@@ -297,20 +300,6 @@ async function updateRendicion(req, res) {
     const isUser = req.user.rol === ROLES.USER_RENDIDOR
     const isAdmin = ADMINS.includes(req.user.rol)
 
-    if (isUser) {
-      if (existing[0].trabajador_id !== req.user.trabajador_id) {
-        return res.status(403).json({ error: 'Forbidden' })
-      }
-      // Solo puede responder/corregir si el admin pidió corrección
-      if (existing[0].estado !== 'Por Corregir') {
-        return res.status(403).json({
-          error: 'No se puede editar ni borrar una rendición ya enviada'
-        })
-      }
-    } else if (!isAdmin) {
-      return res.status(403).json({ error: 'Forbidden' })
-    }
-
     const {
       fecha_documento,
       tipo_documento,
@@ -323,18 +312,57 @@ async function updateRendicion(req, res) {
       estado
     } = req.body || {}
 
+    if (isUser) {
+      if (existing[0].trabajador_id !== req.user.trabajador_id) {
+        return res.status(403).json({ error: 'Forbidden' })
+      }
+
+      // Import Excel (es_legacy): permitir adjuntar/cambiar comprobante sin editar el resto
+      const urlAdjunto = String(comprobante_url || '').trim()
+      if (Boolean(existing[0].es_legacy) && urlAdjunto) {
+        await query(
+          `UPDATE rendiciones_gastos
+           SET comprobante_url = ?
+           WHERE id = ? AND is_deleted = FALSE`,
+          [urlAdjunto, id]
+        )
+        await registrarAuditoria(
+          req.user.id,
+          req.user.nombre,
+          'MODIFICAR',
+          'Gastos',
+          `Comprobante adjunto a rendición legacy ${existing[0].codigo_rinde}`
+        )
+        const updated = await query(
+          `SELECT * FROM rendiciones_gastos WHERE id = ? AND is_deleted = FALSE`,
+          [id]
+        )
+        return res.json(updated[0])
+      }
+
+      // Solo puede responder/corregir si el admin pidió corrección
+      if (existing[0].estado !== 'Por Corregir') {
+        return res.status(403).json({
+          error: 'No se puede editar ni borrar una rendición ya enviada'
+        })
+      }
+    } else if (!isAdmin) {
+      return res.status(403).json({ error: 'Forbidden' })
+    }
+
     // Usuario normal: solo campos de corrección; vuelve a "Sin Devolución"
     if (isUser) {
       const tipo = tipo_documento || existing[0].tipo_documento
-      const num =
-        tipo === 'Factura'
-          ? String(numero_documento ?? existing[0].numero_documento ?? '').trim()
-          : numero_documento !== undefined
-            ? numero_documento
-            : existing[0].numero_documento
+      const numRaw =
+        numero_documento !== undefined
+          ? numero_documento
+          : existing[0].numero_documento
+      const num = resolveNumeroDocumentoForTipo(tipo, numRaw)
 
-      if (tipo === 'Factura' && !num) {
-        return res.status(400).json({ error: 'numero_documento es obligatorio para Factura' })
+      if (tipoRequiereNumeroDocumento(tipo) && !num) {
+        return res.status(400).json({
+          error: `numero_documento es obligatorio para ${tipo}`
+        })
       }
 
       const nextOrigen = origen_pago || existing[0].origen_pago
@@ -394,15 +422,16 @@ async function updateRendicion(req, res) {
     }
 
     const tipo = tipo_documento || existing[0].tipo_documento
-    const num =
-      tipo === 'Factura'
-        ? String(numero_documento ?? existing[0].numero_documento ?? '').trim()
-        : numero_documento !== undefined
-          ? numero_documento
-          : existing[0].numero_documento
+    const numRaw =
+      numero_documento !== undefined
+        ? numero_documento
+        : existing[0].numero_documento
+    const num = resolveNumeroDocumentoForTipo(tipo, numRaw)
 
-    if (tipo === 'Factura' && !num) {
-      return res.status(400).json({ error: 'numero_documento es obligatorio para Factura' })
+    if (tipoRequiereNumeroDocumento(tipo) && !num) {
+      return res.status(400).json({
+        error: `numero_documento es obligatorio para ${tipo}`
+      })
     }
 
     const nextTarjetaId =
@@ -632,9 +661,9 @@ async function importRendicionesExcel(req, res) {
         if (!descripcion) throw new Error('descripcion es obligatoria')
         if (descripcion.length > 500) throw new Error('descripcion supera 500 caracteres')
 
-        const numeroDoc = normalizeNumeroDocumento(row.numero_documento)
-        if (tipo === 'Factura' && !numeroDoc) {
-          throw new Error('numero_documento obligatorio para Factura (f)')
+        const numeroDoc = resolveNumeroDocumentoForTipo(tipo, row.numero_documento)
+        if (tipoRequiereNumeroDocumento(tipo) && !numeroDoc) {
+          throw new Error(`numero_documento obligatorio para ${tipo}`)
         }
 
         const trabajadorId = await findTrabajadorIdByRut(rut)
@@ -671,15 +700,15 @@ async function importRendicionesExcel(req, res) {
         const result = await query(
           `INSERT INTO rendiciones_gastos
             (codigo_rinde, caja_id, trabajador_id, fecha_documento, tipo_documento, numero_documento,
-             monto, origen_pago, tarjeta_id, comprobante_url, descripcion, estado, arrastre_mes)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'Sin Devolución', ?)`,
+             monto, origen_pago, tarjeta_id, comprobante_url, descripcion, estado, arrastre_mes, es_legacy)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, 'Sin Devolución', ?, 1)`,
           [
             codigo,
             cajaId,
             trabajadorId,
             fecha,
             tipo,
-            tipo === 'Factura' ? numeroDoc : null,
+            numeroDoc,
             monto,
             origen,
             tarjetaId,

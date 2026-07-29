@@ -108,6 +108,11 @@ async function createAnticipo(req, res) {
       return res.status(400).json({ error: 'caja_id, trabajador_id, fecha y monto son requeridos' })
     }
 
+    const montoNum = Number(monto)
+    if (!Number.isFinite(montoNum) || montoNum <= 0) {
+      return res.status(400).json({ error: 'El monto debe ser mayor a 0' })
+    }
+
     if (!String(comprobante_url || '').trim()) {
       return res.status(400).json({
         error: 'El comprobante es obligatorio. Ninguna asignación puede guardarse sin documento.'
@@ -123,13 +128,17 @@ async function createAnticipo(req, res) {
       return res.status(400).json({ error: 'Banco origen es obligatorio' })
     }
 
-    let codigo = normalizeNumeroDocumento(codigo_vale)
+    const codigo = normalizeNumeroDocumento(codigo_vale)
     if (!codigo) {
-      const maxRows = await query(
-        `SELECT MAX(CAST(SUBSTRING_INDEX(codigo_vale, '-', -1) AS UNSIGNED)) AS max_num
-         FROM anticipos`
-      )
-      codigo = nextCodigo('V', Number(maxRows[0]?.max_num) || 5500)
+      return res.status(400).json({ error: 'N° Doc / Vale (codigo_vale) es obligatorio' })
+    }
+
+    const obs = cellToString(observacion) || ''
+    if (!obs.trim()) {
+      return res.status(400).json({ error: 'Las observaciones / motivo son obligatorias' })
+    }
+    if (obs.length > 500) {
+      return res.status(400).json({ error: 'Las observaciones no pueden superar 500 caracteres' })
     }
 
     const result = await query(
@@ -142,10 +151,10 @@ async function createAnticipo(req, res) {
         caja_id,
         trabajador_id,
         fecha,
-        Number(monto),
+        montoNum,
         cuenta,
         banco,
-        cellToString(observacion) || null,
+        obs.trim(),
         comprobante_url || null
       ]
     )
@@ -398,8 +407,8 @@ async function importAsignacionesExcel(req, res) {
         const result = await query(
           `INSERT INTO anticipos
             (codigo_vale, caja_id, trabajador_id, fecha, monto, numero_cuenta, banco_origen,
-             observacion, comprobante_url)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+             observacion, comprobante_url, es_legacy)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 1)`,
           [codigo, cajaId, trabajadorId, fecha, monto, cuenta, banco, observacion]
         )
 

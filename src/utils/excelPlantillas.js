@@ -334,10 +334,10 @@ export function descargarPlantillaGastos() {
 
   const leyendaTipo = [
     ['tipo_documento', 'Significado'],
-    ['b / B', 'Boleta (sin N° docto)'],
+    ['b / B', 'Boleta (N° docto opcional)'],
     ['f / F', 'Factura (requiere numero_documento)'],
     ['p / P', 'Peaje (sin N° docto)'],
-    ['g / G', 'Guía Despacho (sin N° docto)']
+    ['g / G', 'Guía Despacho (requiere numero_documento)']
   ]
 
   const notas = [
@@ -348,7 +348,8 @@ export function descargarPlantillaGastos() {
     ['monto: solo números (ej. 15000)'],
     ['tarjeta_ultimos4: obligatorio si d o c'],
     ['descripcion: obligatoria (máx. 500)'],
-    ['Letras e/d/c y b/f/p/g: mayúscula o minúscula']
+    ['Letras e/d/c y b/f/p/g: mayúscula o minúscula'],
+    ['Se crean como Legacy sin comprobante; adjuntar después en el sistema']
   ]
 
   const cells = [
@@ -382,12 +383,16 @@ export function descargarPlantillaGastos() {
       'Sí',
       'b = Boleta | f = Factura | p = Peaje | g = Guía Despacho (mayúscula o minúscula)'
     ],
-    ['numero_documento', 'Condicional', 'Obligatorio si tipo_documento = f'],
+    ['numero_documento', 'Condicional', 'Obligatorio si tipo_documento = f o g; opcional en b; vacío en p'],
     ['monto', 'Sí', 'Monto en pesos (sin $ ni puntos)'],
     ['origen_pago', 'Sí', 'e = Efectivo | d = Débito | c = Crédito (mayúscula o minúscula)'],
     ['tarjeta_ultimos4', 'Condicional', 'Obligatorio si origen_pago = d o c'],
     ['descripcion', 'Sí', 'Descripción / observación (máx. 500 caracteres)'],
-    ['NOTA', '', 'Los comprobantes se adjuntan después en el sistema. No borre la fila de encabezados.']
+    [
+      'NOTA',
+      '',
+      'Se crean como Legacy sin comprobante; adjuntar después en el sistema. No borre la fila de encabezados.'
+    ]
   ]
 
   downloadXlsx('plantilla_importacion_gastos.xlsx', [
@@ -440,7 +445,8 @@ export function descargarPlantillaAsignaciones() {
     ['monto: solo números'],
     ['numero_cuenta: obligatorio'],
     ['banco_origen: obligatorio'],
-    ['observacion: máx. 500 caracteres']
+    ['observacion: máx. 500 caracteres'],
+    ['Se crean como Legacy sin comprobante; adjuntar después en el sistema']
   ]
 
   const cells = [
@@ -473,7 +479,11 @@ export function descargarPlantillaAsignaciones() {
     ['numero_cuenta', 'Sí', 'Número de cuenta bancaria (solo dígitos)'],
     ['banco_origen', 'Sí', 'Banco en MAYÚSCULAS (ej. BANCO DE CHILE)'],
     ['observacion', 'No', 'Observaciones / motivo (máx. 500)'],
-    ['NOTA', '', 'Los comprobantes se adjuntan después en el sistema. No borre la fila de encabezados.']
+    [
+      'NOTA',
+      '',
+      'Se crean como Legacy sin comprobante; adjuntar después en el sistema. No borre la fila de encabezados.'
+    ]
   ]
 
   downloadXlsx('plantilla_importacion_asignaciones.xlsx', [

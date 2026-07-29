@@ -254,11 +254,9 @@ export function mapRendicion(row) {
   if (tipo === 'Ticket Peaje') tipo = 'Peaje'
   const num = row.numero_documento
   const docto =
-    tipo === 'Factura' && num
-      ? `Factura #${num}`
-      : tipo && tipo !== 'Factura'
-        ? tipo
-        : ''
+    tipo && num
+      ? `${tipo} #${num}`
+      : tipo || ''
 
   return {
     id: row.id,
@@ -272,6 +270,8 @@ export function mapRendicion(row) {
     trabajadorId: row.trabajador_id,
     pago: labelPagoFromOrigen(row.origen_pago),
     docto,
+    tipoDocumento: tipo,
+    numeroDocumento: num ? String(num) : '',
     monto: formatMontoApi(row.monto),
     estado: row.estado || 'Sin Devolución',
     estadoClass: ESTADO_CLASS[row.estado] || 'dash-status--warn',
@@ -283,7 +283,7 @@ export function mapRendicion(row) {
     intento: 1,
     observacionAdmin: row.observacion_admin || '',
     camposCorregir: null,
-    legacy: false,
+    legacy: Boolean(row.es_legacy),
     comprobanteNombre: row.comprobante_url || ''
   }
 }
@@ -292,8 +292,8 @@ export function mapLegacy(row) {
   const tipo = row.tipo_documento || ''
   const num = row.numero_documento
   const docto =
-    tipo === 'Factura' && num
-      ? `Factura #${num}`
+    tipo && num
+      ? `${tipo} #${num}`
       : tipo || ''
 
   return {
@@ -333,6 +333,7 @@ export function mapAnticipo(row) {
     bancoOrigen: row.banco_origen || '',
     cajaGroupKey: row.clave_interna || '',
     cajaId: row.caja_id,
+    legacy: Boolean(row.es_legacy),
     comprobanteNombre: row.comprobante_url || ''
   }
 }

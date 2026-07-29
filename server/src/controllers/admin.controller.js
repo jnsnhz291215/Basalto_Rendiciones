@@ -1,6 +1,12 @@
 const bcrypt = require('bcryptjs')
 const { pool, query } = require('../config/db')
-const { registrarAuditoria } = require('../utils/audit')
+const {
+  registrarAuditoria,
+  identificarEntidad,
+  pushCambio,
+  pushPasswordReset,
+  formatearDetalleCambio
+} = require('../utils/audit')
 const { ROLES, SUPER_ADMINS, ADMINS } = require('../middlewares/role.middleware')
 const {
   ensureTarjetaFechaDesactivacion,
@@ -209,24 +215,33 @@ async function updateTrabajador(req, res) {
     )
     if (!existing[0]) return res.status(404).json({ error: 'Trabajador no encontrado' })
 
+    const nextRut = rut?.trim() || existing[0].rut
+    const nextNombre = nombre_completo?.trim() || existing[0].nombre_completo
+    const nextCargo = cargo !== undefined ? cargo : existing[0].cargo
+
+    const cambios = []
+    pushCambio(cambios, 'rut', existing[0].rut, nextRut)
+    pushCambio(cambios, 'nombre', existing[0].nombre_completo, nextNombre)
+    pushCambio(cambios, 'cargo', existing[0].cargo, nextCargo)
+
     await query(
       `UPDATE trabajadores
        SET rut = ?, nombre_completo = ?, cargo = ?
        WHERE id = ? AND is_deleted = FALSE`,
-      [
-        rut?.trim() || existing[0].rut,
-        nombre_completo?.trim() || existing[0].nombre_completo,
-        cargo !== undefined ? cargo : existing[0].cargo,
-        id
-      ]
+      [nextRut, nextNombre, nextCargo, id]
     )
 
+    const identidad = identificarEntidad('Trabajador', {
+      nombre: nextNombre,
+      rut: nextRut,
+      id
+    })
     await registrarAuditoria(
       req.user.id,
       req.user.nombre,
       'MODIFICAR',
       'Trabajadores',
-      `Trabajador id=${id} actualizado`
+      formatearDetalleCambio(identidad, cambios)
     )
 
     const updated = await query(
@@ -249,20 +264,29 @@ async function softDeleteTrabajador(req, res) {
       })
     }
     const id = Number(req.params.id)
-    const result = await query(
+    const rows = await query(
+      `SELECT id, rut, nombre_completo FROM trabajadores WHERE id = ? AND is_deleted = FALSE`,
+      [id]
+    )
+    if (!rows[0]) {
+      return res.status(404).json({ error: 'Trabajador no encontrado' })
+    }
+    await query(
       `UPDATE trabajadores SET is_deleted = TRUE, deleted_at = NOW()
        WHERE id = ? AND is_deleted = FALSE`,
       [id]
     )
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Trabajador no encontrado' })
-    }
+    const identidad = identificarEntidad('Trabajador', {
+      nombre: rows[0].nombre_completo,
+      rut: rows[0].rut,
+      id
+    })
     await registrarAuditoria(
       req.user.id,
       req.user.nombre,
       'ELIMINAR',
       'Trabajadores',
-      `Soft delete trabajador id=${id}`
+      `Soft delete: ${identidad}`
     )
     return res.json({ ok: true })
   } catch (err) {
@@ -281,32 +305,46 @@ async function setTrabajadorCajas(req, res) {
     }
 
     const existing = await query(
-      `SELECT id FROM trabajadores WHERE id = ? AND is_deleted = FALSE`,
+      `SELECT id, rut, nombre_completo FROM trabajadores WHERE id = ? AND is_deleted = FALSE`,
       [id]
     )
     if (!existing[0]) return res.status(404).json({ error: 'Trabajador no encontrado' })
 
+    const prevRows = await query(
+      `SELECT clave_interna FROM trabajador_cajas WHERE trabajador_id = ?`,
+      [id]
+    )
+    const prevClaves = prevRows.map((r) => r.clave_interna)
+    const nextClaves = claves
+      .map((clave) => String(clave).trim().toUpperCase())
+      .filter(Boolean)
+
     // Asignación no es dato contable: se reemplaza el set (hard delete de filas N:M)
     await query(`DELETE FROM trabajador_cajas WHERE trabajador_id = ?`, [id])
 
-    for (const clave of claves) {
-      const c = String(clave).trim().toUpperCase()
-      if (!c) continue
+    for (const c of nextClaves) {
       await query(
         `INSERT INTO trabajador_cajas (trabajador_id, clave_interna) VALUES (?, ?)`,
         [id, c]
       )
     }
 
+    const cambios = []
+    pushCambio(cambios, 'cajas', prevClaves, nextClaves)
+    const identidad = identificarEntidad('Trabajador', {
+      nombre: existing[0].nombre_completo,
+      rut: existing[0].rut,
+      id
+    })
     await registrarAuditoria(
       req.user.id,
       req.user.nombre,
       'MODIFICAR',
       'Trabajadores',
-      `Cajas asignadas a trabajador id=${id}: [${claves.join(', ')}]`
+      formatearDetalleCambio(identidad, cambios)
     )
 
-    return res.json({ ok: true, cajas_asignadas: claves })
+    return res.json({ ok: true, cajas_asignadas: nextClaves })
   } catch (err) {
     console.error('[setTrabajadorCajas]', err)
     return res.status(500).json({ error: 'Internal Server Error' })
@@ -339,15 +377,15 @@ async function createUsuario(req, res) {
       return res.status(400).json({ error: 'rut, correo, password y rol son requeridos' })
     }
 
-    // Solo Super Admins crean SUPER_ADMIN*
-    if (
-      (rol === ROLES.SUPER_ADMIN_DEV || rol === ROLES.SUPER_ADMIN) &&
-      !SUPER_ADMINS.includes(req.user.rol)
-    ) {
-      return res.status(403).json({ error: 'No puedes crear ese rol' })
+    // Super Admin - Dev es único y no se puede crear vía API
+    if (rol === ROLES.SUPER_ADMIN_DEV) {
+      return res.status(403).json({
+        error: 'No se puede crear el rol Super Admin - Dev'
+      })
     }
-    if (rol === ROLES.SUPER_ADMIN_DEV && req.user.rol !== ROLES.SUPER_ADMIN_DEV) {
-      return res.status(403).json({ error: 'Solo Super Admin - Dev puede crear ese rol' })
+    // Solo Super Admins crean SUPER_ADMIN
+    if (rol === ROLES.SUPER_ADMIN && !SUPER_ADMINS.includes(req.user.rol)) {
+      return res.status(403).json({ error: 'No puedes crear ese rol' })
     }
 
     let trabajadorId = trabajador_id || null
@@ -392,7 +430,11 @@ async function createUsuario(req, res) {
       req.user.nombre,
       'CREAR',
       'Admin Users',
-      `Usuario ${correo.trim()} rol=${rol}`
+      `${identificarEntidad('Usuario', {
+        correo: correo.trim(),
+        nombre,
+        rut: rut.trim()
+      })} rol=${rol} estado=${estado === 'inactivo' ? 'inactivo' : 'activo'}`
     )
 
     const created = await query(
@@ -462,17 +504,17 @@ async function updateUsuario(req, res) {
 
     // Mismas restricciones de creación al asignar roles admin
     if (nextRol !== row.rol) {
-      if (
-        (nextRol === ROLES.SUPER_ADMIN_DEV || nextRol === ROLES.SUPER_ADMIN) &&
-        !SUPER_ADMINS.includes(req.user.rol)
-      ) {
+      // Super Admin - Dev es único: no promover ni degradar ese rol vía API
+      if (nextRol === ROLES.SUPER_ADMIN_DEV || row.rol === ROLES.SUPER_ADMIN_DEV) {
+        return res.status(403).json({
+          error: 'El rol Super Admin - Dev no se puede asignar ni modificar'
+        })
+      }
+      if (nextRol === ROLES.SUPER_ADMIN && !SUPER_ADMINS.includes(req.user.rol)) {
         return res.status(403).json({ error: 'No puedes asignar ese rol' })
       }
-      if (nextRol === ROLES.SUPER_ADMIN_DEV && req.user.rol !== ROLES.SUPER_ADMIN_DEV) {
-        return res.status(403).json({ error: 'Solo Super Admin - Dev puede asignar ese rol' })
-      }
       if (
-        [ROLES.SUPER_ADMIN_DEV, ROLES.SUPER_ADMIN, ROLES.ADMIN_CAJA].includes(nextRol) &&
+        [ROLES.SUPER_ADMIN, ROLES.ADMIN_CAJA].includes(nextRol) &&
         !SUPER_ADMINS.includes(req.user.rol)
       ) {
         return res.status(403).json({ error: 'No puedes cambiar roles de administrador' })
@@ -480,6 +522,7 @@ async function updateUsuario(req, res) {
     }
 
     let trabajadorId = row.trabajador_id
+    const prevNombre = row.trabajador_nombre || null
     if (nombre) {
       if (trabajadorId) {
         await query(
@@ -512,21 +555,31 @@ async function updateUsuario(req, res) {
     }
 
     let passwordHash = row.password_hash
-    if (password && String(password).trim()) {
+    const passwordChanged = Boolean(password && String(password).trim())
+    if (passwordChanged) {
       passwordHash = await bcrypt.hash(String(password).trim(), 10)
     }
 
+    const nextCorreo = correo?.trim() || row.correo
     const nextEstado =
       estado === 'inactivo' || estado === 'activo'
         ? estado
         : row.estado
+    const nextNombre = nombre || prevNombre
+
+    const cambios = []
+    pushCambio(cambios, 'correo', row.correo, nextCorreo)
+    pushCambio(cambios, 'rol', row.rol, nextRol)
+    pushCambio(cambios, 'estado', row.estado, nextEstado)
+    pushCambio(cambios, 'nombre', prevNombre, nextNombre)
+    if (passwordChanged) pushPasswordReset(cambios)
 
     await query(
       `UPDATE usuarios
        SET correo = ?, rol = ?, estado = ?, password_hash = ?, trabajador_id = ?
        WHERE id = ? AND is_deleted = FALSE`,
       [
-        correo?.trim() || row.correo,
+        nextCorreo,
         nextRol,
         nextEstado,
         passwordHash,
@@ -535,12 +588,18 @@ async function updateUsuario(req, res) {
       ]
     )
 
+    const identidad = identificarEntidad('Usuario', {
+      correo: nextCorreo,
+      nombre: nextNombre,
+      rut: row.rut,
+      id
+    })
     await registrarAuditoria(
       req.user.id,
       req.user.nombre,
       'MODIFICAR',
       'Admin Users',
-      `Usuario id=${id} actualizado`
+      formatearDetalleCambio(identidad, cambios)
     )
 
     const updated = await query(
@@ -577,20 +636,34 @@ async function softDeleteUsuario(req, res) {
     if (id === req.user.id) {
       return res.status(400).json({ error: 'No puedes eliminarte a ti mismo' })
     }
-    const result = await query(
+    const rows = await query(
+      `SELECT u.id, u.rut, u.correo, u.rol,
+              t.nombre_completo AS trabajador_nombre
+       FROM usuarios u
+       LEFT JOIN trabajadores t ON t.id = u.trabajador_id AND t.is_deleted = FALSE
+       WHERE u.id = ? AND u.is_deleted = FALSE`,
+      [id]
+    )
+    if (!rows[0]) {
+      return res.status(404).json({ error: 'Usuario no encontrado' })
+    }
+    await query(
       `UPDATE usuarios SET is_deleted = TRUE, deleted_at = NOW(), estado = 'inactivo'
        WHERE id = ? AND is_deleted = FALSE`,
       [id]
     )
-    if (result.affectedRows === 0) {
-      return res.status(404).json({ error: 'Usuario no encontrado' })
-    }
+    const identidad = identificarEntidad('Usuario', {
+      correo: rows[0].correo,
+      nombre: rows[0].trabajador_nombre,
+      rut: rows[0].rut,
+      id
+    })
     await registrarAuditoria(
       req.user.id,
       req.user.nombre,
       'ELIMINAR',
       'Admin Users',
-      `Soft delete usuario id=${id}`
+      `Soft delete: ${identidad} (rol=${rows[0].rol})`
     )
     return res.json({ ok: true })
   } catch (err) {
@@ -649,7 +722,15 @@ async function resetPasswordUsuario(req, res) {
       req.user.nombre,
       'MODIFICAR',
       'Usuarios',
-      `Reinicio de contraseña usuario id=${id}`
+      formatearDetalleCambio(
+        identificarEntidad('Usuario', {
+          correo: rows[0].correo,
+          nombre: rows[0].trabajador_nombre,
+          rut: rows[0].rut,
+          id
+        }),
+        [{ texto: 'contraseña restablecida' }]
+      )
     )
 
     return res.json({
@@ -859,6 +940,18 @@ async function updatePersonal(req, res) {
       return res.status(400).json({ error: 'nombre_completo es requerido' })
     }
 
+    const prevCajasRows = await query(
+      `SELECT clave_interna FROM trabajador_cajas WHERE trabajador_id = ?`,
+      [existing.id]
+    )
+    const prevCajas = prevCajasRows.map((r) => r.clave_interna)
+    let linkedUser = await findRendidorForTrabajador(existing)
+
+    const cambios = []
+    pushCambio(cambios, 'rut', existing.rut, nextRut)
+    pushCambio(cambios, 'nombre', existing.nombre_completo, nextNombre)
+    pushCambio(cambios, 'cargo', existing.cargo, nextCargo)
+
     await conn.beginTransaction()
 
     await conn.execute(
@@ -870,10 +963,11 @@ async function updatePersonal(req, res) {
 
     if (cajaClaves) {
       await replaceTrabajadorCajas(conn, existing.id, cajaClaves)
+      pushCambio(cambios, 'cajas', prevCajas, cajaClaves)
     }
 
-    let linkedUser = await findRendidorForTrabajador({ ...existing, rut: nextRut })
     let passwordPlain = null
+    let nextCorreo = linkedUser?.correo || null
 
     if (!linkedUser && crearUsuario) {
       const adminExistente = await findAdminForTrabajador({ ...existing, rut: nextRut })
@@ -897,6 +991,7 @@ async function updatePersonal(req, res) {
       }
       passwordPlain = String(password)
       const hash = await bcrypt.hash(passwordPlain, 10)
+      const estadoNuevo = body.estado === 'inactivo' ? 'inactivo' : 'activo'
       await conn.execute(
         `INSERT INTO usuarios (trabajador_id, rut, correo, password_hash, rol, estado)
          VALUES (?, ?, ?, ?, ?, ?)`,
@@ -906,13 +1001,18 @@ async function updatePersonal(req, res) {
           correo,
           hash,
           ROLES.USER_RENDIDOR,
-          body.estado === 'inactivo' ? 'inactivo' : 'activo'
+          estadoNuevo
         ]
       )
+      nextCorreo = correo
+      cambios.push({
+        texto: `usuario creado correo=${correo} rol=${ROLES.USER_RENDIDOR} estado=${estadoNuevo}`
+      })
     } else if (linkedUser && (crearUsuario || wantsUserUpdate)) {
       // Switch off no borra el usuario; solo actualiza si envían campos de acceso
       let passwordHash = linkedUser.password_hash
-      if (body.password && String(body.password).trim()) {
+      const passwordChanged = Boolean(body.password && String(body.password).trim())
+      if (passwordChanged) {
         passwordPlain = String(body.password).trim()
         passwordHash = await bcrypt.hash(passwordPlain, 10)
       }
@@ -920,8 +1020,13 @@ async function updatePersonal(req, res) {
         body.estado === 'inactivo' || body.estado === 'activo'
           ? body.estado
           : linkedUser.estado
-      const nextCorreo =
+      nextCorreo =
         body.correo !== undefined ? String(body.correo).trim() || linkedUser.correo : linkedUser.correo
+
+      pushCambio(cambios, 'correo', linkedUser.correo, nextCorreo)
+      pushCambio(cambios, 'estado', linkedUser.estado, nextEstado)
+      pushCambio(cambios, 'rut_usuario', linkedUser.rut, nextRut)
+      if (passwordChanged) pushPasswordReset(cambios)
 
       await conn.execute(
         `UPDATE usuarios
@@ -933,12 +1038,18 @@ async function updatePersonal(req, res) {
 
     await conn.commit()
 
+    const identidad = identificarEntidad('Personal', {
+      correo: nextCorreo,
+      nombre: nextNombre,
+      rut: nextRut,
+      id: existing.id
+    })
     await registrarAuditoria(
       req.user.id,
       req.user.nombre,
       'MODIFICAR',
       'Personal',
-      `Personal id=${existing.id} actualizado`
+      formatearDetalleCambio(identidad, cambios)
     )
 
     const personal = await getPersonalByTrabajadorId(existing.id)

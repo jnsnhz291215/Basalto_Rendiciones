@@ -254,9 +254,24 @@ function mapOrigenPago(value) {
 }
 
 /**
- * ¿Dos textos de CC/caja apuntan al mismo registro?
- * Compara clave normalizada; también acepta si una contiene a la otra (≥3 chars).
+ * N° documento:
+ * - Peaje: no aplica
+ * - Boleta: opcional
+ * - Factura / Guía Despacho: obligatorio
  */
+function tipoAceptaNumeroDocumento(tipo) {
+  return tipo === 'Boleta' || tipo === 'Factura' || tipo === 'Guía Despacho'
+}
+
+function tipoRequiereNumeroDocumento(tipo) {
+  return tipo === 'Factura' || tipo === 'Guía Despacho'
+}
+
+function resolveNumeroDocumentoForTipo(tipo, value) {
+  if (!tipoAceptaNumeroDocumento(tipo)) return null
+  const num = normalizeNumeroDocumento(value)
+  return num || null
+}
 function keysMatch(a, b) {
   const ka = normalizeLookupKey(a)
   const kb = normalizeLookupKey(b)
@@ -280,5 +295,8 @@ module.exports = {
   mapTipoDocumento,
   mapOrigenPago,
   keysMatch,
-  cellToString
+  cellToString,
+  tipoAceptaNumeroDocumento,
+  tipoRequiereNumeroDocumento,
+  resolveNumeroDocumentoForTipo
 }

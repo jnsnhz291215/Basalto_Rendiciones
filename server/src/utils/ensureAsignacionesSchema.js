@@ -66,6 +66,14 @@ async function ensureAsignacionesSchema() {
     )
   }
 
+  if (!(await columnExists('anticipos', 'es_legacy'))) {
+    await query(
+      `ALTER TABLE anticipos
+       ADD COLUMN es_legacy TINYINT(1) NOT NULL DEFAULT 0
+       COMMENT 'Import Excel sin comprobante; adjuntar después'`
+    )
+  }
+
   if (!(await tableExists('bancos_origen'))) {
     await query(
       `CREATE TABLE bancos_origen (

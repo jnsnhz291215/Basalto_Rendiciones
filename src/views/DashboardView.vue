@@ -557,7 +557,7 @@
               v-model="modalEditAdmin.nombre"
               type="text"
               required
-              placeholder="Juan Sanhueza"
+              placeholder="Nombre Apellido"
             />
           </div>
           <div class="dash-field">
@@ -566,7 +566,7 @@
               v-model="modalEditAdmin.correo"
               type="email"
               required
-              placeholder="jsanhueza@basaltodrilling.cl"
+              placeholder="usuario@empresa.cl"
             />
           </div>
           <div class="dash-field">
@@ -840,6 +840,13 @@
                 class="dash-sr-only"
                 @change="onImportGastosExcel"
               />
+              <input
+                ref="legacyComprobanteInputEl"
+                type="file"
+                accept=".pdf,image/png,image/jpeg,.png,.jpg,.jpeg,application/pdf"
+                class="dash-sr-only"
+                @change="onLegacyComprobanteFile"
+              />
               <button
                 class="dash-btn-primary dash-btn-toggle-caja"
                 type="button"
@@ -870,9 +877,13 @@
                     guardar.
                   </p>
                   <p>
+                    <strong>N° documento:</strong> Peaje no requiere; Boleta opcional;
+                    <strong>Factura</strong> y <strong>Guía Despacho</strong> obligatorio (debe
+                    verse en la foto).
+                  </p>
+                  <p>
                     Si adjunta una <strong>foto</strong> (no PDF), asegúrese de que se vea
-                    claramente el <strong>cobro/total</strong>. En facturas, también debe verse el
-                    <strong>número de factura</strong>.
+                    claramente el <strong>cobro/total</strong>.
                   </p>
                 </div>
               </div>
@@ -950,8 +961,11 @@
                     <option>Guía Despacho</option>
                   </select>
                 </div>
-                <div v-if="gasto.tipo === 'Factura'" class="dash-field">
-                  <label>N° Docto</label>
+                <div v-if="gastoMuestraNumeroDocto" class="dash-field">
+                  <label>
+                    N° Docto
+                    <span v-if="!gastoRequiereNumeroDocto" class="dash-field-hint">(opcional)</span>
+                  </label>
                   <input v-model="gasto.numero" type="text" placeholder="12345" />
                 </div>
                 <div class="dash-field">
@@ -1232,7 +1246,7 @@
                   <div class="dash-actions-cell">
                     <template v-if="isAdminSession">
                       <button
-                        v-if="row.estado === 'Por Corregir' && !row.legacy"
+                        v-if="row.estado === 'Por Corregir' && !esLegacyHistorico(row)"
                         class="dash-btn-edit"
                         type="button"
                         @click="openModalCorregir(row)"
@@ -1240,7 +1254,7 @@
                         Corregir Rendición
                       </button>
                       <button
-                        v-else-if="row.estado !== 'Rechazado' && !row.legacy"
+                        v-else-if="row.estado !== 'Rechazado' && !esLegacyHistorico(row)"
                         class="dash-btn-edit"
                         type="button"
                         @click="openModalResponder(row)"
@@ -1251,12 +1265,22 @@
                             : 'Responder'
                         }}
                       </button>
-                      <span v-else-if="row.legacy" class="dash-badge dash-badge--legacy"
+                      <span v-else-if="esLegacyHistorico(row)" class="dash-badge dash-badge--legacy"
                         >Solo lectura</span
                       >
                       <span v-else class="dash-muted">-</span>
                       <button
-                        v-if="row.estado === 'Por Corregir' && !row.legacy"
+                        v-if="puedeAdjuntarComprobanteGasto(row)"
+                        class="dash-btn-ghost-sm"
+                        type="button"
+                        @click="triggerAdjuntarComprobante('gasto', row)"
+                      >
+                        {{
+                          row.comprobanteNombre ? 'Cambiar comprobante' : 'Subir comprobante'
+                        }}
+                      </button>
+                      <button
+                        v-if="row.estado === 'Por Corregir' && !esLegacyHistorico(row)"
                         class="dash-btn-ghost-sm"
                         type="button"
                         title="Responder como administrador"
@@ -1265,7 +1289,7 @@
                         Admin
                       </button>
                       <button
-                        v-if="canDevForceDelete && !row.legacy && row.id"
+                        v-if="canDevForceDelete && !esLegacyHistorico(row) && row.id"
                         class="dash-btn-icon dash-btn-icon--danger"
                         type="button"
                         title="Hard delete (Dev)"
@@ -1276,7 +1300,7 @@
                     </template>
                     <template v-else>
                       <button
-                        v-if="row.estado === 'Por Corregir' && !row.legacy"
+                        v-if="row.estado === 'Por Corregir' && !esLegacyHistorico(row)"
                         class="dash-btn-edit"
                         type="button"
                         @click="openModalCorregir(row)"
@@ -1284,7 +1308,17 @@
                         Corregir Rendición
                       </button>
                       <button
-                        v-if="canDevForceDelete && !row.legacy && row.id"
+                        v-if="puedeAdjuntarComprobanteGasto(row)"
+                        class="dash-btn-ghost-sm"
+                        type="button"
+                        @click="triggerAdjuntarComprobante('gasto', row)"
+                      >
+                        {{
+                          row.comprobanteNombre ? 'Cambiar comprobante' : 'Subir comprobante'
+                        }}
+                      </button>
+                      <button
+                        v-if="canDevForceDelete && !esLegacyHistorico(row) && row.id"
                         class="dash-btn-icon dash-btn-icon--danger"
                         type="button"
                         title="Hard delete (Dev)"
@@ -1292,7 +1326,14 @@
                       >
                         <i class="fa-solid fa-trash" aria-hidden="true"></i>
                       </button>
-                      <span v-else-if="!(row.estado === 'Por Corregir' && !row.legacy)" class="dash-muted">-</span>
+                      <span
+                        v-else-if="
+                          !(row.estado === 'Por Corregir' && !esLegacyHistorico(row)) &&
+                          !puedeAdjuntarComprobanteGasto(row)
+                        "
+                        class="dash-muted"
+                        >-</span
+                      >
                     </template>
                   </div>
                 </td>
@@ -1319,15 +1360,15 @@
                 <p class="dash-hint">
                   <template v-if="canSkipComprobanteIa">
                     Bypass Super Admin Dev: se guarda el comprobante sin validar monto
-                    <template v-if="pendingVerifyKind === 'gasto' && gasto.tipo === 'Factura'">
-                      ni N° de factura
+                    <template v-if="pendingVerifyKind === 'gasto' && gastoRequiereNumeroDocto">
+                      ni N° de documento
                     </template>
                     con IA.
                   </template>
                   <template v-else>
                     La IA revisa que el monto
-                    <template v-if="pendingVerifyKind === 'gasto' && gasto.tipo === 'Factura'">
-                      y el N° de factura
+                    <template v-if="pendingVerifyKind === 'gasto' && gastoRequiereNumeroDocto">
+                      y el N° de documento
                     </template>
                     sean legibles y coincidan con lo declarado.
                   </template>
@@ -1397,8 +1438,14 @@
 
             <div v-else-if="modalVerificar.phase === 'ok'" class="dash-verify-body">
               <p class="dash-verify-ok">
-                Documento validado. Guardando
-                {{ pendingVerifyKind === 'anticipo' ? 'asignación' : 'rendición' }}…
+                Documento validado.
+                <template v-if="pendingVerifyKind === 'gasto-adjunto' || pendingVerifyKind === 'anticipo-adjunto'">
+                  Guardando comprobante…
+                </template>
+                <template v-else>
+                  Guardando
+                  {{ pendingVerifyKind === 'anticipo' ? 'asignación' : 'rendición' }}…
+                </template>
               </p>
             </div>
           </div>
@@ -1804,6 +1851,22 @@
                 <p class="dash-hint">
                   Completa los datos de la asignación entregada.
                 </p>
+                <div class="dash-alert dash-alert--warn">
+                  <p>
+                    <strong>Importante:</strong> una vez guardada, la asignación
+                    <strong>no se puede editar ni eliminar</strong>. Revise bien los datos antes de
+                    guardar.
+                  </p>
+                  <p>
+                    <strong>Todos los campos son obligatorios</strong> (incl.
+                    <strong>N° Doc / Vale</strong>, <strong>observaciones</strong> y
+                    <strong>comprobante</strong>).
+                  </p>
+                  <p>
+                    Si adjunta una <strong>foto</strong> (no PDF), asegúrese de que se vea
+                    claramente el <strong>comprobante</strong>.
+                  </p>
+                </div>
               </div>
               <button
                 class="dash-modal-close"
@@ -1818,7 +1881,7 @@
             <form class="dash-anticipo-form" @submit.prevent="onSaveAsignacion">
               <div class="dash-form dash-gasto-grid-4">
                 <div class="dash-field">
-                  <label>Fondo Fijo / Caja</label>
+                  <label>Fondo Fijo / Caja *</label>
                   <select v-model="asignacion.fondo">
                     <option
                       v-for="c in cajasActivasOpciones"
@@ -1830,11 +1893,11 @@
                   </select>
                 </div>
                 <div class="dash-field">
-                  <label>Fecha</label>
+                  <label>Fecha *</label>
                   <input v-model="asignacion.fecha" type="date" />
                 </div>
                 <div class="dash-field">
-                  <label>Trabajador</label>
+                  <label>Trabajador *</label>
                   <div class="dash-combobox">
                     <input
                       v-model="anticipoTrabajadorQuery"
@@ -1877,18 +1940,19 @@
                   </div>
                 </div>
                 <div class="dash-field">
-                  <label>N° Doc / Vale</label>
+                  <label>N° Doc / Vale *</label>
                   <input
                     v-model="asignacion.doc"
                     type="text"
                     placeholder="N° de comprobante..."
+                    required
                   />
                 </div>
               </div>
 
               <div class="dash-form dash-gasto-grid-4 dash-form--section">
                 <div class="dash-field">
-                  <label>Monto ($)</label>
+                  <label>Monto ($) *</label>
                   <input
                     :value="asignacion.monto"
                     type="text"
@@ -1971,7 +2035,7 @@
 
               <div class="dash-form--section">
                 <div class="dash-desc-head">
-                  <label class="dash-field-label">Observaciones / Motivo</label>
+                  <label class="dash-field-label">Observaciones / Motivo *</label>
                   <span
                     class="dash-word-count"
                     :class="{ 'dash-word-count--over': letrasObservacionAnticipo > 500 }"
@@ -1985,6 +2049,7 @@
                   maxlength="500"
                   placeholder="Detalle amplio de la asignación..."
                   class="dash-textarea"
+                  required
                   @input="onAnticipoObservacionInput"
                 ></textarea>
               </div>
@@ -2064,13 +2129,20 @@
                 <th>Observaciones</th>
                 <th class="dash-table-center">Adjunto</th>
                 <th class="dash-table-right">Monto</th>
-                <th v-if="canDevForceDelete" class="dash-table-center">Acciones</th>
+                <th class="dash-table-center">Acciones</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="row in asignacionesFiltradas" :key="row.doc">
+              <tr
+                v-for="row in asignacionesFiltradas"
+                :key="row.doc"
+                :class="{ 'dash-row-legacy': row.legacy }"
+              >
                 <td class="dash-mono">{{ row.fecha }}</td>
-                <td class="dash-table-strong">{{ row.conductor }}</td>
+                <td class="dash-table-strong">
+                  <span v-if="row.legacy" class="dash-badge dash-badge--legacy">Legacy</span>
+                  {{ row.conductor }}
+                </td>
                 <td>{{ row.doc }}</td>
                 <td>{{ row.bancoOrigen || '-' }}</td>
                 <td class="dash-mono">{{ row.numeroCuenta || '-' }}</td>
@@ -2088,16 +2160,33 @@
                   <span v-else class="dash-adjunto-empty">-</span>
                 </td>
                 <td class="dash-table-right dash-rinde">{{ row.monto }}</td>
-                <td v-if="canDevForceDelete" class="dash-table-center dash-table-actions">
-                  <button
-                    v-if="row.id"
-                    class="dash-btn-icon dash-btn-icon--danger"
-                    type="button"
-                    title="Hard delete (Dev)"
-                    @click="onHardDeleteAnticipo(row)"
-                  >
-                    <i class="fa-solid fa-trash" aria-hidden="true"></i>
-                  </button>
+                <td class="dash-table-center dash-table-actions">
+                  <div class="dash-actions-cell">
+                    <button
+                      v-if="puedeAdjuntarComprobanteAsignacion(row)"
+                      class="dash-btn-ghost-sm"
+                      type="button"
+                      @click="triggerAdjuntarComprobante('anticipo', row)"
+                    >
+                      {{
+                        row.comprobanteNombre ? 'Cambiar comprobante' : 'Subir comprobante'
+                      }}
+                    </button>
+                    <button
+                      v-if="canDevForceDelete && row.id"
+                      class="dash-btn-icon dash-btn-icon--danger"
+                      type="button"
+                      title="Hard delete (Dev)"
+                      @click="onHardDeleteAnticipo(row)"
+                    >
+                      <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                    </button>
+                    <span
+                      v-else-if="!puedeAdjuntarComprobanteAsignacion(row)"
+                      class="dash-muted"
+                      >-</span
+                    >
+                  </div>
                 </td>
               </tr>
             </tbody>
@@ -2869,7 +2958,7 @@
                     <input
                       :value="adminForm.rut"
                       type="text"
-                      placeholder="12.345.678-9"
+                      placeholder=""
                       @input="adminForm.rut = fromRutInput($event.target.value).display"
                     />
                   </div>
@@ -2878,7 +2967,7 @@
                     <input
                       v-model="adminForm.nombre"
                       type="text"
-                      placeholder="Juan Sanhueza"
+                      placeholder="Nombre Apellido"
                     />
                   </div>
                   <div class="dash-field">
@@ -2886,7 +2975,7 @@
                     <input
                       v-model="adminForm.correo"
                       type="email"
-                      placeholder="jsanhueza@basaltodrilling.cl"
+                      placeholder="usuario@empresa.cl"
                     />
                   </div>
                 </div>
@@ -2939,8 +3028,8 @@
             <div v-else class="dash-panel dash-panel--placeholder">
               <p>
                 Tu rol ({{ sessionAdminNivel }}) no puede crear administradores. Solo
-                <strong>Super Admin - Dev</strong> crea Super Admins, y
-                <strong>Super Admin / Super Admin - Dev</strong> crean Administradores de Caja.
+                <strong>Super Admin - Dev</strong> crea Super Admins y Administradores de Caja, y
+                <strong>Super Admin</strong> crea Administradores de Caja.
               </p>
             </div>
 
@@ -3319,7 +3408,7 @@
                       :value="tarjetaForm.titular"
                       type="text"
                       maxlength="100"
-                      placeholder="Ej: Juan Sanhueza / Caja Chica"
+                      placeholder="Ej: Nombre Titular / Caja Chica"
                       @input="onTarjetaTitularInput"
                     />
                   </div>
@@ -3450,8 +3539,8 @@
                   <label>Usuario / Actor</label>
                   <select v-model="auditoriaFiltro.actor">
                     <option>**Todos los Usuarios**</option>
-                    <option>Juan Sanhueza (Super Admin - Dev)</option>
-                    <option>Carlos Muñoz (Admin Caja)</option>
+                    <option>Administrador (ejemplo)</option>
+                    <option>Usuario Caja (ejemplo)</option>
                   </select>
                 </div>
 
@@ -3672,6 +3761,8 @@ const saveOk = ref('')
 const importExcelLoading = ref(false)
 const gastoImportInputEl = ref(null)
 const asignacionImportInputEl = ref(null)
+const legacyComprobanteInputEl = ref(null)
+const pendingLegacyAttach = ref(null)
 
 const cajaActiva = ref('')
 const mesActivo = ref('')
@@ -3864,7 +3955,7 @@ let pendingGastoSave = null
 let pendingAnticipoSave = null
 
 const verifyComprobanteFile = computed(() =>
-  pendingVerifyKind.value === 'anticipo'
+  pendingVerifyKind.value === 'anticipo' || pendingVerifyKind.value === 'anticipo-adjunto'
     ? anticipoComprobanteFile.value
     : gastoComprobanteFile.value
 )
@@ -3977,11 +4068,19 @@ const letrasObservacionAnticipo = computed(
   () => String(asignacion.observaciones || '').length
 )
 
-const verifyComprobanteNombre = computed(() =>
-  pendingVerifyKind.value === 'anticipo'
-    ? asignacion.comprobanteNombre
-    : gasto.comprobanteNombre
-)
+const verifyComprobanteNombre = computed(() => {
+  if (
+    pendingVerifyKind.value === 'anticipo' ||
+    pendingVerifyKind.value === 'anticipo-adjunto'
+  ) {
+    return (
+      anticipoComprobanteFile.value?.name ||
+      asignacion.comprobanteNombre ||
+      ''
+    )
+  }
+  return gastoComprobanteFile.value?.name || gasto.comprobanteNombre || ''
+})
 
 const modalAsignarCajas = reactive({
   open: false,
@@ -4057,7 +4156,7 @@ const adminRutStatus = computed(() => rutStatusLabel(adminForm.rut))
 
 /**
  * Jerarquía de Administración (preparado para BD):
- * - Super Admin - Dev: crea Super Admin - Dev, Super Admin y Admin de Caja
+ * - Super Admin - Dev: único; crea Super Admin y Admin de Caja (no se puede crear otro Dev)
  * - Super Admin: crea solo Admin de Caja (no puede crear Super Admins)
  * - Administrador de Caja: no crea admins; sí puede crear Usuarios
  * - Usuarios rendidores: los crean Admin, Super Admin y Super Admin - Dev
@@ -4349,7 +4448,7 @@ function onAnticipoTrabajadorBlur() {
 }
 
 function onGastoTipoChange() {
-  if (gasto.tipo !== 'Factura') {
+  if (!gastoMuestraNumeroDocto.value) {
     gasto.numero = ''
   }
 }
@@ -4391,11 +4490,7 @@ watch(
 
 const creatableAdminRoles = computed(() => {
   if (sessionAdminNivel.value === ROLE_DEV) {
-    return [
-      'Super Admin - Dev (Acceso Total + Eliminación)',
-      'Super Admin',
-      'Administrador de Caja'
-    ]
+    return ['Super Admin', 'Administrador de Caja']
   }
   if (sessionAdminNivel.value === ROLE_SUPER) {
     return ['Administrador de Caja']
@@ -4403,19 +4498,21 @@ const creatableAdminRoles = computed(() => {
   return []
 })
 
-/** Roles disponibles al editar: creatables + el rol actual del admin (para no forzar cambio) */
+const isEditingSuperAdminDev = computed(() => {
+  const current = modalEditAdmin.rol || ''
+  return current === ROLE_DEV || current.includes('Dev')
+})
+
+/** Roles disponibles al editar: creatables + el rol actual (Dev solo lectura si aplica) */
 const editableAdminRoles = computed(() => {
-  const base = [...creatableAdminRoles.value]
   const current = modalEditAdmin.rol
+  if (current && (current === ROLE_DEV || current.includes('Dev'))) {
+    const full = 'Super Admin - Dev (Acceso Total + Eliminación)'
+    return [current.includes('Acceso Total') ? current : full]
+  }
+  const base = [...creatableAdminRoles.value]
   if (current && !base.includes(current)) {
-    // Mapear labels cortos de la tabla a opciones del select
-    if (current === 'Super Admin - Dev' || current.includes('Dev')) {
-      const full = 'Super Admin - Dev (Acceso Total + Eliminación)'
-      if (sessionAdminNivel.value === ROLE_DEV && !base.includes(full)) base.unshift(full)
-      else if (!base.includes(current)) base.unshift(current)
-    } else if (!base.includes(current)) {
-      base.unshift(current)
-    }
+    base.unshift(current)
   }
   return base
 })
@@ -4487,6 +4584,18 @@ const tarjetasEmpresa = ref([])
 
 const gastoRequiereTarjetaDigits = computed(
   () => gasto.metodoPago === 'debito' || gasto.metodoPago === 'credito'
+)
+
+/** N° docto: Peaje no; Boleta opcional; Factura y Guía Despacho obligatorio */
+const gastoMuestraNumeroDocto = computed(
+  () =>
+    gasto.tipo === 'Boleta' ||
+    gasto.tipo === 'Factura' ||
+    gasto.tipo === 'Guía Despacho'
+)
+
+const gastoRequiereNumeroDocto = computed(
+  () => gasto.tipo === 'Factura' || gasto.tipo === 'Guía Despacho'
 )
 
 const tarjetasParaGasto = computed(() => {
@@ -5117,12 +5226,19 @@ function onAsignacionFile(event) {
 
 function onVerificarReplaceFile(event) {
   const file = event.target.files?.[0] || null
-  if (pendingVerifyKind.value === 'anticipo') {
+  if (
+    pendingVerifyKind.value === 'anticipo' ||
+    pendingVerifyKind.value === 'anticipo-adjunto'
+  ) {
     anticipoComprobanteFile.value = file
-    asignacion.comprobanteNombre = file ? file.name : ''
+    if (pendingVerifyKind.value === 'anticipo') {
+      asignacion.comprobanteNombre = file ? file.name : ''
+    }
   } else {
     gastoComprobanteFile.value = file
-    gasto.comprobanteNombre = file ? file.name : ''
+    if (pendingVerifyKind.value === 'gasto') {
+      gasto.comprobanteNombre = file ? file.name : ''
+    }
   }
 }
 
@@ -5139,6 +5255,7 @@ function onCloseModalVerificar() {
   pendingVerifyKind.value = null
   pendingGastoSave = null
   pendingAnticipoSave = null
+  pendingLegacyAttach.value = null
 }
 
 async function verificarComprobanteConIa() {
@@ -5151,14 +5268,46 @@ async function verificarComprobanteConIa() {
   const fd = new FormData()
   fd.append('comprobante', file)
 
-  if (pendingVerifyKind.value === 'anticipo') {
+  if (
+    pendingVerifyKind.value === 'anticipo' ||
+    pendingVerifyKind.value === 'anticipo-adjunto'
+  ) {
     const payload = pendingAnticipoSave || {}
-    fd.append('monto', String(payload.monto || parseMontoInput(asignacion.monto) || ''))
+    const row = pendingLegacyAttach.value?.row
+    fd.append(
+      'monto',
+      String(
+        payload.monto ||
+          parseMontoNumber(row?.monto) ||
+          parseMontoInput(asignacion.monto) ||
+          ''
+      )
+    )
     fd.append('tipo_documento', 'Vale')
     fd.append('tipo_movimiento', 'asignacion')
-    if (payload.caja_id) fd.append('caja_id', String(payload.caja_id))
-    if (payload.trabajador_id) fd.append('trabajador_id', String(payload.trabajador_id))
-    if (payload.fecha) fd.append('fecha', String(payload.fecha))
+    const cajaId = payload.caja_id || row?.cajaId
+    const trabajadorId = payload.trabajador_id || row?.trabajadorId
+    const fecha = payload.fecha || row?.fechaSort
+    if (cajaId) fd.append('caja_id', String(cajaId))
+    if (trabajadorId) fd.append('trabajador_id', String(trabajadorId))
+    if (fecha) fd.append('fecha', String(fecha))
+  } else if (pendingVerifyKind.value === 'gasto-adjunto') {
+    const row = pendingLegacyAttach.value?.row
+    const tipo =
+      row?.tipoDocumento ||
+      String(row?.docto || 'Boleta').split('#')[0].trim() ||
+      'Boleta'
+    const numero =
+      row?.numeroDocumento ||
+      (String(row?.docto || '').match(/#\s*(.+)\s*$/) || [])[1]?.trim() ||
+      ''
+    fd.append('monto', String(parseMontoNumber(row?.monto) || ''))
+    fd.append('tipo_documento', tipo)
+    fd.append('tipo_movimiento', 'gasto')
+    if (row?.cajaId) fd.append('caja_id', String(row.cajaId))
+    if (row?.trabajadorId) fd.append('trabajador_id', String(row.trabajadorId))
+    if (row?.fechaSort) fd.append('fecha', String(row.fechaSort))
+    if (numero) fd.append('numero_documento', String(numero))
   } else {
     const payload = pendingGastoSave || {}
     fd.append('monto', String(payload.monto || parseMontoInput(gasto.monto) || ''))
@@ -5167,7 +5316,7 @@ async function verificarComprobanteConIa() {
     if (payload.caja_id) fd.append('caja_id', String(payload.caja_id))
     if (payload.trabajador_id) fd.append('trabajador_id', String(payload.trabajador_id))
     if (payload.fecha_documento) fd.append('fecha', String(payload.fecha_documento))
-    if (gasto.tipo === 'Factura') {
+    if (gastoMuestraNumeroDocto.value && gasto.numero.trim()) {
       fd.append('numero_documento', gasto.numero.trim())
     }
   }
@@ -5194,7 +5343,29 @@ async function ejecutarVerificacionYGuardado() {
     }
 
     modalVerificar.phase = 'ok'
-    if (pendingVerifyKind.value === 'anticipo') {
+    if (pendingVerifyKind.value === 'anticipo-adjunto') {
+      const row = pendingLegacyAttach.value?.row
+      if (!row?.id) throw new Error('No hay asignación para adjuntar comprobante')
+      await api.updateAnticipo(row.id, {
+        comprobante_url: verifyResult.comprobante_url
+      })
+      await loadDashboardData()
+      modalVerificar.open = false
+      pendingVerifyKind.value = null
+      pendingLegacyAttach.value = null
+      anticipoComprobanteFile.value = null
+    } else if (pendingVerifyKind.value === 'gasto-adjunto') {
+      const row = pendingLegacyAttach.value?.row
+      if (!row?.id) throw new Error('No hay gasto para adjuntar comprobante')
+      await api.updateRendicion(row.id, {
+        comprobante_url: verifyResult.comprobante_url
+      })
+      await loadDashboardData()
+      modalVerificar.open = false
+      pendingVerifyKind.value = null
+      pendingLegacyAttach.value = null
+      gastoComprobanteFile.value = null
+    } else if (pendingVerifyKind.value === 'anticipo') {
       if (!pendingAnticipoSave) throw new Error('No hay anticipo pendiente de guardar')
       await api.createAnticipo({
         ...pendingAnticipoSave,
@@ -5228,7 +5399,41 @@ async function ejecutarVerificacionYGuardado() {
 async function retryVerificarYGuardar() {
   if (!verifyComprobanteFile.value) return
   if (pendingVerifyKind.value === 'anticipo' && !pendingAnticipoSave) return
-  if (pendingVerifyKind.value !== 'anticipo' && !pendingGastoSave) return
+  if (pendingVerifyKind.value === 'gasto' && !pendingGastoSave) return
+  if (
+    (pendingVerifyKind.value === 'gasto-adjunto' ||
+      pendingVerifyKind.value === 'anticipo-adjunto') &&
+    !pendingLegacyAttach.value?.row?.id
+  ) {
+    return
+  }
+  await ejecutarVerificacionYGuardado()
+}
+
+function triggerAdjuntarComprobante(kind, row) {
+  if (!row?.id) return
+  pendingLegacyAttach.value = { kind, row }
+  if (legacyComprobanteInputEl.value) {
+    legacyComprobanteInputEl.value.value = ''
+    legacyComprobanteInputEl.value.click()
+  }
+}
+
+async function onLegacyComprobanteFile(event) {
+  const file = event.target.files?.[0] || null
+  if (event.target) event.target.value = ''
+  if (!file || !pendingLegacyAttach.value?.row?.id) {
+    pendingLegacyAttach.value = null
+    return
+  }
+  const { kind } = pendingLegacyAttach.value
+  if (kind === 'anticipo') {
+    anticipoComprobanteFile.value = file
+    pendingVerifyKind.value = 'anticipo-adjunto'
+  } else {
+    gastoComprobanteFile.value = file
+    pendingVerifyKind.value = 'gasto-adjunto'
+  }
   await ejecutarVerificacionYGuardado()
 }
 
@@ -5279,9 +5484,28 @@ function mismoTrabajadorCaja(a, b) {
   return Boolean(a.cajaGroupKey) && a.cajaGroupKey === b.cajaGroupKey
 }
 
+/** Histórico migrado (`rendiciones_legacy`): solo lectura. */
+function esLegacyHistorico(row) {
+  return Boolean(row?.legacyId)
+}
+
+/** Import Excel operativo (`es_legacy` en gastos/anticipos): badge Legacy + adjuntar comprobante. */
+function esLegacyOperacional(row) {
+  return Boolean(row?.legacy && row?.id && !row?.legacyId)
+}
+
+function puedeAdjuntarComprobanteGasto(row) {
+  return esLegacyOperacional(row)
+}
+
+function puedeAdjuntarComprobanteAsignacion(row) {
+  if (!row?.id) return false
+  return Boolean(row.legacy) || !row.comprobanteNombre
+}
+
 /** Pago con tarjeta de la empresa (vinculada) → Sin Devolución. */
 function esPagoTarjetaEmpresa(row) {
-  if (!row || row.legacy) return false
+  if (!row || esLegacyHistorico(row)) return false
   return (
     Boolean(row.tarjetaId) &&
     (row.metodoPago === 'debito' || row.metodoPago === 'credito')
@@ -5453,7 +5677,7 @@ async function onSaveRespuesta() {
   if (modalResponder.comentario.length > 500) return
 
   const row = movimientos.value.find((m) => m.rinde === modalResponder.rinde)
-  if (!row || row.legacy || !row.id) {
+  if (!row || esLegacyHistorico(row) || !row.id) {
     closeModalResponder()
     return
   }
@@ -5501,7 +5725,7 @@ async function onSaveRespuesta() {
 }
 
 function openModalCorregir(row) {
-  const numeroMatch = String(row.docto || '').match(/#?\s*(\d+)/)
+  const numeroMatch = String(row.docto || '').match(/#\s*(.+)\s*$/)
   const montoNum = String(row.monto || '').replace(/\D/g, '')
   let tipoBase = String(row.docto || 'Boleta').split('#')[0].trim() || 'Boleta'
   if (tipoBase === 'Ticket Peaje') tipoBase = 'Peaje'
@@ -5510,7 +5734,7 @@ function openModalCorregir(row) {
   modalCorregir.open = true
   modalCorregir.rinde = row.rinde
   modalCorregir.trabajador = row.trabajador || ''
-  modalCorregir.numeroLocked = numeroMatch ? numeroMatch[1] : String(row.docto || '')
+  modalCorregir.numeroLocked = numeroMatch ? numeroMatch[1].trim() : ''
   modalCorregir.observacionAdmin =
     row.observacionAdmin || 'Se solicita corrección de la rendición.'
   modalCorregir.intento = row.intento || 1
@@ -5572,7 +5796,7 @@ function labelPago(metodoPago) {
 
 async function onSaveCorreccion() {
   const row = movimientos.value.find((m) => m.rinde === modalCorregir.rinde)
-  if (!row || row.legacy || !row.id) {
+  if (!row || esLegacyHistorico(row) || !row.id) {
     closeModalCorregir()
     return
   }
@@ -5582,8 +5806,22 @@ async function onSaveCorreccion() {
 
   if (campos.tipo_docto) {
     payload.tipo_documento = modalCorregir.tipo
-    payload.numero_documento =
-      modalCorregir.tipo === 'Factura' ? modalCorregir.numeroLocked || null : null
+    if (modalCorregir.tipo === 'Peaje') {
+      payload.numero_documento = null
+    } else if (
+      modalCorregir.tipo === 'Factura' ||
+      modalCorregir.tipo === 'Guía Despacho' ||
+      modalCorregir.tipo === 'Boleta'
+    ) {
+      payload.numero_documento = modalCorregir.numeroLocked || null
+      if (
+        (modalCorregir.tipo === 'Factura' || modalCorregir.tipo === 'Guía Despacho') &&
+        !payload.numero_documento
+      ) {
+        saveError.value = `N° de documento es obligatorio para ${modalCorregir.tipo}.`
+        return
+      }
+    }
   }
   if (campos.monto) {
     payload.monto = parseMontoInput(modalCorregir.monto)
@@ -5621,7 +5859,13 @@ async function onSaveCorreccion() {
       )
       fd.append('tipo_movimiento', 'gasto')
       fd.append('tipo_documento', modalCorregir.tipo || row.docto || 'Boleta')
-      if (modalCorregir.tipo === 'Factura' && modalCorregir.numeroLocked) {
+      const tipoCorr = modalCorregir.tipo || ''
+      if (
+        (tipoCorr === 'Factura' ||
+          tipoCorr === 'Guía Despacho' ||
+          tipoCorr === 'Boleta') &&
+        modalCorregir.numeroLocked
+      ) {
         fd.append('numero_documento', String(modalCorregir.numeroLocked))
       }
       if (row.cajaId) fd.append('caja_id', String(row.cajaId))
@@ -5673,7 +5917,14 @@ async function onSaveGasto() {
     saveError.value = 'La descripción / observación es obligatoria.'
     return
   }
-  if (gasto.tipo === 'Factura' && !gasto.numero.trim() && !canSkipComprobanteIa.value) return
+  if (
+    gastoRequiereNumeroDocto.value &&
+    !gasto.numero.trim() &&
+    !canSkipComprobanteIa.value
+  ) {
+    saveError.value = `N° de documento es obligatorio para ${gasto.tipo}.`
+    return
+  }
   if (!gasto.cajaGroupKey) return
   if (!gastoComprobanteFile.value) {
     saveError.value = 'El comprobante es obligatorio. Adjunta PDF, PNG o JPG.'
@@ -5722,7 +5973,9 @@ async function onSaveGasto() {
     trabajador_id: trabajadorId,
     fecha_documento: gasto.fecha,
     tipo_documento: gasto.tipo,
-    numero_documento: gasto.tipo === 'Factura' ? gasto.numero.trim() : null,
+    numero_documento: gastoMuestraNumeroDocto.value
+      ? gasto.numero.trim() || null
+      : null,
     monto: montoNum,
     origen_pago: origenFromMetodo(gasto.metodoPago),
     tarjeta_id: resolveTarjetaIdParaGasto(),
@@ -5795,33 +6048,51 @@ function closeFormAnticipo() {
 }
 
 async function onSaveAsignacion() {
-  if (!asignacion.trabajadorId || !asignacion.monto) return
-  if (letrasObservacionAnticipo.value > 500) return
-  if (!anticipoComprobanteFile.value) {
-    saveError.value = 'El comprobante es obligatorio. Adjunta PDF, PNG o JPG.'
+  const cajaId =
+    findCajaIdByGroupKey(asignacion.fondo) || findCajaIdForGasto(asignacion.fondo)
+  if (!asignacion.fondo || !cajaId) {
+    saveError.value = 'Selecciona una caja con presupuesto para el mes activo.'
+    return
+  }
+  if (!String(asignacion.fecha || '').trim()) {
+    saveError.value = 'La fecha es obligatoria.'
+    return
+  }
+  if (!asignacion.trabajadorId) {
+    saveError.value = 'Selecciona un trabajador.'
+    return
+  }
+  const codigoVale = String(asignacion.doc || '').trim()
+  if (!codigoVale) {
+    saveError.value = 'N° Doc / Vale es obligatorio.'
+    return
+  }
+  const montoNum = parseMontoInput(asignacion.monto)
+  if (!Number.isFinite(montoNum) || montoNum <= 0) {
+    saveError.value = 'Ingresa un monto válido mayor a 0.'
     return
   }
   const cuenta = String(asignacion.numeroCuenta || '').replace(/\D/g, '')
-  const banco = normalizeBancoOrigenInput(asignacion.bancoOrigen)
   if (!cuenta) {
     saveError.value = 'Número de cuenta es obligatorio.'
     return
   }
+  const banco = normalizeBancoOrigenInput(asignacion.bancoOrigen)
   if (!banco) {
     saveError.value = 'Banco origen es obligatorio.'
     return
   }
-
-  const cajaId =
-    findCajaIdByGroupKey(asignacion.fondo) || findCajaIdForGasto(asignacion.fondo)
-  if (!cajaId) {
-    saveError.value = 'Selecciona una caja con presupuesto para el mes activo'
+  if (!anticipoComprobanteFile.value) {
+    saveError.value = 'El comprobante es obligatorio. Adjunta PDF, PNG o JPG.'
     return
   }
-
-  const montoNum = parseMontoInput(asignacion.monto)
-  if (!Number.isFinite(montoNum) || montoNum <= 0) {
-    saveError.value = 'Ingresa un monto válido.'
+  const observacion = String(asignacion.observaciones || '').trim()
+  if (!observacion) {
+    saveError.value = 'Las observaciones / motivo son obligatorias.'
+    return
+  }
+  if (observacion.length > 500 || letrasObservacionAnticipo.value > 500) {
+    saveError.value = 'Las observaciones no pueden superar 500 caracteres.'
     return
   }
 
@@ -5832,8 +6103,8 @@ async function onSaveAsignacion() {
     trabajador_id: Number(asignacion.trabajadorId),
     fecha: asignacion.fecha,
     monto: montoNum,
-    observacion: asignacion.observaciones.trim() || null,
-    codigo_vale: asignacion.doc.trim() || undefined,
+    observacion,
+    codigo_vale: codigoVale,
     numero_cuenta: cuenta,
     banco_origen: banco
   }
@@ -6248,7 +6519,7 @@ async function onDeleteCentroCosto(cc) {
 }
 
 async function onHardDeleteRendicion(row) {
-  if (!canDevForceDelete.value || !row?.id || row.legacy) return
+  if (!canDevForceDelete.value || !row?.id || esLegacyHistorico(row)) return
   if (
     !confirm(
       `¿HARD DELETE de la rendición ${row.rinde}? Esta acción no se puede deshacer.`
@@ -6447,9 +6718,7 @@ async function onSavePersonal() {
 function adminRolLabelForEdit(admin) {
   const rol = admin?.rol || ''
   if (rol.includes('Dev') || admin?.rolApi === 'SUPER_ADMIN_DEV') {
-    return sessionAdminNivel.value === ROLE_DEV
-      ? 'Super Admin - Dev (Acceso Total + Eliminación)'
-      : 'Super Admin - Dev'
+    return 'Super Admin - Dev (Acceso Total + Eliminación)'
   }
   if (rol.includes('Caja') || admin?.rolApi === 'ADMIN_CAJA') {
     return ROLE_ADMIN_CAJA
@@ -6486,12 +6755,16 @@ async function onSaveEditAdmin() {
   try {
     modalEditAdmin.error = ''
     saveError.value = ''
-    await api.updateUsuario(modalEditAdmin.id, {
+    const payload = {
       correo: modalEditAdmin.correo.trim(),
-      rol: rolApiFromUi(shortAdminRol(modalEditAdmin.rol)),
       estado: modalEditAdmin.estado,
       nombre: modalEditAdmin.nombre.trim()
-    })
+    }
+    // No permitir cambiar hacia/desde Super Admin - Dev desde la UI
+    if (!isEditingSuperAdminDev.value) {
+      payload.rol = rolApiFromUi(shortAdminRol(modalEditAdmin.rol))
+    }
+    await api.updateUsuario(modalEditAdmin.id, payload)
     await loadDashboardData()
     closeModalEditAdmin()
   } catch (err) {
@@ -6751,6 +7024,7 @@ async function onSaveAdmin() {
   if (!rutLimpio || !adminForm.nombre.trim() || !adminForm.correo.trim()) return
   if (!validarRutChileno(rutLimpio)) return
   if (!creatableAdminRoles.value.includes(adminForm.rol)) return
+  if (adminForm.rol.includes('Dev')) return
   if (adminForm.passType === 'manual' && !adminForm.password.trim()) return
 
   const passwordTemporal =

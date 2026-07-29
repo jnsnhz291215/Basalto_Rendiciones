@@ -8,6 +8,7 @@ const {
   removeComprobanteFile,
   normalizeTipoMovimiento
 } = require('./comprobanteStorage')
+const { tipoRequiereNumeroDocumento } = require('./excelImport')
 
 const ALLOWED_MIME = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'])
 
@@ -49,7 +50,7 @@ function resolveMime(file) {
 }
 
 function buildPrompt({ tipoDocumento, montoEsperado, numeroEsperado }) {
-  const esFactura = String(tipoDocumento || '') === 'Factura'
+  const requiereNumero = tipoRequiereNumeroDocumento(tipoDocumento)
   return `Eres un validador de comprobantes chilenos (boleta, factura, peaje, guía de despacho u otro).
 Analiza el documento adjunto y responde SOLO un JSON con esta forma exacta:
 {
@@ -68,7 +69,11 @@ Reglas:
 - No inventes valores. Si dudás, marca visible=false y null.
 - Tipo declarado por el usuario: ${tipoDocumento || 'desconocido'}.
 - Monto declarado por el usuario: ${montoEsperado}.
-${esFactura ? `- Número de factura declarado: ${numeroEsperado || '(vacío)'}.` : '- No es factura: el número es opcional.'}
+${
+  requiereNumero
+    ? `- Número de documento declarado: ${numeroEsperado || '(vacío)'}. Debe coincidir si es legible.`
+    : '- El número de documento es opcional para este tipo.'
+}
 - notas: breve explicación en español.`
 }
 
@@ -116,12 +121,12 @@ async function guardarYVerificarComprobante({
     }
   }
 
-  const esFactura = String(tipoDocumento || '') === 'Factura'
+  const requiereNumero = tipoRequiereNumeroDocumento(tipoDocumento)
   const numeroEsperado = String(numeroDocumento || '').trim()
-  if (esFactura && !numeroEsperado && !skipIaVerify && mov === 'gasto') {
+  if (requiereNumero && !numeroEsperado && !skipIaVerify && mov === 'gasto') {
     return {
       ok: false,
-      errores: ['Para Factura debes ingresar el N° de documento.'],
+      errores: [`Para ${tipoDocumento} debes ingresar el N° de documento.`],
       detalle: {}
     }
   }
@@ -196,14 +201,14 @@ async function guardarYVerificarComprobante({
   const numeroDetectado = parsed.numero_documento != null ? String(parsed.numero_documento) : null
   const numeroVisible = parsed.numero_visible !== false && Boolean(normalizeNumeroDoc(numeroDetectado))
 
-  if (esFactura) {
+  if (requiereNumero) {
     if (!numeroVisible) {
       errores.push(
-        'No se pudo leer el N° de factura en el comprobante. Debe verse claramente el número de documento.'
+        `No se pudo leer el N° de documento en el comprobante. Debe verse claramente el número (${tipoDocumento}).`
       )
     } else if (!numerosCoinciden(numeroEsperado, numeroDetectado)) {
       errores.push(
-        `El N° de factura del comprobante (${numeroDetectado}) no coincide con el declarado (${numeroEsperado}).`
+        `El N° de documento del comprobante (${numeroDetectado}) no coincide con el declarado (${numeroEsperado}).`
       )
     }
   }
