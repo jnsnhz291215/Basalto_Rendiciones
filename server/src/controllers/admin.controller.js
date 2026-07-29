@@ -15,6 +15,7 @@ const {
 const {
   ensureCuentasBancoSchema,
   upsertCuentaBanco,
+  resolveCentroCobro,
   normalizeNumeroCuenta,
   normalizeBancoNombre
 } = require('../utils/ensureCuentasBancoSchema')
@@ -1269,28 +1270,51 @@ async function softDeleteTarjeta(req, res) {
   }
 }
 
-/* --- Cuentas de Banco (catálogo 1:1 número ↔ banco) --- */
+/* --- Cuentas de Banco (catálogo 1:1 número ↔ banco + CC) --- */
+
+const CUENTA_BANCO_SELECT = `SELECT cb.id, cb.numero_cuenta, cb.banco, cb.centro_cobro_id,
+              cc.nombre AS centro_cobro_nombre,
+              cb.created_at, cb.updated_at
+       FROM cuentas_banco cb
+       LEFT JOIN centros_costo cc ON cc.id = cb.centro_cobro_id AND cc.is_deleted = FALSE`
 
 async function listCuentasBanco(req, res) {
   try {
     await ensureCuentasBancoSchema()
     const q = normalizeNumeroCuenta(req.query.q || '')
+    const ccFilter = Number(req.query.centro_cobro_id)
+    const hasCc = Number.isFinite(ccFilter) && ccFilter > 0
     let rows
-    if (q) {
+    if (q && hasCc) {
       rows = await query(
-        `SELECT id, numero_cuenta, banco, created_at, updated_at
-         FROM cuentas_banco
-         WHERE is_deleted = FALSE AND numero_cuenta LIKE ?
-         ORDER BY banco ASC, numero_cuenta ASC
+        `${CUENTA_BANCO_SELECT}
+         WHERE cb.is_deleted = FALSE
+           AND cb.numero_cuenta LIKE ?
+           AND cb.centro_cobro_id = ?
+         ORDER BY cb.banco ASC, cb.numero_cuenta ASC
+         LIMIT 100`,
+        [`%${q}%`, ccFilter]
+      )
+    } else if (q) {
+      rows = await query(
+        `${CUENTA_BANCO_SELECT}
+         WHERE cb.is_deleted = FALSE AND cb.numero_cuenta LIKE ?
+         ORDER BY cb.banco ASC, cb.numero_cuenta ASC
          LIMIT 100`,
         [`%${q}%`]
       )
+    } else if (hasCc) {
+      rows = await query(
+        `${CUENTA_BANCO_SELECT}
+         WHERE cb.is_deleted = FALSE AND cb.centro_cobro_id = ?
+         ORDER BY cb.banco ASC, cb.numero_cuenta ASC`,
+        [ccFilter]
+      )
     } else {
       rows = await query(
-        `SELECT id, numero_cuenta, banco, created_at, updated_at
-         FROM cuentas_banco
-         WHERE is_deleted = FALSE
-         ORDER BY banco ASC, numero_cuenta ASC`
+        `${CUENTA_BANCO_SELECT}
+         WHERE cb.is_deleted = FALSE
+         ORDER BY cc.nombre ASC, cb.banco ASC, cb.numero_cuenta ASC`
       )
     }
     return res.json(rows)
@@ -1303,7 +1327,7 @@ async function listCuentasBanco(req, res) {
 async function createCuentaBanco(req, res) {
   try {
     await ensureCuentasBancoSchema()
-    const { numero_cuenta, banco } = req.body || {}
+    const { numero_cuenta, banco, centro_cobro_id } = req.body || {}
     const numero = normalizeNumeroCuenta(numero_cuenta)
     const bancoNorm = normalizeBancoNombre(banco)
     if (!numero) {
@@ -1312,9 +1336,13 @@ async function createCuentaBanco(req, res) {
     if (!bancoNorm) {
       return res.status(400).json({ error: 'Banco es obligatorio' })
     }
+    const cc = await resolveCentroCobro(centro_cobro_id)
+    if (!cc) {
+      return res.status(400).json({ error: 'Centro de cobro (CC) es obligatorio' })
+    }
 
     const existing = await query(
-      `SELECT id, numero_cuenta, banco FROM cuentas_banco
+      `SELECT id, numero_cuenta, banco, centro_cobro_id FROM cuentas_banco
        WHERE numero_cuenta = ? AND is_deleted = FALSE LIMIT 1`,
       [numero]
     )
@@ -1324,7 +1352,7 @@ async function createCuentaBanco(req, res) {
       })
     }
 
-    const result = await upsertCuentaBanco(numero, bancoNorm)
+    const result = await upsertCuentaBanco(numero, bancoNorm, cc.id)
     if (!result.ok) {
       return res.status(result.status).json({ error: result.error })
     }
@@ -1334,7 +1362,7 @@ async function createCuentaBanco(req, res) {
       req.user.nombre,
       'CREAR',
       'Cuentas Banco',
-      `Cuenta ${result.cuenta.numero_cuenta} · ${result.cuenta.banco}`
+      `Cuenta ${result.cuenta.numero_cuenta} · ${result.cuenta.banco} · CC ${cc.nombre}`
     )
     return res.status(201).json(result.cuenta)
   } catch (err) {
@@ -1362,6 +1390,14 @@ async function updateCuentaBanco(req, res) {
       req.body?.banco !== undefined
         ? normalizeBancoNombre(req.body.banco)
         : normalizeBancoNombre(prev.banco)
+    const nextCcRaw =
+      req.body?.centro_cobro_id !== undefined
+        ? req.body.centro_cobro_id
+        : prev.centro_cobro_id
+    const cc = await resolveCentroCobro(nextCcRaw)
+    if (!cc) {
+      return res.status(400).json({ error: 'Centro de cobro (CC) es obligatorio' })
+    }
 
     if (!nextNumero) {
       return res.status(400).json({ error: 'Número de cuenta es obligatorio' })
@@ -1387,9 +1423,9 @@ async function updateCuentaBanco(req, res) {
     try {
       await query(
         `UPDATE cuentas_banco
-         SET numero_cuenta = ?, banco = ?
+         SET numero_cuenta = ?, banco = ?, centro_cobro_id = ?
          WHERE id = ? AND is_deleted = FALSE`,
-        [nextNumero, nextBanco, id]
+        [nextNumero, nextBanco, cc.id, id]
       )
     } catch (err) {
       if (err?.code === 'ER_DUP_ENTRY') {
@@ -1405,12 +1441,12 @@ async function updateCuentaBanco(req, res) {
       req.user.nombre,
       'MODIFICAR',
       'Cuentas Banco',
-      `Cuenta id=${id}: ${nextNumero} · ${nextBanco}`
+      `Cuenta id=${id}: ${nextNumero} · ${nextBanco} · CC ${cc.nombre}`
     )
 
     const updated = await query(
-      `SELECT id, numero_cuenta, banco, created_at, updated_at
-       FROM cuentas_banco WHERE id = ? AND is_deleted = FALSE`,
+      `${CUENTA_BANCO_SELECT}
+       WHERE cb.id = ? AND cb.is_deleted = FALSE`,
       [id]
     )
     return res.json(updated[0])

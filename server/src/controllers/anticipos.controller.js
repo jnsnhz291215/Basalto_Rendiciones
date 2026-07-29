@@ -129,7 +129,8 @@ async function createAnticipo(req, res) {
       })
     }
 
-    const cuentaSync = await upsertCuentaBanco(numero_cuenta, banco_origen)
+    const centroCobroId = await getCentroCobroIdFromCaja(caja_id)
+    const cuentaSync = await upsertCuentaBanco(numero_cuenta, banco_origen, centroCobroId)
     if (!cuentaSync.ok) {
       return res.status(cuentaSync.status).json({ error: cuentaSync.error })
     }
@@ -246,7 +247,9 @@ async function updateAnticipo(req, res) {
         numero_cuenta !== undefined ? numero_cuenta : existing[0].numero_cuenta
       const bancoRaw =
         banco_origen !== undefined ? banco_origen : existing[0].banco_origen
-      const cuentaSync = await upsertCuentaBanco(cuentaRaw, bancoRaw)
+      const cajaForCc = caja_id || existing[0].caja_id
+      const centroCobroId = await getCentroCobroIdFromCaja(cajaForCc)
+      const cuentaSync = await upsertCuentaBanco(cuentaRaw, bancoRaw, centroCobroId)
       if (!cuentaSync.ok) {
         return res.status(cuentaSync.status).json({ error: cuentaSync.error })
       }
@@ -356,6 +359,18 @@ async function findTrabajadorIdByRut(rutRaw) {
   return match ? Number(match.id) : null
 }
 
+async function getCentroCobroIdFromCaja(cajaId) {
+  const id = Number(cajaId)
+  if (!Number.isFinite(id) || id <= 0) return null
+  const rows = await query(
+    `SELECT centro_cobro_id FROM cajas_chicas
+     WHERE id = ? AND is_deleted = FALSE LIMIT 1`,
+    [id]
+  )
+  const cc = rows[0]?.centro_cobro_id
+  return cc != null && Number(cc) > 0 ? Number(cc) : null
+}
+
 async function findCajaIdByCcYCaja(ccNombre, cajaClave) {
   const ccRaw = cellToString(ccNombre)
   const cajaRaw = cellToString(cajaClave)
@@ -423,14 +438,6 @@ async function importAsignacionesExcel(req, res) {
         const monto = parseMonto(row.__raw?.monto ?? row.monto)
         if (monto == null) throw new Error('monto inválido')
 
-        const cuentaSync = await upsertCuentaBanco(
-          row.__raw?.numero_cuenta ?? row.numero_cuenta,
-          cellToString(row.banco_origen)
-        )
-        if (!cuentaSync.ok) throw new Error(cuentaSync.error)
-        const cuenta = cuentaSync.cuenta.numero_cuenta
-        const banco = cuentaSync.cuenta.banco
-
         const trabajadorId = await findTrabajadorIdByRut(rut)
         if (!trabajadorId) {
           throw new Error(`trabajador_rut no encontrado (${row.trabajador_rut})`)
@@ -438,6 +445,16 @@ async function importAsignacionesExcel(req, res) {
 
         const cajaId = await findCajaIdByCcYCaja(cc, caja)
         if (!cajaId) throw new Error(`caja/cc no encontrados (${cc} / ${caja})`)
+
+        const centroCobroId = await getCentroCobroIdFromCaja(cajaId)
+        const cuentaSync = await upsertCuentaBanco(
+          row.__raw?.numero_cuenta ?? row.numero_cuenta,
+          cellToString(row.banco_origen),
+          centroCobroId
+        )
+        if (!cuentaSync.ok) throw new Error(cuentaSync.error)
+        const cuenta = cuentaSync.cuenta.numero_cuenta
+        const banco = cuentaSync.cuenta.banco
 
         let codigo = normalizeNumeroDocumento(row.n_doc_vale)
         if (!codigo) {

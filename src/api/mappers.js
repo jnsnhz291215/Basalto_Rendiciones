@@ -253,7 +253,9 @@ export function mapCuentaBanco(row) {
   return {
     id: row.id,
     numeroCuenta: String(row.numero_cuenta || ''),
-    banco: String(row.banco || '')
+    banco: String(row.banco || ''),
+    centroCobroId: row.centro_cobro_id ?? null,
+    centroCobroNombre: row.centro_cobro_nombre || null
   }
 }
 

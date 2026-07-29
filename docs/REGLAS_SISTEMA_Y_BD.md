@@ -221,17 +221,18 @@ API: `GET/POST /api/cajas/centros-costo`, `PUT/DELETE /api/cajas/centros-costo/:
 
 ### 6.4b `cuentas_banco` — Cuentas bancarias (catálogo)
 
-**Propósito:** Catálogo 1:1 número de cuenta → banco, usado en Asignaciones.
+**Propósito:** Catálogo 1:1 número de cuenta → banco, asignado a un CC (centro de cobro), usado en Asignaciones.
 
 | Campo | Notas |
 |-------|--------|
 | `id` | PK interno (no visible en UI) |
-| `numero_cuenta` | UNIQUE NOT NULL (solo dígitos) |
+| `numero_cuenta` | UNIQUE global NOT NULL (solo dígitos); un número no se duplica ni en otro banco/CC |
 | `banco` | NOT NULL (MAYÚSCULAS normalizado) |
+| `centro_cobro_id` | FK → `centros_costo.id` (obligatorio en altas API/UI) |
 | `is_deleted` / `deleted_at` | Soft delete (libera UNIQUE renombrando el número) |
 
 API admin: `GET/POST /api/admin/cuentas-banco`, `PUT/DELETE /api/admin/cuentas-banco/:id`.  
-Al crear/editar asignaciones se hace upsert del par; si el número ya existe con otro banco → error 400.
+Al crear/editar asignaciones se hace upsert del par con el CC de la caja; si el número ya existe con otro banco u otro CC → error 400.
 
 ---
 
@@ -411,16 +412,19 @@ CREATE TABLE tarjetas_empresa (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- 6b. CUENTAS DE BANCO (catálogo 1:1)
+-- 6b. CUENTAS DE BANCO (catálogo 1:1 número↔banco + CC)
 CREATE TABLE cuentas_banco (
     id INT AUTO_INCREMENT PRIMARY KEY,
     numero_cuenta VARCHAR(40) NOT NULL,
     banco VARCHAR(120) NOT NULL,
+    centro_cobro_id INT NULL,
     is_deleted BOOLEAN DEFAULT FALSE,
     deleted_at DATETIME NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_cuentas_banco_numero (numero_cuenta)
+    UNIQUE KEY uq_cuentas_banco_numero (numero_cuenta),
+    CONSTRAINT fk_cuentas_banco_centro_cobro
+      FOREIGN KEY (centro_cobro_id) REFERENCES centros_costo(id) ON DELETE RESTRICT
 ) ENGINE=InnoDB;
 
 -- 7. RENDICIONES DE GASTOS

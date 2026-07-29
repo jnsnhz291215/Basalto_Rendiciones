@@ -2093,12 +2093,18 @@
                         @mousedown.prevent="selectNumeroCuenta(c)"
                       >
                         <span class="dash-mono">{{ c.numeroCuenta }}</span>
-                        <span class="dash-combobox-option-meta">{{ c.banco }}</span>
+                        <span class="dash-combobox-option-meta">
+                          {{ c.banco
+                          }}<template v-if="c.centroCobroNombre"> · {{ c.centroCobroNombre }}</template>
+                        </span>
                       </li>
                     </ul>
                   </div>
                   <p v-if="cuentaCatalogoMatch" class="dash-field-hint dash-hint--ok">
-                    Catálogo: {{ cuentaCatalogoMatch.banco }}
+                    Catálogo: {{ cuentaCatalogoMatch.banco
+                    }}<template v-if="cuentaCatalogoMatch.centroCobroNombre">
+                      · {{ cuentaCatalogoMatch.centroCobroNombre }}
+                    </template>
                   </p>
                 </div>
                 <div class="dash-field">
@@ -4201,7 +4207,7 @@
               <div>
                 <h3 class="dash-cajas-toolbar-title">Cuentas de Banco</h3>
                 <p class="dash-cajas-toolbar-hint">
-                  Catálogo 1:1 de número de cuenta y banco para Asignaciones.
+                  Catálogo 1:1 de número de cuenta, banco y CC para Asignaciones.
                 </p>
               </div>
               <button
@@ -4226,7 +4232,7 @@
                     {{ cuentaBancoForm.editId ? 'Editar Cuenta de Banco' : 'Registrar Cuenta de Banco' }}
                   </h2>
                   <p class="dash-hint">
-                    Cada número de cuenta pertenece a un único banco.
+                    Cada número de cuenta pertenece a un único banco y a un CC.
                   </p>
                 </div>
                 <button
@@ -4241,6 +4247,15 @@
 
               <form class="dash-admin-form" @submit.prevent="onSaveCuentaBanco">
                 <div class="dash-caja-grid-2">
+                  <div class="dash-field">
+                    <label>Centro de cobro / empresa (CC) *</label>
+                    <select v-model="cuentaBancoForm.centroCobroId" required>
+                      <option disabled value="">Seleccionar…</option>
+                      <option v-for="cc in centrosCosto" :key="cc.id" :value="cc.id">
+                        {{ cc.nombre }}
+                      </option>
+                    </select>
+                  </div>
                   <div class="dash-field">
                     <label>Número de cuenta *</label>
                     <input
@@ -4284,6 +4299,7 @@
               <table class="dash-table">
                 <thead>
                   <tr>
+                    <th>CC</th>
                     <th>Número de cuenta</th>
                     <th>Banco</th>
                     <th class="dash-table-center">Acciones</th>
@@ -4291,9 +4307,10 @@
                 </thead>
                 <tbody>
                   <tr v-if="!cuentasBanco.length">
-                    <td colspan="3" class="dash-table-empty">No hay cuentas registradas.</td>
+                    <td colspan="4" class="dash-table-empty">No hay cuentas registradas.</td>
                   </tr>
                   <tr v-for="c in cuentasBanco" :key="c.id || c.numeroCuenta">
+                    <td>{{ c.centroCobroNombre || '—' }}</td>
                     <td class="dash-mono dash-table-strong">{{ c.numeroCuenta }}</td>
                     <td>{{ c.banco }}</td>
                     <td class="dash-table-center dash-table-actions">
@@ -5502,6 +5519,7 @@ const tarjetaForm = reactive({
 
 const cuentaBancoForm = reactive({
   editId: null,
+  centroCobroId: '',
   numeroCuenta: '',
   banco: ''
 })
@@ -8575,7 +8593,18 @@ function onAsignacionCuentaInput(event) {
 
 const numeroCuentaSugerencias = computed(() => {
   const q = String(asignacion.numeroCuenta || '')
-  const list = [...cuentasBanco.value]
+  const ccId = cajaSeleccionada.value?.centroCobroId
+  let list = [...cuentasBanco.value]
+  if (ccId != null && ccId !== '') {
+    // Prioriza cuentas del mismo CC; incluye sin CC (legado) al final
+    const same = []
+    const sinCc = []
+    for (const c of list) {
+      if (c.centroCobroId == null || c.centroCobroId === '') sinCc.push(c)
+      else if (Number(c.centroCobroId) === Number(ccId)) same.push(c)
+    }
+    list = [...same, ...sinCc]
+  }
   if (!q) return list.slice(0, 12)
   return list.filter((c) => c.numeroCuenta.includes(q)).slice(0, 12)
 })
@@ -8722,6 +8751,7 @@ function toggleFormCuentaBanco() {
 
 function resetCuentaBancoForm() {
   cuentaBancoForm.editId = null
+  cuentaBancoForm.centroCobroId = ''
   cuentaBancoForm.numeroCuenta = ''
   cuentaBancoForm.banco = ''
 }
@@ -8743,6 +8773,7 @@ function onCuentaBancoBancoInput(event) {
 
 function onEditCuentaBanco(c) {
   cuentaBancoForm.editId = c.id
+  cuentaBancoForm.centroCobroId = c.centroCobroId || ''
   cuentaBancoForm.numeroCuenta = c.numeroCuenta || ''
   cuentaBancoForm.banco = c.banco || ''
   cuentaBancoFormOpen.value = true
@@ -8763,13 +8794,22 @@ async function onDeleteCuentaBanco(c) {
 async function onSaveCuentaBanco() {
   const numero = String(cuentaBancoForm.numeroCuenta || '').replace(/\D/g, '')
   const banco = normalizeBancoOrigenInput(cuentaBancoForm.banco)
+  const centroCobroId = Number(cuentaBancoForm.centroCobroId)
   if (!numero || !banco) {
     saveError.value = 'Número de cuenta y banco son obligatorios.'
     return
   }
+  if (!Number.isFinite(centroCobroId) || centroCobroId <= 0) {
+    saveError.value = 'Centro de cobro (CC) es obligatorio.'
+    return
+  }
   try {
     saveError.value = ''
-    const payload = { numero_cuenta: numero, banco }
+    const payload = {
+      numero_cuenta: numero,
+      banco,
+      centro_cobro_id: centroCobroId
+    }
     if (cuentaBancoForm.editId) {
       await api.updateCuentaBanco(cuentaBancoForm.editId, payload)
     } else {
