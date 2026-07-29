@@ -2061,16 +2061,45 @@
                 </div>
                 <div class="dash-field">
                   <label>Número de cuenta *</label>
-                  <input
-                    :value="asignacion.numeroCuenta"
-                    type="text"
-                    inputmode="numeric"
-                    maxlength="40"
-                    placeholder="00123456789"
-                    class="dash-mono"
-                    required
-                    @input="onAsignacionCuentaInput"
-                  />
+                  <div class="dash-combobox">
+                    <input
+                      :value="asignacion.numeroCuenta"
+                      type="text"
+                      inputmode="numeric"
+                      maxlength="40"
+                      placeholder="00123456789"
+                      class="dash-mono dash-combobox-input"
+                      autocomplete="off"
+                      required
+                      @focus="onNumeroCuentaFocus"
+                      @input="onAsignacionCuentaInput"
+                      @keydown.down.prevent="highlightNumeroCuenta(1)"
+                      @keydown.up.prevent="highlightNumeroCuenta(-1)"
+                      @keydown.enter.prevent="confirmNumeroCuentaHighlight"
+                      @keydown.escape="numeroCuentaOpen = false"
+                      @blur="onNumeroCuentaBlur"
+                    />
+                    <ul
+                      v-if="numeroCuentaOpen && numeroCuentaSugerencias.length"
+                      class="dash-combobox-list"
+                      role="listbox"
+                    >
+                      <li
+                        v-for="(c, idx) in numeroCuentaSugerencias"
+                        :key="c.id || c.numeroCuenta"
+                        class="dash-combobox-option"
+                        :class="{ 'dash-combobox-option--active': idx === numeroCuentaHighlight }"
+                        role="option"
+                        @mousedown.prevent="selectNumeroCuenta(c)"
+                      >
+                        <span class="dash-mono">{{ c.numeroCuenta }}</span>
+                        <span class="dash-combobox-option-meta">{{ c.banco }}</span>
+                      </li>
+                    </ul>
+                  </div>
+                  <p v-if="cuentaCatalogoMatch" class="dash-field-hint dash-hint--ok">
+                    Catálogo: {{ cuentaCatalogoMatch.banco }}
+                  </p>
                 </div>
                 <div class="dash-field">
                   <label>Banco origen *</label>
@@ -3972,8 +4001,30 @@
         </template>
       </div>
 
-      <!-- Tarjetas Empresa -->
+      <!-- Cuentas de Banco (Tarjetas + Cuentas) -->
       <div v-else-if="activeView === 'tarjetas' && isAdminSession" class="dash-admin-tab">
+        <div class="dash-personal-subview-bar">
+          <div class="dash-personal-subview-tabs">
+            <button
+              type="button"
+              class="dash-personal-subview-tab"
+              :class="{ 'dash-personal-subview-tab--active': cuentasBancoSubview === 'tarjetas' }"
+              @click="cuentasBancoSubview = 'tarjetas'"
+            >
+              Tarjetas
+            </button>
+            <button
+              type="button"
+              class="dash-personal-subview-tab"
+              :class="{ 'dash-personal-subview-tab--active': cuentasBancoSubview === 'cuentas' }"
+              @click="cuentasBancoSubview = 'cuentas'"
+            >
+              Cuentas de Banco
+            </button>
+          </div>
+        </div>
+
+        <template v-if="cuentasBancoSubview === 'tarjetas'">
             <div class="dash-cajas-toolbar">
               <div>
                 <h3 class="dash-cajas-toolbar-title">Tarjetas Corporativas Habilitadas</h3>
@@ -4143,6 +4194,132 @@
                 </tbody>
               </table>
             </div>
+        </template>
+
+        <template v-else>
+            <div class="dash-cajas-toolbar">
+              <div>
+                <h3 class="dash-cajas-toolbar-title">Cuentas de Banco</h3>
+                <p class="dash-cajas-toolbar-hint">
+                  Catálogo 1:1 de número de cuenta y banco para Asignaciones.
+                </p>
+              </div>
+              <button
+                class="dash-btn-primary dash-btn-toggle-caja"
+                type="button"
+                @click="toggleFormCuentaBanco"
+              >
+                <span>{{ cuentaBancoFormOpen ? '▲' : '＋' }}</span>
+                <span>{{ cuentaBancoFormOpen ? 'Ocultar Formulario' : 'Registrar Cuenta' }}</span>
+              </button>
+            </div>
+
+            <div
+              class="dash-collapse"
+              :class="{ 'dash-collapse--open': cuentaBancoFormOpen }"
+            >
+              <div class="dash-collapse-inner">
+                <div class="dash-panel dash-gasto-form-panel dash-collapse-panel">
+              <div class="dash-caja-form-head">
+                <div>
+                  <h2 class="dash-assign-title dash-assign-title--flush">
+                    {{ cuentaBancoForm.editId ? 'Editar Cuenta de Banco' : 'Registrar Cuenta de Banco' }}
+                  </h2>
+                  <p class="dash-hint">
+                    Cada número de cuenta pertenece a un único banco.
+                  </p>
+                </div>
+                <button
+                  class="dash-modal-close"
+                  type="button"
+                  aria-label="Cerrar"
+                  @click="closeFormCuentaBanco"
+                >
+                  ×
+                </button>
+              </div>
+
+              <form class="dash-admin-form" @submit.prevent="onSaveCuentaBanco">
+                <div class="dash-caja-grid-2">
+                  <div class="dash-field">
+                    <label>Número de cuenta *</label>
+                    <input
+                      :value="cuentaBancoForm.numeroCuenta"
+                      type="text"
+                      inputmode="numeric"
+                      maxlength="40"
+                      placeholder="00123456789"
+                      class="dash-mono"
+                      required
+                      @input="onCuentaBancoNumeroInput"
+                    />
+                  </div>
+                  <div class="dash-field">
+                    <label>Banco *</label>
+                    <input
+                      :value="cuentaBancoForm.banco"
+                      type="text"
+                      maxlength="120"
+                      placeholder="Ej: BANCO DE CHILE"
+                      required
+                      @input="onCuentaBancoBancoInput"
+                    />
+                  </div>
+                </div>
+
+                <div class="dash-caja-form-actions">
+                  <button class="dash-btn-secondary" type="button" @click="closeFormCuentaBanco">
+                    Cancelar
+                  </button>
+                  <button class="dash-btn-primary" type="submit">
+                    <span>{{ cuentaBancoForm.editId ? 'Actualizar Cuenta' : 'Guardar Cuenta' }}</span>
+                  </button>
+                </div>
+              </form>
+                </div>
+              </div>
+            </div>
+
+            <div class="dash-table-wrap">
+              <table class="dash-table">
+                <thead>
+                  <tr>
+                    <th>Número de cuenta</th>
+                    <th>Banco</th>
+                    <th class="dash-table-center">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="!cuentasBanco.length">
+                    <td colspan="3" class="dash-table-empty">No hay cuentas registradas.</td>
+                  </tr>
+                  <tr v-for="c in cuentasBanco" :key="c.id || c.numeroCuenta">
+                    <td class="dash-mono dash-table-strong">{{ c.numeroCuenta }}</td>
+                    <td>{{ c.banco }}</td>
+                    <td class="dash-table-center dash-table-actions">
+                      <button
+                        class="dash-btn-icon"
+                        type="button"
+                        title="Editar"
+                        @click="onEditCuentaBanco(c)"
+                      >
+                        <i class="fa-solid fa-pen" aria-hidden="true"></i>
+                      </button>
+                      <button
+                        v-if="canHardDelete"
+                        class="dash-btn-icon dash-btn-icon--danger"
+                        type="button"
+                        title="Eliminar"
+                        @click="onDeleteCuentaBanco(c)"
+                      >
+                        <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+        </template>
       </div>
 
       <!-- Auditoría (solo Super Admin / Super Admin Dev) -->
@@ -4268,6 +4445,7 @@ import {
   mapAuditLog,
   mapCaja,
   mapCentroCobro,
+  mapCuentaBanco,
   mapLegacy,
   mapPersonal,
   mapRendicion,
@@ -4585,6 +4763,7 @@ function normalizarGroupKey(value) {
 }
 const activeView = ref('rendicion')
 const personalSubview = ref('personal')
+const cuentasBancoSubview = ref('tarjetas')
 const sidebarOpen = ref(false)
 
 const OPERACION_VIEW_IDS = ['rendicion', 'asignacion', 'informes']
@@ -4599,7 +4778,7 @@ const operacionNavItems = [
 const configuracionNavItems = [
   { id: 'cajas', label: 'Cajas', icon: 'fa-cash-register' },
   { id: 'centros-costo', label: 'Centros de Costo', icon: 'fa-building' },
-  { id: 'tarjetas', label: 'Tarjetas Empresa', icon: 'fa-credit-card' }
+  { id: 'tarjetas', label: 'Cuentas de Banco', icon: 'fa-building-columns' }
 ]
 
 const administracionNavItems = [
@@ -4671,6 +4850,7 @@ const anticipoTrabajadorHighlight = ref(0)
 
 const adminFormOpen = ref(false)
 const tarjetaFormOpen = ref(false)
+const cuentaBancoFormOpen = ref(false)
 
 const letrasDescripcion = computed(() => String(gasto.descripcion || '').length)
 
@@ -4755,6 +4935,8 @@ const asignacion = reactive({
 const bancosOrigen = ref([])
 const bancoOrigenOpen = ref(false)
 const bancoOrigenHighlight = ref(0)
+const numeroCuentaOpen = ref(false)
+const numeroCuentaHighlight = ref(0)
 
 const letrasObservacionAnticipo = computed(
   () => String(asignacion.observaciones || '').length
@@ -5318,9 +5500,16 @@ const tarjetaForm = reactive({
   titular: ''
 })
 
+const cuentaBancoForm = reactive({
+  editId: null,
+  numeroCuenta: '',
+  banco: ''
+})
+
 const personalModalRutStatus = computed(() => rutStatusLabel(modalPersonal.rut))
 
 const tarjetasEmpresa = ref([])
+const cuentasBanco = ref([])
 
 const gastoRequiereTarjetaDigits = computed(
   () => gasto.metodoPago === 'debito' || gasto.metodoPago === 'credito'
@@ -5516,6 +5705,9 @@ async function loadDashboardData() {
 
     const tarjetasRaw = await safeList(api.listTarjetas)
     tarjetasEmpresa.value = tarjetasRaw.map(mapTarjeta)
+
+    const cuentasRaw = await safeList(api.listCuentasBanco)
+    cuentasBanco.value = cuentasRaw.map(mapCuentaBanco)
 
     if (isSuperAdminSession.value) {
       const logsRaw = await safeList(api.listAuditLogs)
@@ -6999,6 +7191,8 @@ function resetAsignacionFormFields() {
   anticipoTrabajadorHighlight.value = 0
   bancoOrigenOpen.value = false
   bancoOrigenHighlight.value = 0
+  numeroCuentaOpen.value = false
+  numeroCuentaHighlight.value = 0
   if (cajaActiva.value) asignacion.fondo = cajaActiva.value
 }
 
@@ -8371,6 +8565,57 @@ function onAsignacionCuentaInput(event) {
   asignacion.numeroCuenta = String(event.target.value || '')
     .replace(/\D/g, '')
     .slice(0, 40)
+  numeroCuentaOpen.value = true
+  numeroCuentaHighlight.value = 0
+  const match = cuentasBanco.value.find((c) => c.numeroCuenta === asignacion.numeroCuenta)
+  if (match) {
+    asignacion.bancoOrigen = match.banco
+  }
+}
+
+const numeroCuentaSugerencias = computed(() => {
+  const q = String(asignacion.numeroCuenta || '')
+  const list = [...cuentasBanco.value]
+  if (!q) return list.slice(0, 12)
+  return list.filter((c) => c.numeroCuenta.includes(q)).slice(0, 12)
+})
+
+const cuentaCatalogoMatch = computed(() => {
+  const q = String(asignacion.numeroCuenta || '')
+  if (!q) return null
+  return cuentasBanco.value.find((c) => c.numeroCuenta === q) || null
+})
+
+function onNumeroCuentaFocus(e) {
+  numeroCuentaOpen.value = true
+  numeroCuentaHighlight.value = 0
+  e?.target?.select?.()
+}
+
+function highlightNumeroCuenta(delta) {
+  const n = numeroCuentaSugerencias.value.length
+  if (!n) return
+  numeroCuentaOpen.value = true
+  numeroCuentaHighlight.value = (numeroCuentaHighlight.value + delta + n) % n
+}
+
+function confirmNumeroCuentaHighlight() {
+  const opt = numeroCuentaSugerencias.value[numeroCuentaHighlight.value]
+  if (opt) selectNumeroCuenta(opt)
+}
+
+function selectNumeroCuenta(cuenta) {
+  if (!cuenta) return
+  asignacion.numeroCuenta = cuenta.numeroCuenta
+  asignacion.bancoOrigen = cuenta.banco
+  numeroCuentaOpen.value = false
+  numeroCuentaHighlight.value = 0
+}
+
+function onNumeroCuentaBlur() {
+  setTimeout(() => {
+    numeroCuentaOpen.value = false
+  }, 120)
 }
 
 const bancoOrigenSugerencias = computed(() => {
@@ -8463,6 +8708,77 @@ async function onSaveTarjeta() {
     closeFormTarjeta()
   } catch (err) {
     saveError.value = err?.message || 'No se pudo guardar la tarjeta'
+  }
+}
+
+function toggleFormCuentaBanco() {
+  if (cuentaBancoFormOpen.value) {
+    closeFormCuentaBanco()
+    return
+  }
+  resetCuentaBancoForm()
+  cuentaBancoFormOpen.value = true
+}
+
+function resetCuentaBancoForm() {
+  cuentaBancoForm.editId = null
+  cuentaBancoForm.numeroCuenta = ''
+  cuentaBancoForm.banco = ''
+}
+
+function closeFormCuentaBanco() {
+  cuentaBancoFormOpen.value = false
+  resetCuentaBancoForm()
+}
+
+function onCuentaBancoNumeroInput(event) {
+  cuentaBancoForm.numeroCuenta = String(event.target.value || '')
+    .replace(/\D/g, '')
+    .slice(0, 40)
+}
+
+function onCuentaBancoBancoInput(event) {
+  cuentaBancoForm.banco = normalizeBancoOrigenInput(event.target.value)
+}
+
+function onEditCuentaBanco(c) {
+  cuentaBancoForm.editId = c.id
+  cuentaBancoForm.numeroCuenta = c.numeroCuenta || ''
+  cuentaBancoForm.banco = c.banco || ''
+  cuentaBancoFormOpen.value = true
+}
+
+async function onDeleteCuentaBanco(c) {
+  if (!canHardDelete.value || !c?.id) return
+  if (!confirm(`¿Eliminar la cuenta ${c.numeroCuenta} (${c.banco})?`)) return
+  try {
+    saveError.value = ''
+    await api.deleteCuentaBanco(c.id)
+    await loadDashboardData()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo eliminar la cuenta'
+  }
+}
+
+async function onSaveCuentaBanco() {
+  const numero = String(cuentaBancoForm.numeroCuenta || '').replace(/\D/g, '')
+  const banco = normalizeBancoOrigenInput(cuentaBancoForm.banco)
+  if (!numero || !banco) {
+    saveError.value = 'Número de cuenta y banco son obligatorios.'
+    return
+  }
+  try {
+    saveError.value = ''
+    const payload = { numero_cuenta: numero, banco }
+    if (cuentaBancoForm.editId) {
+      await api.updateCuentaBanco(cuentaBancoForm.editId, payload)
+    } else {
+      await api.createCuentaBanco(payload)
+    }
+    await loadDashboardData()
+    closeFormCuentaBanco()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo guardar la cuenta de banco'
   }
 }
 

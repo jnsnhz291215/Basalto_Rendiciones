@@ -249,6 +249,14 @@ export function mapTarjeta(row) {
   }
 }
 
+export function mapCuentaBanco(row) {
+  return {
+    id: row.id,
+    numeroCuenta: String(row.numero_cuenta || ''),
+    banco: String(row.banco || '')
+  }
+}
+
 export function mapRendicion(row) {
   let tipo = row.tipo_documento || ''
   if (tipo === 'Ticket Peaje') tipo = 'Peaje'

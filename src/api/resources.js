@@ -322,6 +322,33 @@ export async function listTarjetas() {
   return unwrapList(await jsonOrThrow('/api/admin/tarjetas'))
 }
 
+export async function listCuentasBanco(params = {}) {
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') qs.set(k, String(v))
+  }
+  const q = qs.toString()
+  return unwrapList(await jsonOrThrow(`/api/admin/cuentas-banco${q ? `?${q}` : ''}`))
+}
+
+export async function createCuentaBanco(payload) {
+  return jsonOrThrow('/api/admin/cuentas-banco', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateCuentaBanco(id, payload) {
+  return jsonOrThrow(`/api/admin/cuentas-banco/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deleteCuentaBanco(id) {
+  return jsonOrThrow(`/api/admin/cuentas-banco/${id}`, { method: 'DELETE' })
+}
+
 export async function listAuditLogs(params = {}) {
   const qs = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {

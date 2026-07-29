@@ -12,6 +12,12 @@ const {
   ensureTarjetaFechaDesactivacion,
   toDateOnly
 } = require('../utils/tarjetaPago')
+const {
+  ensureCuentasBancoSchema,
+  upsertCuentaBanco,
+  normalizeNumeroCuenta,
+  normalizeBancoNombre
+} = require('../utils/ensureCuentasBancoSchema')
 
 /** Normaliza RUT para comparar (sin puntos/guión). */
 function cleanRutValue(rut) {
@@ -1263,6 +1269,198 @@ async function softDeleteTarjeta(req, res) {
   }
 }
 
+/* --- Cuentas de Banco (catálogo 1:1 número ↔ banco) --- */
+
+async function listCuentasBanco(req, res) {
+  try {
+    await ensureCuentasBancoSchema()
+    const q = normalizeNumeroCuenta(req.query.q || '')
+    let rows
+    if (q) {
+      rows = await query(
+        `SELECT id, numero_cuenta, banco, created_at, updated_at
+         FROM cuentas_banco
+         WHERE is_deleted = FALSE AND numero_cuenta LIKE ?
+         ORDER BY banco ASC, numero_cuenta ASC
+         LIMIT 100`,
+        [`%${q}%`]
+      )
+    } else {
+      rows = await query(
+        `SELECT id, numero_cuenta, banco, created_at, updated_at
+         FROM cuentas_banco
+         WHERE is_deleted = FALSE
+         ORDER BY banco ASC, numero_cuenta ASC`
+      )
+    }
+    return res.json(rows)
+  } catch (err) {
+    console.error('[listCuentasBanco]', err)
+    return res.status(500).json({ error: 'Internal Server Error' })
+  }
+}
+
+async function createCuentaBanco(req, res) {
+  try {
+    await ensureCuentasBancoSchema()
+    const { numero_cuenta, banco } = req.body || {}
+    const numero = normalizeNumeroCuenta(numero_cuenta)
+    const bancoNorm = normalizeBancoNombre(banco)
+    if (!numero) {
+      return res.status(400).json({ error: 'Número de cuenta es obligatorio' })
+    }
+    if (!bancoNorm) {
+      return res.status(400).json({ error: 'Banco es obligatorio' })
+    }
+
+    const existing = await query(
+      `SELECT id, numero_cuenta, banco FROM cuentas_banco
+       WHERE numero_cuenta = ? AND is_deleted = FALSE LIMIT 1`,
+      [numero]
+    )
+    if (existing[0]) {
+      return res.status(409).json({
+        error: `El número de cuenta ${numero} ya está registrado (${existing[0].banco})`
+      })
+    }
+
+    const result = await upsertCuentaBanco(numero, bancoNorm)
+    if (!result.ok) {
+      return res.status(result.status).json({ error: result.error })
+    }
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      'CREAR',
+      'Cuentas Banco',
+      `Cuenta ${result.cuenta.numero_cuenta} · ${result.cuenta.banco}`
+    )
+    return res.status(201).json(result.cuenta)
+  } catch (err) {
+    console.error('[createCuentaBanco]', err)
+    return res.status(500).json({ error: 'Internal Server Error' })
+  }
+}
+
+async function updateCuentaBanco(req, res) {
+  try {
+    await ensureCuentasBancoSchema()
+    const id = Number(req.params.id)
+    const existing = await query(
+      `SELECT * FROM cuentas_banco WHERE id = ? AND is_deleted = FALSE`,
+      [id]
+    )
+    if (!existing[0]) return res.status(404).json({ error: 'Cuenta de banco no encontrada' })
+
+    const prev = existing[0]
+    const nextNumero =
+      req.body?.numero_cuenta !== undefined
+        ? normalizeNumeroCuenta(req.body.numero_cuenta)
+        : prev.numero_cuenta
+    const nextBanco =
+      req.body?.banco !== undefined
+        ? normalizeBancoNombre(req.body.banco)
+        : normalizeBancoNombre(prev.banco)
+
+    if (!nextNumero) {
+      return res.status(400).json({ error: 'Número de cuenta es obligatorio' })
+    }
+    if (!nextBanco) {
+      return res.status(400).json({ error: 'Banco es obligatorio' })
+    }
+
+    if (nextNumero !== prev.numero_cuenta) {
+      const dup = await query(
+        `SELECT id, banco FROM cuentas_banco
+         WHERE numero_cuenta = ? AND is_deleted = FALSE AND id <> ?
+         LIMIT 1`,
+        [nextNumero, id]
+      )
+      if (dup[0]) {
+        return res.status(409).json({
+          error: `El número de cuenta ${nextNumero} ya está registrado`
+        })
+      }
+    }
+
+    try {
+      await query(
+        `UPDATE cuentas_banco
+         SET numero_cuenta = ?, banco = ?
+         WHERE id = ? AND is_deleted = FALSE`,
+        [nextNumero, nextBanco, id]
+      )
+    } catch (err) {
+      if (err?.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({
+          error: `El número de cuenta ${nextNumero} ya está registrado`
+        })
+      }
+      throw err
+    }
+
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      'MODIFICAR',
+      'Cuentas Banco',
+      `Cuenta id=${id}: ${nextNumero} · ${nextBanco}`
+    )
+
+    const updated = await query(
+      `SELECT id, numero_cuenta, banco, created_at, updated_at
+       FROM cuentas_banco WHERE id = ? AND is_deleted = FALSE`,
+      [id]
+    )
+    return res.json(updated[0])
+  } catch (err) {
+    console.error('[updateCuentaBanco]', err)
+    return res.status(500).json({ error: 'Internal Server Error' })
+  }
+}
+
+async function softDeleteCuentaBanco(req, res) {
+  try {
+    if (!SUPER_ADMINS.includes(req.user.rol)) {
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'Solo Super Admin puede eliminar cuentas de banco'
+      })
+    }
+    await ensureCuentasBancoSchema()
+    const id = Number(req.params.id)
+    const existing = await query(
+      `SELECT * FROM cuentas_banco WHERE id = ? AND is_deleted = FALSE`,
+      [id]
+    )
+    if (!existing[0]) return res.status(404).json({ error: 'Cuenta de banco no encontrada' })
+
+    // Liberar UNIQUE para poder re-registrar el mismo número
+    const freedNumero = `${existing[0].numero_cuenta}#DEL${id}`.slice(0, 40)
+    const result = await query(
+      `UPDATE cuentas_banco
+       SET is_deleted = TRUE, deleted_at = NOW(), numero_cuenta = ?
+       WHERE id = ? AND is_deleted = FALSE`,
+      [freedNumero, id]
+    )
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Cuenta de banco no encontrada' })
+    }
+    await registrarAuditoria(
+      req.user.id,
+      req.user.nombre,
+      'ELIMINAR',
+      'Cuentas Banco',
+      `Soft delete cuenta id=${id} (${existing[0].numero_cuenta})`
+    )
+    return res.json({ ok: true })
+  } catch (err) {
+    console.error('[softDeleteCuentaBanco]', err)
+    return res.status(500).json({ error: 'Internal Server Error' })
+  }
+}
+
 /* --- Audit logs (solo lectura) --- */
 
 async function listAuditLogs(req, res) {
@@ -1341,6 +1539,10 @@ module.exports = {
   createTarjeta,
   updateTarjeta,
   softDeleteTarjeta,
+  listCuentasBanco,
+  createCuentaBanco,
+  updateCuentaBanco,
+  softDeleteCuentaBanco,
   listAuditLogs,
   syncBidireccionalHandler
 }

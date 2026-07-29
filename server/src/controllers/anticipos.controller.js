@@ -6,9 +6,12 @@ const { nextCodigo } = require('../utils/helpers')
 const { canDevHardDelete } = require('../config/devFlags')
 const {
   ensureAsignacionesSchema,
-  normalizeBancoNombre,
-  upsertBancoOrigen
+  normalizeBancoNombre
 } = require('../utils/ensureAsignacionesSchema')
+const {
+  ensureCuentasBancoSchema,
+  upsertCuentaBanco
+} = require('../utils/ensureCuentasBancoSchema')
 const {
   HEADERS_ASIGNACIONES,
   parseExcelConHeaders,
@@ -16,7 +19,6 @@ const {
   parseMonto,
   cleanRut,
   normalizeNumeroDocumento,
-  normalizeNumeroCuenta,
   keysMatch,
   cellToString
 } = require('../utils/excelImport')
@@ -99,6 +101,7 @@ async function listBancosOrigen(req, res) {
 async function createAnticipo(req, res) {
   try {
     await ensureAsignacionesSchema()
+    await ensureCuentasBancoSchema()
     const {
       caja_id,
       trabajador_id,
@@ -126,14 +129,12 @@ async function createAnticipo(req, res) {
       })
     }
 
-    const cuenta = normalizeNumeroCuenta(numero_cuenta)
-    const banco = await upsertBancoOrigen(banco_origen)
-    if (!cuenta) {
-      return res.status(400).json({ error: 'Número de cuenta es obligatorio' })
+    const cuentaSync = await upsertCuentaBanco(numero_cuenta, banco_origen)
+    if (!cuentaSync.ok) {
+      return res.status(cuentaSync.status).json({ error: cuentaSync.error })
     }
-    if (!banco) {
-      return res.status(400).json({ error: 'Banco origen es obligatorio' })
-    }
+    const cuenta = cuentaSync.cuenta.numero_cuenta
+    const banco = cuentaSync.cuenta.banco
 
     const codigo = normalizeNumeroDocumento(codigo_vale)
     if (!codigo) {
@@ -171,7 +172,7 @@ async function createAnticipo(req, res) {
       req.user.nombre,
       'CREAR',
       'Asignaciones',
-      `Asignación ${codigo} a trabajador_id=${trabajador_id} ($${monto}) · ${banco}`
+      `Asignación ${codigo} a trabajador_id=${trabajador_id} ($${monto}) · ${banco} · cta ${cuenta}`
     )
 
     const created = await query(
@@ -188,6 +189,7 @@ async function createAnticipo(req, res) {
 async function updateAnticipo(req, res) {
   try {
     await ensureAsignacionesSchema()
+    await ensureCuentasBancoSchema()
     const id = Number(req.params.id)
     const existing = await query(
       `SELECT * FROM anticipos WHERE id = ? AND is_deleted = FALSE`,
@@ -238,19 +240,18 @@ async function updateAnticipo(req, res) {
     }
 
     let nextCuenta = existing[0].numero_cuenta
-    if (numero_cuenta !== undefined) {
-      nextCuenta = normalizeNumeroCuenta(numero_cuenta)
-      if (!nextCuenta) {
-        return res.status(400).json({ error: 'Número de cuenta es obligatorio' })
-      }
-    }
-
     let nextBanco = existing[0].banco_origen
-    if (banco_origen !== undefined) {
-      nextBanco = await upsertBancoOrigen(banco_origen)
-      if (!nextBanco) {
-        return res.status(400).json({ error: 'Banco origen es obligatorio' })
+    if (numero_cuenta !== undefined || banco_origen !== undefined) {
+      const cuentaRaw =
+        numero_cuenta !== undefined ? numero_cuenta : existing[0].numero_cuenta
+      const bancoRaw =
+        banco_origen !== undefined ? banco_origen : existing[0].banco_origen
+      const cuentaSync = await upsertCuentaBanco(cuentaRaw, bancoRaw)
+      if (!cuentaSync.ok) {
+        return res.status(cuentaSync.status).json({ error: cuentaSync.error })
       }
+      nextCuenta = cuentaSync.cuenta.numero_cuenta
+      nextBanco = cuentaSync.cuenta.banco
     } else if (nextBanco) {
       nextBanco = normalizeBancoNombre(nextBanco)
     }
@@ -381,6 +382,7 @@ async function findCajaIdByCcYCaja(ccNombre, cajaClave) {
 async function importAsignacionesExcel(req, res) {
   try {
     await ensureAsignacionesSchema()
+    await ensureCuentasBancoSchema()
     await ensureImportacionesSchema()
     const parsed = parseExcelConHeaders(req.file?.buffer, HEADERS_ASIGNACIONES, 'Asignaciones')
     if (!parsed.ok) {
@@ -421,11 +423,13 @@ async function importAsignacionesExcel(req, res) {
         const monto = parseMonto(row.__raw?.monto ?? row.monto)
         if (monto == null) throw new Error('monto inválido')
 
-        const cuenta = normalizeNumeroCuenta(row.__raw?.numero_cuenta ?? row.numero_cuenta)
-        if (!cuenta) throw new Error('numero_cuenta es obligatorio')
-
-        const banco = await upsertBancoOrigen(cellToString(row.banco_origen))
-        if (!banco) throw new Error('banco_origen es obligatorio')
+        const cuentaSync = await upsertCuentaBanco(
+          row.__raw?.numero_cuenta ?? row.numero_cuenta,
+          cellToString(row.banco_origen)
+        )
+        if (!cuentaSync.ok) throw new Error(cuentaSync.error)
+        const cuenta = cuentaSync.cuenta.numero_cuenta
+        const banco = cuentaSync.cuenta.banco
 
         const trabajadorId = await findTrabajadorIdByRut(rut)
         if (!trabajadorId) {

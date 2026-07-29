@@ -10,6 +10,7 @@ const { ensureCajasSchema } = require('./utils/ensureCajasSchema')
 const { ensureAsignacionesSchema } = require('./utils/ensureAsignacionesSchema')
 const { ensureRendicionesTipoDocto } = require('./utils/ensureRendicionesTipoDocto')
 const { ensureImportacionesSchema } = require('./utils/ensureImportacionesSchema')
+const { ensureCuentasBancoSchema } = require('./utils/ensureCuentasBancoSchema')
 const { ensureIndexes } = require('./utils/ensureIndexes')
 
 const authRoutes = require('./routes/auth.routes')
@@ -127,6 +128,12 @@ app.listen(PORT, async () => {
     console.log('[schema] importaciones_lotes OK')
   } catch (err) {
     console.warn('[schema] ensureImportacionesSchema:', err.message)
+  }
+  try {
+    await ensureCuentasBancoSchema()
+    console.log('[schema] cuentas_banco OK')
+  } catch (err) {
+    console.warn('[schema] ensureCuentasBancoSchema:', err.message)
   }
   try {
     await ensureIndexes()

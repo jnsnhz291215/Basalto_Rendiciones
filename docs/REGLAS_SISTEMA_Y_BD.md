@@ -117,7 +117,7 @@ Campos típicos insertados en `audit_logs`:
 | `/api/rendiciones` | Gastos, comprobantes, filtros, estados de devolución |
 | `/api/anticipos` | Vales / fondos a conductores |
 | `/api/reportes` | Cartola por **mes cerrado**, import/export |
-| `/api/admin` | Trabajadores, usuarios, tarjetas, asignación de cajas, audit_logs |
+| `/api/admin` | Trabajadores, usuarios, tarjetas, cuentas_banco, asignación de cajas, audit_logs |
 
 Reportes: filtro por **mes cerrado** (1 al último día del mes), no rango libre “desde/hasta”.
 
@@ -204,7 +204,7 @@ API: `GET/POST /api/cajas/centros-costo`, `PUT/DELETE /api/cajas/centros-costo/:
 | `estado` | `activa` / `inactiva` |
 | `fecha_desactivacion` | DATE; se setea al pasar a `inactiva`; NULL si está activa. Pagos con `fecha_documento >= fecha_desactivacion` se rechazan. |
 
-**Validación:** Tabla OK para el módulo Admin → Tarjetas.
+**Validación:** Tabla OK para el módulo Admin → Cuentas de Banco → Tarjetas.
 
 **Inconsistencia a resolver con la UI (feedback vigente):**
 
@@ -216,6 +216,22 @@ API: `GET/POST /api/cajas/centros-costo`, `PUT/DELETE /api/cajas/centros-costo/:
 - Columna DB `origen_pago` enum: `efectivo` \| `debito` \| `credito` (UI/plantilla: **forma de pago** / header `forma_pago`).  
 - `tarjeta_id` opcional solo si en el futuro se vuelve a vincular tarjeta corporativa; hoy el front no exige elegir tarjeta empresa en el ingreso de gasto (sí últimos 4 si Débito/Crédito).  
 - Mantener `tarjetas_empresa` como maestro administrativo aunque no mueva la forma de pago hasta que se defina de nuevo.
+
+---
+
+### 6.4b `cuentas_banco` — Cuentas bancarias (catálogo)
+
+**Propósito:** Catálogo 1:1 número de cuenta → banco, usado en Asignaciones.
+
+| Campo | Notas |
+|-------|--------|
+| `id` | PK interno (no visible en UI) |
+| `numero_cuenta` | UNIQUE NOT NULL (solo dígitos) |
+| `banco` | NOT NULL (MAYÚSCULAS normalizado) |
+| `is_deleted` / `deleted_at` | Soft delete (libera UNIQUE renombrando el número) |
+
+API admin: `GET/POST /api/admin/cuentas-banco`, `PUT/DELETE /api/admin/cuentas-banco/:id`.  
+Al crear/editar asignaciones se hace upsert del par; si el número ya existe con otro banco → error 400.
 
 ---
 
@@ -248,6 +264,7 @@ API: `GET/POST /api/cajas/centros-costo`, `PUT/DELETE /api/cajas/centros-costo/:
 | `codigo_vale` | Ej. `V-5541` |
 | `fecha` | Sin hora en UI |
 | `monto`, `observacion`, `comprobante_url` | Adjunto opcional |
+| `numero_cuenta`, `banco_origen` | Persistidos en asignación; sincronizan catálogo `cuentas_banco` |
 | `caja_id`, `trabajador_id` | FKs |
 
 **Validación:** Correcto. **No** modelar patente / tipo vehículo / hora (quitados del producto).
@@ -392,6 +409,18 @@ CREATE TABLE tarjetas_empresa (
     deleted_at DATETIME NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- 6b. CUENTAS DE BANCO (catálogo 1:1)
+CREATE TABLE cuentas_banco (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    numero_cuenta VARCHAR(40) NOT NULL,
+    banco VARCHAR(120) NOT NULL,
+    is_deleted BOOLEAN DEFAULT FALSE,
+    deleted_at DATETIME NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_cuentas_banco_numero (numero_cuenta)
 ) ENGINE=InnoDB;
 
 -- 7. RENDICIONES DE GASTOS

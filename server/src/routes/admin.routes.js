@@ -17,6 +17,10 @@ const {
   createTarjeta,
   updateTarjeta,
   softDeleteTarjeta,
+  listCuentasBanco,
+  createCuentaBanco,
+  updateCuentaBanco,
+  softDeleteCuentaBanco,
   listAuditLogs,
   syncBidireccionalHandler
 } = require('../controllers/admin.controller')
@@ -52,6 +56,12 @@ router.get('/tarjetas', listTarjetas)
 router.post('/tarjetas', createTarjeta)
 router.put('/tarjetas/:id', updateTarjeta)
 router.delete('/tarjetas/:id', checkRole(SUPER_ADMINS), softDeleteTarjeta)
+
+/* Cuentas de Banco */
+router.get('/cuentas-banco', listCuentasBanco)
+router.post('/cuentas-banco', createCuentaBanco)
+router.put('/cuentas-banco/:id', updateCuentaBanco)
+router.delete('/cuentas-banco/:id', checkRole(SUPER_ADMINS), softDeleteCuentaBanco)
 
 /* Audit logs - solo Super Admins */
 router.get('/audit-logs', checkRole(SUPER_ADMINS), listAuditLogs)
