@@ -6,7 +6,7 @@ Documento operativo/técnico desde el lado de **Basalto Rendiciones**. Describe 
 **Referencias cortas:** `DEPLOY.md` (notas sync).  
 **Nota:** `docs/REGLAS_SISTEMA_Y_BD.md` no tiene sección de sync; solo indica que el JWT de Rendiciones es independiente del de Turnos.
 
-> **Estado (jul 2026):** sync bidireccional **desactivada** por defecto (`SYNC_BIDIRECCIONAL_ENABLED` off). Para reactivar: `SYNC_BIDIRECCIONAL_ENABLED=1` en `server/.env` (API y CLI).
+> **Estado (jul 2026):** sync bidireccional **activa** por defecto (API y CLI). Para desactivar temporalmente: `SYNC_BIDIRECCIONAL_ENABLED=0` en `server/.env`.
 
 ---
 
