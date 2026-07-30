@@ -28,6 +28,14 @@ Mantener alineados, por **RUT** (clave de cruce normalizada), el personal y las 
 - **Vínculo** `usuarios.trabajador_id` en Rendiciones cuando falta o el nombre está vacío (“Sin nombre”).
 - **Mapeo de rol** en altas Turnos → Rendiciones (y `es_super_admin` en altas Rendiciones → Turnos `admin_users`).
 
+### Modelo de roles (importante)
+
+| Sistema | Modelo |
+|---------|--------|
+| **Rendiciones** | `trabajadores` = ficha de la persona. `usuarios` añade rol (`ADMIN_*` o `USER_RENDIDOR`). Admin y rendidor **no** coexisten. |
+| **Turnos** | `admin_users` **XOR** (`trabajadores` + `users`). Un admin **no** necesita (ni debe) aparecer como trabajador. |
+
+Por eso: la ficha `trabajadores` de un **admin** en Rendiciones **no** se copia a `trabajadores`/`users` de Turnos. Solo se crea/actualiza `admin_users`.
 ### Qué NO se sincroniza
 
 - **`activo` (Turnos) ↔ `estado` (Rendiciones).** Las desactivaciones **no** se propagan.
@@ -146,9 +154,9 @@ Aplica a:
 |-----------|----------------|
 | **Turnos → Rendiciones (usuario)** | Siempre `estado = 'inactivo'`. Un admin debe activarlo en Rendiciones para login. Si el usuario **ya existe**, el sync **no toca** `estado`. |
 | **Turnos → Rendiciones (trabajador)** | Crea ficha; si ese RUT tiene `admin_users` o `users` en Turnos y aún no hay `usuarios` en Rendiciones, crea el usuario **inactivo**. |
-| **Rendiciones → Turnos (usuario/admin)** | Inserta con **`activo = 1`**. No copia el `estado` de Rendiciones. |
-| **Rendiciones → Turnos (trabajador)** | Inserta con **`activo = 1`**. |
-| **Admin vs user en Turnos** | Si existe `admin_users` para el RUT, no se empareja/crea vía tabla `users`. |
+| **Rendiciones → Turnos (usuario/admin)** | Inserta con **`activo = 1`**. No copia el `estado` de Rendiciones. Admin → solo `admin_users` (sin ficha `trabajadores`). |
+| **Rendiciones → Turnos (trabajador)** | Inserta con **`activo = 1`** solo si el RUT **no** es admin en Rendiciones ni en Turnos. |
+| **Admin vs user/trabajador en Turnos** | Exclusividad: `admin_users` **XOR** (`trabajadores` + `users`). Si existe `admin_users` para el RUT, no se crea vía `users`/`trabajadores`. Si el RUT ya es trabajador en Turnos, no se crea admin desde Rendiciones (error en stats). |
 
 Orden de la corrida real (no dry-run): primero `syncUsuarios`, luego `syncTrabajadores`.
 
@@ -321,7 +329,7 @@ CLI:
 - Dry-run no es un plan de cambios detallado.
 - Usuarios soft-deleted en Rendiciones fuera del universo sync.
 - Prioridad: si hay `admin_users` y `users` con el mismo RUT, manda el admin para el emparejamiento con `usuarios`.
-
+- Exclusividad Turnos: admin XOR trabajador. Fichas `trabajadores` de admins en Rendiciones no se insertan en Turnos.
 ---
 
 ## Referencias de código

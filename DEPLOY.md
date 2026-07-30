@@ -149,6 +149,7 @@ Si solo cambió una capa, reinicia solo ese proceso PM2.
   - `estado`/`activo` **no** se sincronizan. Altas Turnos→Rendiciones crean usuario con `estado='inactivo'` (si ya existe, no se toca `estado`).
   - UPDATE comunes: email↔correo, password↔password_hash; trabajadores solo nombre. Conflictos: `updated_at` más reciente gana; empate → Turnos.
   - INSERT Turnos `trabajadores` usa `id_ciudad` = primer ID de `ciudades`, `id_faena=1`; INSERT `users` crea antes el trabajador (FK).
+  - Exclusividad Turnos: admin XOR trabajador. La ficha `trabajadores` de un admin en Rendiciones **no** se copia a Turnos (solo `admin_users`).
 - En producción, `CORS_ORIGIN` debería incluir `https://rendiciones.basalto.app` (además o en lugar de localhost).
 - Archivos `*.ndjson` / `debug-*.ndjson` están en `.gitignore` (logs de debug).
 

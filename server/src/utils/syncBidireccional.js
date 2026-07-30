@@ -24,6 +24,11 @@ const { ROLES } = require('../middlewares/role.middleware')
  *   - UPDATE comunes trabajadores: nombre (nombres+apellidos ↔ nombre_completo).
  *   - Alta Turnos→Rendiciones: usuario siempre con estado='inactivo'; si ya existe, no tocar estado.
  *   - Conflictos: gana updated_at más reciente; empate → Turnos.
+ *   - Modelo de roles:
+ *       Rendiciones: `trabajadores` = ficha de persona; `usuarios` añade rol
+ *       (ADMIN_* o USER_RENDIDOR). Admin y rendidor no coexisten.
+ *       Turnos: admin (`admin_users`) XOR trabajador+login (`trabajadores`+`users`).
+ *       Un admin de Rendiciones NO se materializa como `trabajadores`/`users` en Turnos.
  */
 
 /** Normaliza RUT para comparación: sin puntos/guión/espacios, mayúsculas. */
@@ -450,6 +455,24 @@ async function insertAdminEnTurnos(u, stats) {
   )
 
   try {
+    // Exclusividad Turnos: no crear admin si el RUT ya es trabajador/usuario.
+    const [trabRows, userRows] = await Promise.all([
+      queryTurnos(
+        `SELECT RUT FROM trabajadores WHERE ${RUT_EQ_TURNOS_RUT} LIMIT 1`,
+        [u._norm]
+      ),
+      queryTurnos(
+        `SELECT rut FROM users WHERE ${RUT_EQ_TURNOS_rut} LIMIT 1`,
+        [u._norm]
+      )
+    ])
+    if (trabRows[0] || userRows[0]) {
+      stats.errores.push(
+        `rendicion→admin_users ${u._norm}: RUT ya existe como trabajador/usuario en Turnos (exclusividad admin XOR trabajador)`
+      )
+      return
+    }
+
     await queryTurnos(
       `INSERT INTO admin_users
         (RUT, nombres, apellido_paterno, apellido_materno, email, password, es_super_admin, activo)
@@ -483,6 +506,18 @@ async function insertUserEnTurnos(u, stats) {
   const rutTurnos = rutConGuion(u._norm)
 
   try {
+    // Exclusividad: un admin de Turnos no recibe ficha users/trabajadores.
+    const adminRows = await queryTurnos(
+      `SELECT RUT FROM admin_users WHERE ${RUT_EQ_TURNOS_rut} LIMIT 1`,
+      [u._norm]
+    )
+    if (adminRows[0]) {
+      stats.errores.push(
+        `rendicion→users ${u._norm}: RUT ya es administrador en Turnos (exclusividad admin XOR trabajador)`
+      )
+      return
+    }
+
     // FK users.rut → trabajadores.RUT
     await ensureTrabajadorTurnos(
       {
@@ -680,17 +715,22 @@ async function ensureUsuarioRendicionDesdeTurnos(
 }
 
 async function syncTrabajadores(stats) {
-  const [turnosTrab, rendTrab, turnosAdmins, turnosUsers] = await Promise.all([
+  const [turnosTrab, rendTrab, turnosAdmins, turnosUsers, rendUsuarios] = await Promise.all([
     loadTurnosTrabajadores(),
     loadRendicionTrabajadores(),
     loadTurnosAdmins(),
-    loadTurnosUsers()
+    loadTurnosUsers(),
+    loadRendicionUsuarios()
   ])
 
   const rendByNorm = new Map(rendTrab.map((t) => [t._norm, t]))
   const turnosByNorm = new Map(turnosTrab.map((t) => [t._norm, t]))
   const turnosAdminByNorm = new Map(turnosAdmins.map((u) => [u._norm, u]))
   const turnosUserByNorm = new Map(turnosUsers.map((u) => [u._norm, u]))
+  /** RUTs con rol admin en Rendiciones: su ficha `trabajadores` NO se copia a Turnos. */
+  const rendAdminNorms = new Set(
+    rendUsuarios.filter((u) => u._norm && isAdminRol(u.rol)).map((u) => u._norm)
+  )
   const paired = new Set()
 
   // Pares: solo nombre (NO activo↔estado)
@@ -766,11 +806,16 @@ async function syncTrabajadores(stats) {
     }
   }
 
-  // Solo en Rendiciones → INSERT en Turnos (activo=1 por default)
+  // Solo en Rendiciones → INSERT en Turnos (activo=1 por default).
+  // Admins: en Rendiciones tienen ficha en `trabajadores`, pero en Turnos NO deben
+  // materializarse como trabajador (exclusividad admin XOR trabajador).
   const rendTrab2 = await loadRendicionTrabajadores()
   for (const t of rendTrab2) {
     if (!t._norm) continue
     if (paired.has(t._norm) || turnosByNorm.has(t._norm)) continue
+    if (turnosAdminByNorm.has(t._norm) || rendAdminNorms.has(t._norm)) {
+      continue
+    }
 
     const { nombres, apellido_paterno, apellido_materno } = splitNombreCompleto(t.nombre_completo)
     try {
