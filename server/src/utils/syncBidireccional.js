@@ -151,40 +151,90 @@ async function getDefaultCiudadId() {
   return cachedCiudadId
 }
 
+function isMissingUpdatedAtError(err) {
+  const msg = String(err?.message || err || '').toLowerCase()
+  return msg.includes('unknown column') && msg.includes('updated_at')
+}
+
 async function loadTurnosAdmins() {
-  const rows = await queryTurnos(
-    `SELECT RUT AS rut, nombres, apellido_paterno, apellido_materno, email, password,
-            es_super_admin, activo, updated_at
-     FROM admin_users`
-  )
-  return rows.map((r) => ({
-    ...r,
-    _norm: normalizeRut(r.rut),
-    _kind: 'admin'
-  }))
+  try {
+    const rows = await queryTurnos(
+      `SELECT RUT AS rut, nombres, apellido_paterno, apellido_materno, email, password,
+              es_super_admin, activo, updated_at
+       FROM admin_users`
+    )
+    return rows.map((r) => ({
+      ...r,
+      _norm: normalizeRut(r.rut),
+      _kind: 'admin'
+    }))
+  } catch (err) {
+    if (!isMissingUpdatedAtError(err)) throw err
+    console.warn('[sync] admin_users.updated_at ausente — corre migrate:sync-updated-at en Turnos')
+    const rows = await queryTurnos(
+      `SELECT RUT AS rut, nombres, apellido_paterno, apellido_materno, email, password,
+              es_super_admin, activo
+       FROM admin_users`
+    )
+    return rows.map((r) => ({
+      ...r,
+      updated_at: null,
+      _norm: normalizeRut(r.rut),
+      _kind: 'admin'
+    }))
+  }
 }
 
 async function loadTurnosUsers() {
-  const rows = await queryTurnos(
-    `SELECT rut, nombres, apellido_paterno, apellido_materno, email, password, activo, updated_at
-     FROM users`
-  )
-  return rows.map((r) => ({
-    ...r,
-    _norm: normalizeRut(r.rut),
-    _kind: 'user'
-  }))
+  try {
+    const rows = await queryTurnos(
+      `SELECT rut, nombres, apellido_paterno, apellido_materno, email, password, activo, updated_at
+       FROM users`
+    )
+    return rows.map((r) => ({
+      ...r,
+      _norm: normalizeRut(r.rut),
+      _kind: 'user'
+    }))
+  } catch (err) {
+    if (!isMissingUpdatedAtError(err)) throw err
+    console.warn('[sync] users.updated_at ausente — corre migrate:sync-updated-at en Turnos')
+    const rows = await queryTurnos(
+      `SELECT rut, nombres, apellido_paterno, apellido_materno, email, password, activo
+       FROM users`
+    )
+    return rows.map((r) => ({
+      ...r,
+      updated_at: null,
+      _norm: normalizeRut(r.rut),
+      _kind: 'user'
+    }))
+  }
 }
 
 async function loadTurnosTrabajadores() {
-  const rows = await queryTurnos(
-    `SELECT RUT AS rut, nombres, apellido_paterno, apellido_materno, email, telefono, activo, updated_at
-     FROM trabajadores`
-  )
-  return rows.map((r) => ({
-    ...r,
-    _norm: normalizeRut(r.rut)
-  }))
+  try {
+    const rows = await queryTurnos(
+      `SELECT RUT AS rut, nombres, apellido_paterno, apellido_materno, email, telefono, activo, updated_at
+       FROM trabajadores`
+    )
+    return rows.map((r) => ({
+      ...r,
+      _norm: normalizeRut(r.rut)
+    }))
+  } catch (err) {
+    if (!isMissingUpdatedAtError(err)) throw err
+    console.warn('[sync] trabajadores.updated_at ausente — corre migrate:sync-updated-at en Turnos')
+    const rows = await queryTurnos(
+      `SELECT RUT AS rut, nombres, apellido_paterno, apellido_materno, email, telefono, activo
+       FROM trabajadores`
+    )
+    return rows.map((r) => ({
+      ...r,
+      updated_at: null,
+      _norm: normalizeRut(r.rut)
+    }))
+  }
 }
 
 async function loadRendicionUsuarios() {
@@ -388,12 +438,26 @@ async function updateAdminEnTurnos(norm, { email, password }, stats) {
   try {
     await queryTurnos(
       `UPDATE admin_users
-       SET email = ?, password = ?
+       SET email = ?, password = ?, updated_at = CURRENT_TIMESTAMP
        WHERE ${RUT_EQ_TURNOS_RUT}`,
       [email, password, norm]
     )
     stats.usuarios.actualizados_en_turnos += 1
   } catch (err) {
+    // Compat: si aún no existe updated_at, reintentar sin tocarlo
+    if (isMissingUpdatedAtError(err)) {
+      try {
+        await queryTurnos(
+          `UPDATE admin_users SET email = ?, password = ? WHERE ${RUT_EQ_TURNOS_RUT}`,
+          [email, password, norm]
+        )
+        stats.usuarios.actualizados_en_turnos += 1
+        return
+      } catch (err2) {
+        stats.errores.push(`update admin_users ${norm}: ${err2.message}`)
+        return
+      }
+    }
     stats.errores.push(`update admin_users ${norm}: ${err.message}`)
   }
 }
@@ -402,12 +466,25 @@ async function updateUserEnTurnos(norm, { email, password }, stats) {
   try {
     await queryTurnos(
       `UPDATE users
-       SET email = ?, password = ?
+       SET email = ?, password = ?, updated_at = CURRENT_TIMESTAMP
        WHERE ${RUT_EQ_TURNOS_rut}`,
       [email, password, norm]
     )
     stats.usuarios.actualizados_en_turnos += 1
   } catch (err) {
+    if (isMissingUpdatedAtError(err)) {
+      try {
+        await queryTurnos(
+          `UPDATE users SET email = ?, password = ? WHERE ${RUT_EQ_TURNOS_rut}`,
+          [email, password, norm]
+        )
+        stats.usuarios.actualizados_en_turnos += 1
+        return
+      } catch (err2) {
+        stats.errores.push(`update users ${norm}: ${err2.message}`)
+        return
+      }
+    }
     stats.errores.push(`update users ${norm}: ${err.message}`)
   }
 }
@@ -795,13 +872,27 @@ async function syncTrabajadores(stats) {
       try {
         await queryTurnos(
           `UPDATE trabajadores
-           SET nombres = ?, apellido_paterno = ?, apellido_materno = ?
+           SET nombres = ?, apellido_paterno = ?, apellido_materno = ?, updated_at = CURRENT_TIMESTAMP
            WHERE ${RUT_EQ_TURNOS_RUT}`,
           [nombres, apellido_paterno, apellido_materno || null, t._norm]
         )
         stats.trabajadores.actualizados_en_turnos += 1
       } catch (err) {
-        stats.errores.push(`update trab turnos ${t._norm}: ${err.message}`)
+        if (isMissingUpdatedAtError(err)) {
+          try {
+            await queryTurnos(
+              `UPDATE trabajadores
+               SET nombres = ?, apellido_paterno = ?, apellido_materno = ?
+               WHERE ${RUT_EQ_TURNOS_RUT}`,
+              [nombres, apellido_paterno, apellido_materno || null, t._norm]
+            )
+            stats.trabajadores.actualizados_en_turnos += 1
+          } catch (err2) {
+            stats.errores.push(`update trab turnos ${t._norm}: ${err2.message}`)
+          }
+        } else {
+          stats.errores.push(`update trab turnos ${t._norm}: ${err.message}`)
+        }
       }
     }
   }

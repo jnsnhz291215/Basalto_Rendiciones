@@ -179,22 +179,30 @@ El sync **lo ejecuta Rendiciones** (API/CLI contra ambas BD). Turnos no necesita
 
 ### 3.2 ALTER `updated_at` (requisito previo)
 
-`DEPLOY.md` indica aplicar:
+Aplicar en la BD de **Turnos** (idempotente):
 
-`server/scripts/sql/add_updated_at_turnos.sql`
+| Dónde | Comando / archivo |
+|-------|-------------------|
+| Repo Turnos | `npm run migrate:sync-updated-at` → `server/migrate/059_sync_updated_at.sql` |
+| Repo Rendiciones (copia) | `server/scripts/sql/add_updated_at_turnos.sql` |
 
-- Descripción documentada: script **idempotente** sobre `admin_users` / `users` / `trabajadores`.
-- **Estado en este repo:** el directorio `server/scripts/sql/` existe pero el archivo **no está presente** (carpeta vacía). Hay que recuperarlo o recrearlo en Turnos / en este repo antes de depender de conflictos por timestamp.
+Luego, si hubo sync previos con exclusividad rota:
 
-Ejemplo de intención (orientativo; validar tipos exactos en el esquema real de Turnos):
+```bash
+# En Turnos — dry-run
+npm run cleanup:admin-trabajador-duplicates
 
-```sql
--- Orientativo — por confirmar en el esquema vivo de Turnos
--- ALTER TABLE admin_users ADD COLUMN updated_at DATETIME ...
--- ALTER TABLE users ADD COLUMN updated_at DATETIME ...
--- ALTER TABLE trabajadores ADD COLUMN updated_at DATETIME ...
--- Preferible: DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+# Aplicar: borra users duplicados y desactiva trabajadores de RUTs que ya son admin
+npm run cleanup:admin-trabajador-duplicates -- --apply
 ```
+
+### Checklist antes de reactivar el sync
+
+1. Desplegar `syncBidireccional.js` (exclusividad admin XOR trabajador).
+2. Correr `migrate:sync-updated-at` en Turnos.
+3. Dry-run cleanup de duplicados; `--apply` si aparecen.
+4. `node scripts/sync-bidireccional.js --dry-run` desde Rendiciones.
+5. Sync real; revisar `stats.errores`.
 
 ### 3.3 Qué NO debe hacer Turnos (responsabilidades)
 
@@ -313,7 +321,8 @@ CLI:
 | Password no funciona en un lado | Algoritmo/hash incompatible (**por confirmar**) |
 | Error FK al crear `users` | Falló `ensureTrabajadorTurnos` o RUT inconsistente |
 | Dry-run “no muestra cambios” | Esperado: solo conteos, no diff |
-| `add_updated_at_turnos.sql` no encontrado | Archivo referenciado en DEPLOY pero **ausente** en el repo |
+| `add_updated_at_turnos.sql` no encontrado | Archivo en `server/scripts/sql/add_updated_at_turnos.sql` (o `npm run migrate:sync-updated-at` en Turnos) |
+| Admin también aparece como trabajador en Turnos | Correr `cleanup:admin-trabajador-duplicates` en Turnos; el sync ya no crea esos duplicados |
 
 ---
 
