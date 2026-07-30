@@ -90,14 +90,29 @@
 
               <div class="field">
                 <label for="password">Contraseña</label>
-                <input
-                  id="password"
-                  name="password"
-                  v-model="password"
-                  type="password"
-                  autocomplete="current-password"
-                  placeholder="••••••••"
-                />
+                <div class="dash-password-wrap">
+                  <input
+                    id="password"
+                    name="password"
+                    v-model="password"
+                    :type="showPassword ? 'text' : 'password'"
+                    autocomplete="current-password"
+                    placeholder="••••••••"
+                  />
+                  <button
+                    class="dash-password-toggle"
+                    type="button"
+                    :aria-label="showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                    :aria-pressed="showPassword"
+                    @click="showPassword = !showPassword"
+                  >
+                    <i
+                      class="fa-solid"
+                      :class="showPassword ? 'fa-eye-slash' : 'fa-eye'"
+                      aria-hidden="true"
+                    ></i>
+                  </button>
+                </div>
               </div>
 
               <p v-if="error || formError" class="error" role="alert">{{ error || formError }}</p>
@@ -146,6 +161,7 @@ const identifier = ref('')
 /** RUT limpio para API (solo dígitos+K) */
 const rutClean = ref('')
 const password = ref('')
+const showPassword = ref(false)
 const formError = ref('')
 
 /** Solo letras, números, @ y . */

@@ -78,7 +78,14 @@
         <form class="dash-admin-form" @submit.prevent="onSavePerfil">
           <div class="dash-field">
             <label>RUT</label>
-            <input :value="formatRut(user?.rut || '')" type="text" disabled class="dash-mono" />
+            <input
+              :value="formatRut(user?.rut || '')"
+              type="text"
+              readonly
+              tabindex="-1"
+              class="dash-mono dash-input-readonly"
+              aria-readonly="true"
+            />
           </div>
           <div class="dash-field">
             <label>Correo</label>
@@ -87,11 +94,72 @@
           <p class="dash-hint">Cambiar contraseña (opcional)</p>
           <div class="dash-field">
             <label>Contraseña actual</label>
-            <input v-model="modalPerfil.passwordActual" type="password" autocomplete="current-password" />
+            <div class="dash-password-wrap">
+              <input
+                v-model="modalPerfil.passwordActual"
+                :type="modalPerfil.showPasswordActual ? 'text' : 'password'"
+                autocomplete="current-password"
+              />
+              <button
+                class="dash-password-toggle"
+                type="button"
+                :aria-label="modalPerfil.showPasswordActual ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                :aria-pressed="modalPerfil.showPasswordActual"
+                @click="modalPerfil.showPasswordActual = !modalPerfil.showPasswordActual"
+              >
+                <i
+                  class="fa-solid"
+                  :class="modalPerfil.showPasswordActual ? 'fa-eye-slash' : 'fa-eye'"
+                  aria-hidden="true"
+                ></i>
+              </button>
+            </div>
           </div>
           <div class="dash-field">
             <label>Nueva contraseña</label>
-            <input v-model="modalPerfil.passwordNueva" type="password" autocomplete="new-password" />
+            <div class="dash-password-wrap">
+              <input
+                v-model="modalPerfil.passwordNueva"
+                :type="modalPerfil.showPasswordNueva ? 'text' : 'password'"
+                autocomplete="new-password"
+              />
+              <button
+                class="dash-password-toggle"
+                type="button"
+                :aria-label="modalPerfil.showPasswordNueva ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                :aria-pressed="modalPerfil.showPasswordNueva"
+                @click="modalPerfil.showPasswordNueva = !modalPerfil.showPasswordNueva"
+              >
+                <i
+                  class="fa-solid"
+                  :class="modalPerfil.showPasswordNueva ? 'fa-eye-slash' : 'fa-eye'"
+                  aria-hidden="true"
+                ></i>
+              </button>
+            </div>
+          </div>
+          <div class="dash-field">
+            <label>Confirmar nueva contraseña</label>
+            <div class="dash-password-wrap">
+              <input
+                v-model="modalPerfil.passwordConfirmar"
+                :type="modalPerfil.showPasswordConfirmar ? 'text' : 'password'"
+                autocomplete="new-password"
+              />
+              <button
+                class="dash-password-toggle"
+                type="button"
+                :aria-label="modalPerfil.showPasswordConfirmar ? 'Ocultar contraseña' : 'Mostrar contraseña'"
+                :aria-pressed="modalPerfil.showPasswordConfirmar"
+                @click="modalPerfil.showPasswordConfirmar = !modalPerfil.showPasswordConfirmar"
+              >
+                <i
+                  class="fa-solid"
+                  :class="modalPerfil.showPasswordConfirmar ? 'fa-eye-slash' : 'fa-eye'"
+                  aria-hidden="true"
+                ></i>
+              </button>
+            </div>
           </div>
           <p v-if="modalPerfil.error" class="error" role="alert">{{ modalPerfil.error }}</p>
           <p v-if="modalPerfil.ok" class="dash-hint dash-hint--ok">{{ modalPerfil.ok }}</p>
@@ -4647,6 +4715,10 @@ const modalPerfil = reactive({
   correo: '',
   passwordActual: '',
   passwordNueva: '',
+  passwordConfirmar: '',
+  showPasswordActual: false,
+  showPasswordNueva: false,
+  showPasswordConfirmar: false,
   error: '',
   ok: ''
 })
@@ -4730,6 +4802,10 @@ function openModalPerfil() {
   modalPerfil.correo = user.value?.correo || ''
   modalPerfil.passwordActual = ''
   modalPerfil.passwordNueva = ''
+  modalPerfil.passwordConfirmar = ''
+  modalPerfil.showPasswordActual = false
+  modalPerfil.showPasswordNueva = false
+  modalPerfil.showPasswordConfirmar = false
   modalPerfil.error = ''
   modalPerfil.ok = ''
 }
@@ -4743,9 +4819,34 @@ function closeModalPerfil() {
 async function onSavePerfil() {
   modalPerfil.error = ''
   modalPerfil.ok = ''
+
+  const quiereCambiarClave =
+    !!modalPerfil.passwordActual ||
+    !!modalPerfil.passwordNueva ||
+    !!modalPerfil.passwordConfirmar
+
+  if (quiereCambiarClave) {
+    if (!modalPerfil.passwordActual) {
+      modalPerfil.error = 'Ingresa tu contraseña actual'
+      return
+    }
+    if (!modalPerfil.passwordNueva) {
+      modalPerfil.error = 'Ingresa la nueva contraseña'
+      return
+    }
+    if (!modalPerfil.passwordConfirmar) {
+      modalPerfil.error = 'Confirma la nueva contraseña'
+      return
+    }
+    if (modalPerfil.passwordNueva !== modalPerfil.passwordConfirmar) {
+      modalPerfil.error = 'La nueva contraseña y su confirmación no coinciden'
+      return
+    }
+  }
+
   try {
     const payload = { correo: modalPerfil.correo.trim() }
-    if (modalPerfil.passwordNueva) {
+    if (quiereCambiarClave) {
       payload.password_actual = modalPerfil.passwordActual
       payload.password_nueva = modalPerfil.passwordNueva
     }
@@ -4755,6 +4856,10 @@ async function onSavePerfil() {
     modalPerfil.ok = 'Perfil actualizado'
     modalPerfil.passwordActual = ''
     modalPerfil.passwordNueva = ''
+    modalPerfil.passwordConfirmar = ''
+    modalPerfil.showPasswordActual = false
+    modalPerfil.showPasswordNueva = false
+    modalPerfil.showPasswordConfirmar = false
   } catch (err) {
     modalPerfil.error = err?.message || 'No se pudo actualizar el perfil'
   }
