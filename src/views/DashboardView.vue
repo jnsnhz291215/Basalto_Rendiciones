@@ -2426,15 +2426,6 @@
           </div>
           <div class="dash-toolbar-actions">
             <button
-              class="dash-btn-excel"
-              type="button"
-              title="Exporta la cartola visible (Excel o PDF)"
-              @click="openExportCartolaModal"
-            >
-              <span>📤</span>
-              <span>Exportar</span>
-            </button>
-            <button
               class="dash-btn-primary dash-btn-toggle-caja"
               type="button"
               @click="toggleFormInforme"
@@ -2565,16 +2556,6 @@
             </div>
 
             <div class="dash-informe-form-actions">
-              <div class="dash-toolbar-actions">
-                <button
-                  class="dash-btn-secondary"
-                  type="button"
-                  @click="openExportCartolaModal"
-                >
-                  <span>📤</span>
-                  <span>Exportar</span>
-                </button>
-              </div>
               <div class="dash-toolbar-actions">
                 <button class="dash-btn-secondary" type="button" @click="closeFormInforme">
                   Cancelar
@@ -2822,30 +2803,6 @@
             <span class="dash-rinde">Cargo {{ cartolaTotales.cargo }}</span>
           </div>
         </div>
-      </div>
-
-      <!-- Importaciones Excel -->
-      <div v-else-if="activeView === 'importaciones' && isAdminSession" class="dash-importaciones">
-        <div class="dash-cajas-toolbar">
-          <div>
-            <h3 class="dash-cajas-toolbar-title">Importaciones</h3>
-            <p class="dash-cajas-toolbar-hint">
-              Lotes expandibles: revisa movimientos, sube comprobantes y confirma la importación.
-            </p>
-          </div>
-          <div class="dash-toolbar-actions">
-            <button
-              class="dash-btn-excel"
-              type="button"
-              title="Importar gastos o asignaciones desde Excel"
-              :disabled="importExcelLoading"
-              @click="openImportModal"
-            >
-              <span>📥</span>
-              <span>Importar</span>
-            </button>
-          </div>
-        </div>
 
         <div
           v-if="exportCartolaModalOpen"
@@ -2902,6 +2859,30 @@
                 Exportar
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Importaciones Excel -->
+      <div v-else-if="activeView === 'importaciones' && isAdminSession" class="dash-importaciones">
+        <div class="dash-cajas-toolbar">
+          <div>
+            <h3 class="dash-cajas-toolbar-title">Importaciones</h3>
+            <p class="dash-cajas-toolbar-hint">
+              Lotes expandibles: revisa movimientos, sube comprobantes y confirma la importación.
+            </p>
+          </div>
+          <div class="dash-toolbar-actions">
+            <button
+              class="dash-btn-excel"
+              type="button"
+              title="Importar gastos o asignaciones desde Excel"
+              :disabled="importExcelLoading"
+              @click="openImportModal"
+            >
+              <span>📥</span>
+              <span>Importar</span>
+            </button>
           </div>
         </div>
 
@@ -7862,21 +7843,29 @@ function confirmExportCartola() {
     return
   }
   saveError.value = ''
+  saveOk.value = ''
   const mes = String(filtrosInforme.mes || '').replace(/-/g, '') || 'mes'
   const mapped = mapCartolaExportRows(rows)
-  if (exportCartolaModalFormat.value === 'pdf') {
-    exportarCartolaPdf(mapped, {
-      periodo: informeResultado.periodo,
-      totales: cartolaTotales.value,
-      filename: `cartola_${mes}_${rows.length}reg.pdf`
-    })
-  } else {
-    exportarCartolaVisible(mapped, {
-      periodo: informeResultado.periodo,
-      filename: `cartola_${mes}_${rows.length}reg.xlsx`
-    })
+  const format = exportCartolaModalFormat.value === 'pdf' ? 'pdf' : 'excel'
+  try {
+    if (format === 'pdf') {
+      exportarCartolaPdf(mapped, {
+        periodo: informeResultado.periodo,
+        totales: cartolaTotales.value,
+        filename: `cartola_${mes}_${rows.length}reg.pdf`
+      })
+    } else {
+      exportarCartolaVisible(mapped, {
+        periodo: informeResultado.periodo,
+        filename: `cartola_${mes}_${rows.length}reg.xlsx`
+      })
+    }
+    exportCartolaModalOpen.value = false
+    saveOk.value = `Cartola exportada (${format.toUpperCase()}, ${rows.length} registros).`
+  } catch (err) {
+    console.error('[exportar cartola]', err)
+    saveError.value = err?.message || 'No se pudo exportar la cartola.'
   }
-  exportCartolaModalOpen.value = false
 }
 
 function openImportModal() {
