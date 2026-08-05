@@ -1654,9 +1654,15 @@ a:hover {
 }
 
 .dash-parcial-table .dash-table {
-  min-width: 0;
+  min-width: 38rem;
   width: 100%;
   table-layout: fixed;
+}
+
+.dash-parcial-table .dash-table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dash-parcial-table .dash-table th:nth-child(1),
@@ -1671,7 +1677,7 @@ a:hover {
 
 .dash-parcial-table .dash-table th:nth-child(3),
 .dash-parcial-table .dash-table td:nth-child(3) {
-  width: 5.75rem;
+  width: 6.25rem;
 }
 
 .dash-parcial-table .dash-table th:nth-child(4),
@@ -1679,15 +1685,17 @@ a:hover {
   width: 4.5rem;
 }
 
-.dash-parcial-table .dash-table th:nth-child(6),
-.dash-parcial-table .dash-table td:nth-child(6) {
-  width: 6.5rem;
-}
-
+.dash-parcial-table .dash-table th:nth-child(5),
 .dash-parcial-table .dash-table td:nth-child(5) {
+  width: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dash-parcial-table .dash-table th:nth-child(6),
+.dash-parcial-table .dash-table td:nth-child(6) {
+  width: 6.75rem;
 }
 
 .dash-parcial-totales {
@@ -1855,6 +1863,10 @@ input[type='number'].dash-input-strong,
 
 .dash-btn-excel:disabled:hover {
   background: #059669;
+}
+
+.dash-export-cartola-hint {
+  margin: 0 0 1rem;
 }
 
 .dash-modal--import {

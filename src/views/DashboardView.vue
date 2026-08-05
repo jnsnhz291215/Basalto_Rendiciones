@@ -2428,11 +2428,11 @@
             <button
               class="dash-btn-excel"
               type="button"
-              title="Exporta a Excel solo lo filtrado / visible en pantalla"
-              @click="onExportarCartolaExcel"
+              title="Exporta la cartola visible (Excel o PDF)"
+              @click="openExportCartolaModal"
             >
               <span>📤</span>
-              <span>Exportar Excel</span>
+              <span>Exportar</span>
             </button>
             <button
               class="dash-btn-primary dash-btn-toggle-caja"
@@ -2566,13 +2566,13 @@
 
             <div class="dash-informe-form-actions">
               <div class="dash-toolbar-actions">
-                <button class="dash-btn-secondary" type="button">
-                  <span>📊</span>
-                  <span>Exportar Excel</span>
-                </button>
-                <button class="dash-btn-pdf" type="button">
-                  <span>📄</span>
-                  <span>Exportar PDF</span>
+                <button
+                  class="dash-btn-secondary"
+                  type="button"
+                  @click="openExportCartolaModal"
+                >
+                  <span>📤</span>
+                  <span>Exportar</span>
                 </button>
               </div>
               <div class="dash-toolbar-actions">
@@ -2595,7 +2595,18 @@
               <h3>{{ informeResultado.titulo }}</h3>
               <p>{{ informeResultado.periodo }}</p>
             </div>
-            <span class="dash-informe-count">{{ informeResultado.total }}</span>
+            <div class="dash-informe-result-actions">
+              <span class="dash-informe-count">{{ informeResultado.total }}</span>
+              <button
+                class="dash-btn-secondary"
+                type="button"
+                title="Exporta la cartola con los filtros actuales (Excel o PDF)"
+                @click="openExportCartolaModal"
+              >
+                <span>📤</span>
+                <span>Exportar</span>
+              </button>
+            </div>
           </div>
 
           <div class="dash-cartola-filters">
@@ -2833,6 +2844,64 @@
               <span>📥</span>
               <span>Importar</span>
             </button>
+          </div>
+        </div>
+
+        <div
+          v-if="exportCartolaModalOpen"
+          class="dash-modal-backdrop"
+          @click.self="closeExportCartolaModal"
+        >
+          <div
+            class="dash-modal dash-modal--compact"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="modal-export-cartola-title"
+          >
+            <div class="dash-modal-head">
+              <h3 id="modal-export-cartola-title">Exportar cartola</h3>
+              <button
+                class="dash-modal-close"
+                type="button"
+                aria-label="Cerrar"
+                @click="closeExportCartolaModal"
+              >
+                ×
+              </button>
+            </div>
+            <p class="dash-hint dash-export-cartola-hint">
+              Se exportará la cartola visible con los filtros actuales.
+            </p>
+            <div class="dash-segmented" role="radiogroup" aria-label="Formato de exportación">
+              <button
+                type="button"
+                role="radio"
+                class="dash-segmented-btn"
+                :class="{ 'dash-segmented-btn--active': exportCartolaModalFormat === 'excel' }"
+                :aria-checked="exportCartolaModalFormat === 'excel'"
+                @click="exportCartolaModalFormat = 'excel'"
+              >
+                Excel
+              </button>
+              <button
+                type="button"
+                role="radio"
+                class="dash-segmented-btn"
+                :class="{ 'dash-segmented-btn--active': exportCartolaModalFormat === 'pdf' }"
+                :aria-checked="exportCartolaModalFormat === 'pdf'"
+                @click="exportCartolaModalFormat = 'pdf'"
+              >
+                PDF
+              </button>
+            </div>
+            <div class="dash-modal-actions">
+              <button class="dash-btn-secondary" type="button" @click="closeExportCartolaModal">
+                Cancelar
+              </button>
+              <button class="dash-btn-primary" type="button" @click="confirmExportCartola">
+                Exportar
+              </button>
+            </div>
           </div>
         </div>
 
@@ -4671,6 +4740,7 @@ import {
   descargarPlantillaGastos,
   exportarCartolaVisible
 } from '../utils/excelPlantillas'
+import { exportarCartolaPdf } from '../utils/cartolaPdf'
 import * as api from '../api/resources'
 import { apiUrl, withSilentApi } from '../api/client'
 import { persistSessionProfile } from '../api/auth'
@@ -4871,6 +4941,8 @@ const saveError = ref('')
 const saveOk = ref('')
 const importExcelLoading = ref(false)
 const importModalOpen = ref(false)
+const exportCartolaModalOpen = ref(false)
+const exportCartolaModalFormat = ref('excel')
 const importModalTipo = ref('gastos')
 const importModalFile = ref(null)
 const importModalDragOver = ref(false)
@@ -7118,7 +7190,10 @@ function openModalHistorialCartola(row) {
   modalHistorialCartola.tipo = row.tipo || ''
   modalHistorialCartola.fecha = row.fecha || ''
   modalHistorialCartola.responsable = row.responsable || ''
-  modalHistorialCartola.monto = row.cargo || row.abono || ''
+  modalHistorialCartola.monto =
+    (row.abono && row.abono !== '-' ? row.abono : '') ||
+    (row.cargo && row.cargo !== '-' ? row.cargo : '') ||
+    ''
   modalHistorialCartola.pago = row.pago || ''
   modalHistorialCartola.docto = row.docto || ''
   modalHistorialCartola.estado = row.estado || ''
@@ -7761,7 +7836,26 @@ function onCartolaBusquedaInput(event) {
   syncInformeResultado()
 }
 
-function onExportarCartolaExcel() {
+function mapCartolaExportRows(rows) {
+  return rows.map((row) => ({
+    ...row,
+    cajaGroupKey: labelCajaGroup(row.cajaGroupKey) || row.cajaGroupKey || '',
+    cajaLabel: labelCajaGroup(row.cajaGroupKey) || row.cajaGroupKey || '',
+    centroCobroNombre:
+      row.centroCobroNombre || labelCentroCobroInforme(row.centroCobroId) || ''
+  }))
+}
+
+function openExportCartolaModal() {
+  exportCartolaModalFormat.value = 'excel'
+  exportCartolaModalOpen.value = true
+}
+
+function closeExportCartolaModal() {
+  exportCartolaModalOpen.value = false
+}
+
+function confirmExportCartola() {
   const rows = cartolaFiltrada.value
   if (!rows.length) {
     saveError.value = 'No hay registros visibles para exportar con los filtros actuales.'
@@ -7769,16 +7863,20 @@ function onExportarCartolaExcel() {
   }
   saveError.value = ''
   const mes = String(filtrosInforme.mes || '').replace(/-/g, '') || 'mes'
-  const exportRows = rows.map((row) => ({
-    ...row,
-    cajaGroupKey: labelCajaGroup(row.cajaGroupKey) || row.cajaGroupKey || '',
-    centroCobroNombre:
-      row.centroCobroNombre || labelCentroCobroInforme(row.centroCobroId) || ''
-  }))
-  exportarCartolaVisible(exportRows, {
-    periodo: informeResultado.periodo,
-    filename: `cartola_${mes}_${rows.length}reg.xlsx`
-  })
+  const mapped = mapCartolaExportRows(rows)
+  if (exportCartolaModalFormat.value === 'pdf') {
+    exportarCartolaPdf(mapped, {
+      periodo: informeResultado.periodo,
+      totales: cartolaTotales.value,
+      filename: `cartola_${mes}_${rows.length}reg.pdf`
+    })
+  } else {
+    exportarCartolaVisible(mapped, {
+      periodo: informeResultado.periodo,
+      filename: `cartola_${mes}_${rows.length}reg.xlsx`
+    })
+  }
+  exportCartolaModalOpen.value = false
 }
 
 function openImportModal() {
