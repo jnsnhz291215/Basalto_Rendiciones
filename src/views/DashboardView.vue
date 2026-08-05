@@ -2424,150 +2424,6 @@
               Consolidado mensual de movimientos e importación/exportación masiva.
             </p>
           </div>
-          <div class="dash-toolbar-actions">
-            <button
-              class="dash-btn-primary dash-btn-toggle-caja"
-              type="button"
-              @click="toggleFormInforme"
-            >
-              <span>{{ informeFormOpen ? '▲' : '＋' }}</span>
-              <span>{{ informeFormOpen ? 'Ocultar Filtros' : 'Filtros de Informe' }}</span>
-            </button>
-          </div>
-        </div>
-
-        <div
-          class="dash-collapse"
-          :class="{ 'dash-collapse--open': informeFormOpen }"
-        >
-          <div class="dash-collapse-inner">
-            <div class="dash-panel dash-gasto-form-panel dash-collapse-panel">
-          <div class="dash-caja-form-head">
-            <div>
-              <h2 class="dash-assign-title dash-assign-title--flush">
-                Configurar Generación de Informe
-              </h2>
-              <p class="dash-hint">La consulta es por período de mes cerrado completo.</p>
-            </div>
-            <button
-              class="dash-modal-close"
-              type="button"
-              aria-label="Cerrar filtros"
-              @click="closeFormInforme"
-            >
-              ×
-            </button>
-          </div>
-
-          <form class="dash-informe-form" @submit.prevent="onAplicarFiltrosInforme">
-            <div class="dash-form dash-form--three">
-              <div class="dash-field">
-                <label>Centro de cobro / empresa</label>
-                <select v-model="informe.centroCobroId" @change="onInformeCcChange">
-                  <option value="">Todos los centros</option>
-                  <option v-for="cc in centrosCosto" :key="cc.id" :value="String(cc.id)">
-                    {{ cc.nombre }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="dash-field">
-                <label>Caja Chica</label>
-                <select v-model="informe.caja">
-                  <option value="">Todas las Cajas</option>
-                  <option
-                    v-for="c in cajasOpcionesInforme"
-                    :key="c.groupKey"
-                    :value="c.groupKey"
-                  >
-                    {{ c.label }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="dash-field">
-                <label class="dash-label-accent">Mes Cerrado (1 al 31) 📅</label>
-                <select v-model="informe.mes">
-                  <option
-                    v-for="m in mesesCerradosOpciones"
-                    :key="m.value"
-                    :value="m.value"
-                  >
-                    {{ m.label }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="dash-field">
-                <label>Trabajador</label>
-                <select v-model="informe.persona">
-                  <option value="">** Todos los Trabajadores **</option>
-                  <option v-for="t in trabajadores" :key="t.id" :value="t.nombre">
-                    {{ t.nombre }}
-                  </option>
-                  <option value="Juan Pérez">Juan Pérez</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="dash-informe-tipos">
-              <div class="dash-informe-tipos-head">
-                <label>Tipos de Movimiento a Incluir:</label>
-                <div class="dash-informe-tipos-toggles">
-                  <button
-                    class="dash-link-btn"
-                    type="button"
-                    @click="seleccionarTodosTiposInforme(true)"
-                  >
-                    Seleccionar Todos
-                  </button>
-                  <button
-                    class="dash-link-btn"
-                    type="button"
-                    @click="seleccionarTodosTiposInforme(false)"
-                  >
-                    Desmarcar Todos
-                  </button>
-                </div>
-              </div>
-
-              <div class="dash-informe-tipos-grid">
-                <label class="dash-informe-check">
-                  <input v-model="informe.tipos.apertura" type="checkbox" />
-                  <span>Inyección / Fondo Fijo</span>
-                </label>
-                <label class="dash-informe-check">
-                  <input v-model="informe.tipos.rendicion" type="checkbox" />
-                  <span>Rendición (Gasto)</span>
-                </label>
-                <label class="dash-informe-check">
-                  <input v-model="informe.tipos.anticipo" type="checkbox" />
-                  <span>Asignación / Vale</span>
-                </label>
-                <label class="dash-informe-check">
-                  <input v-model="informe.tipos.devolucion" type="checkbox" />
-                  <span>Devolución Trabajador</span>
-                </label>
-                <label class="dash-informe-check">
-                  <input v-model="informe.tipos.sobrante" type="checkbox" />
-                  <span>Devolución Sobrante</span>
-                </label>
-              </div>
-            </div>
-
-            <div class="dash-informe-form-actions">
-              <div class="dash-toolbar-actions">
-                <button class="dash-btn-secondary" type="button" @click="closeFormInforme">
-                  Cancelar
-                </button>
-                <button class="dash-btn-primary" type="submit">
-                  <span>Aplicar Filtros</span>
-                </button>
-              </div>
-            </div>
-          </form>
-            </div>
-          </div>
         </div>
 
         <div class="dash-panel">
@@ -5297,8 +5153,6 @@ const modalPersonalCaja = reactive({
   lista: []
 })
 
-const informeFormOpen = ref(false)
-
 const informeTiposDefault = () => ({
   apertura: true,
   rendicion: true,
@@ -5307,15 +5161,7 @@ const informeTiposDefault = () => ({
   sobrante: true
 })
 
-const informe = reactive({
-  centroCobroId: '',
-  caja: '',
-  mes: '2026-07',
-  persona: '',
-  busqueda: '',
-  tipos: informeTiposDefault()
-})
-
+/** Fuente de verdad de filtros de cartola (barra compacta). */
 const filtrosInforme = reactive({
   centroCobroId: '',
   caja: '',
@@ -6623,19 +6469,6 @@ const cartolaPorCcYCaja = computed(() => {
 
 const cartolaTotales = computed(() => totalesFilasCartola(cartolaFiltrada.value))
 
-const cajasOpcionesInforme = computed(() => {
-  const ccId = informe.centroCobroId
-  const map = new Map()
-  for (const c of cajas.value) {
-    if (ccId && String(c.centroCobroId ?? '') !== String(ccId)) continue
-    if (!map.has(c.groupKey)) map.set(c.groupKey, c.displayName)
-  }
-  return [...map.entries()].map(([groupKey, displayName]) => ({
-    groupKey,
-    label: displayName
-  }))
-})
-
 /** Cajas del filtro rápido de cartola (según CC seleccionado en filtrosInforme) */
 const cajasOpcionesCartola = computed(() => {
   const ccId = filtrosInforme.centroCobroId
@@ -6649,12 +6482,6 @@ const cajasOpcionesCartola = computed(() => {
     label: displayName
   }))
 })
-
-function onInformeCcChange() {
-  if (!informe.caja) return
-  const ok = cajasOpcionesInforme.value.some((c) => c.groupKey === informe.caja)
-  if (!ok) informe.caja = ''
-}
 
 function labelCentroCobroInforme(ccId) {
   if (!ccId) return 'Todos'
@@ -7749,30 +7576,6 @@ async function onSaveAsignarCajas() {
   }
 }
 
-function toggleFormInforme() {
-  if (informeFormOpen.value) {
-    closeFormInforme()
-    return
-  }
-  informe.centroCobroId = filtrosInforme.centroCobroId
-  informe.caja = filtrosInforme.caja
-  informe.mes = filtrosInforme.mes
-  informe.persona = filtrosInforme.persona
-  informe.busqueda = filtrosInforme.busqueda
-  Object.assign(informe.tipos, filtrosInforme.tipos)
-  informeFormOpen.value = true
-}
-
-function closeFormInforme() {
-  informeFormOpen.value = false
-}
-
-function seleccionarTodosTiposInforme(value) {
-  for (const key of Object.keys(informe.tipos)) {
-    informe.tipos[key] = value
-  }
-}
-
 function syncInformeResultado() {
   const ccLabel = labelCentroCobroInforme(filtrosInforme.centroCobroId)
   const cajaLabel = filtrosInforme.caja ? labelCajaGroup(filtrosInforme.caja) : 'Todas'
@@ -7787,18 +7590,15 @@ function onCartolaMesChange(event) {
   const mes = event?.target?.value || ''
   if (!mes) return
   filtrosInforme.mes = mes
-  informe.mes = mes
   syncInformeResultado()
 }
 
 function onCartolaCcChange(event) {
   const ccId = event?.target?.value || ''
   filtrosInforme.centroCobroId = ccId
-  informe.centroCobroId = ccId
   const ok = cajasOpcionesCartola.value.some((c) => c.groupKey === filtrosInforme.caja)
   if (!ok) {
     filtrosInforme.caja = ''
-    informe.caja = ''
   }
   syncInformeResultado()
 }
@@ -7806,14 +7606,12 @@ function onCartolaCcChange(event) {
 function onCartolaCajaChange(event) {
   const caja = event?.target?.value || ''
   filtrosInforme.caja = caja
-  informe.caja = caja
   syncInformeResultado()
 }
 
 function onCartolaBusquedaInput(event) {
   const q = event?.target?.value || ''
   filtrosInforme.busqueda = q
-  informe.busqueda = q
   syncInformeResultado()
 }
 
@@ -8349,17 +8147,6 @@ async function onImportComprobanteFileChange(event) {
   } finally {
     importComprobanteUploading.value = false
   }
-}
-
-function onAplicarFiltrosInforme() {
-  filtrosInforme.centroCobroId = informe.centroCobroId
-  filtrosInforme.caja = informe.caja
-  filtrosInforme.mes = informe.mes
-  filtrosInforme.persona = informe.persona
-  filtrosInforme.busqueda = informe.busqueda
-  Object.assign(filtrosInforme.tipos, informe.tipos)
-  syncInformeResultado()
-  closeFormInforme()
 }
 
 function formatMonto(value) {
