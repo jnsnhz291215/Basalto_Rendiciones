@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="update-banner-root">
     <div
       v-if="visible"
       class="update-banner"
@@ -94,13 +94,22 @@ function stopPolling() {
   }
 }
 
+watch(
+  () => visible.value,
+  () => {
+    window.dispatchEvent(new Event('rendiciones:chrome-layout'))
+  }
+)
+
 onMounted(async () => {
   await checkVersion()
   startPolling()
+  window.dispatchEvent(new Event('rendiciones:chrome-layout'))
 })
 
 onUnmounted(() => {
   stopPolling()
+  window.dispatchEvent(new Event('rendiciones:chrome-layout'))
 })
 
 watch(

@@ -37,6 +37,8 @@ async function load() {
     items.value = await withSilentApi(() => fetchEmergenciaActiva())
   } catch (err) {
     console.error('[emergencia-banner]', err)
+  } finally {
+    window.dispatchEvent(new Event('rendiciones:chrome-layout'))
   }
 }
 
@@ -56,6 +58,13 @@ function stopPolling() {
 }
 
 watch(
+  () => items.value.length,
+  () => {
+    window.dispatchEvent(new Event('rendiciones:chrome-layout'))
+  }
+)
+
+watch(
   () => (user.value ? user.value.rut || user.value.id || true : null),
   (ok) => {
     if (ok) {
@@ -64,6 +73,7 @@ watch(
     } else {
       stopPolling()
       items.value = []
+      window.dispatchEvent(new Event('rendiciones:chrome-layout'))
     }
   }
 )
@@ -75,13 +85,15 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopPolling()
+  window.dispatchEvent(new Event('rendiciones:chrome-layout'))
 })
 </script>
 
 <style scoped>
 .emergencia-banner {
   position: relative;
-  z-index: 40;
+  z-index: 1;
+  flex: 0 0 auto;
   width: 100%;
   background: #b91c1c;
   color: #fff;
