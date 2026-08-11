@@ -374,6 +374,18 @@ export async function getSystemVersion(fetchOpts = {}) {
   })
 }
 
+/**
+ * Avisos de emergencia activos (compartidos con Turnos vía BD).
+ * @returns {Promise<Array<{ id: number, mensaje: string, inicia_en?: string, termina_en?: string }>>}
+ */
+export async function fetchEmergenciaActiva(fetchOpts = {}) {
+  const data = await jsonOrThrow('/api/avisos/emergencia/activa', {
+    silent: true,
+    ...fetchOpts
+  })
+  return Array.isArray(data?.items) ? data.items : []
+}
+
 /** Solo Super Admin: bump SYSTEM_VERSION para notificar recarga a clientes. */
 export async function triggerSystemReload() {
   return jsonOrThrow('/api/admin/trigger-reload', { method: 'POST' })

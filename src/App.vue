@@ -1,5 +1,6 @@
 <template>
   <div class="app-root">
+    <EmergenciaBanner />
     <UpdateBanner />
     <router-view />
   </div>
@@ -7,4 +8,5 @@
 
 <script setup>
 import UpdateBanner from './components/UpdateBanner.vue'
+import EmergenciaBanner from './components/EmergenciaBanner.vue'
 </script>

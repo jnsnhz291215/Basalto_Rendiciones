@@ -46,6 +46,18 @@ Por eso: la ficha `trabajadores` de un **admin** en Rendiciones **no** se copia 
 - JWT, sesiones, cajas, rendiciones, anticipos, faenas, turnos laborales, etc.
 - Filas soft-deleted en Rendiciones (`is_deleted = TRUE`) — no se cargan ni se reactivan desde el sync.
 
+### Lectura compartida (no sync): avisos de emergencia
+
+Los avisos tipo **emergencia** viven solo en Turnos (`avisos_emergencia`). Rendiciones los **lee** en vivo vía `TURNOS_DB_*`:
+
+| Canal | Detalle |
+|-------|---------|
+| API | `GET /api/avisos/emergencia/activa` (sesión Rendiciones) |
+| UI | Banner rojo en `App.vue` (`EmergenciaBanner.vue`), poll 30s |
+| Código | `server/src/utils/avisosEmergenciaTurnos.js` |
+
+Crear/desactivar solo desde Turnos (SPA Avisos). No se duplica la tabla en Rendiciones.
+
 ---
 
 ## 2. Desde Rendiciones (este lado)

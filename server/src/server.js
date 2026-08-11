@@ -21,6 +21,7 @@ const adminRoutes = require('./routes/admin.routes')
 const legacyRoutes = require('./routes/legacy.routes')
 const importacionesRoutes = require('./routes/importaciones.routes')
 const systemRoutes = require('./routes/system.routes')
+const avisosRoutes = require('./routes/avisos.routes')
 const { initSystemVersion } = require('./utils/systemVersion')
 
 const app = express()
@@ -68,6 +69,7 @@ try {
 }
 
 app.use('/api/system', systemRoutes)
+app.use('/api/avisos', avisosRoutes)
 app.use('/api/auth', authRoutes)
 app.use('/api/cajas', cajasRoutes)
 app.use('/api/rendiciones', rendicionesRoutes)
