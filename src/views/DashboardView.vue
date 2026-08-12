@@ -7686,9 +7686,13 @@ function setImportModalTipo(tipo) {
   clearImportModalFile()
 }
 
-function descargarPlantillaImportModal() {
-  if (importModalTipo.value === 'asignaciones') descargarPlantillaAsignaciones()
-  else descargarPlantillaGastos()
+async function descargarPlantillaImportModal() {
+  try {
+    if (importModalTipo.value === 'asignaciones') await descargarPlantillaAsignaciones()
+    else await descargarPlantillaGastos()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo descargar la plantilla'
+  }
 }
 
 function clearImportModalFile() {

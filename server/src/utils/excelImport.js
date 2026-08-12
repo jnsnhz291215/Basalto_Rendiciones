@@ -352,6 +352,65 @@ function keysMatch(a, b) {
   return false
 }
 
+/**
+ * Solo enteros positivos exactos (id de catálogo).
+ * Acepta number o string "12" / "12.0"; rechaza "12abc", vacío, etc.
+ */
+function parsePositiveIntId(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const n = Math.round(value)
+    if (n > 0 && Math.abs(value - n) < 1e-9) return n
+    return null
+  }
+  const s = cellToString(value).trim()
+  if (!/^\d+(\.0+)?$/.test(s)) return null
+  const n = Number(s)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return Math.round(n)
+}
+
+/**
+ * Resuelve caja_id desde filas de catálogo.
+ * Prioridad: id numérico exacto de caja → filtro cc por id → fuzzy keysMatch.
+ *
+ * @param {{ id: any, clave_interna?: any, nombre_exterior?: any, cc_nombre?: any, centro_cobro_id?: any }[]} rows
+ * @param {any} ccNombre
+ * @param {any} cajaClave
+ * @returns {number|null}
+ */
+function resolveCajaIdFromCatalog(rows, ccNombre, cajaClave) {
+  const list = Array.isArray(rows) ? rows : []
+  const ccRaw = cellToString(ccNombre)
+  const cajaRaw = cellToString(cajaClave)
+  if (!cajaRaw) return null
+
+  const cajaIdNum = parsePositiveIntId(cajaRaw)
+  if (cajaIdNum != null) {
+    const byId = list.find((r) => Number(r.id) === cajaIdNum)
+    if (byId) return Number(byId.id)
+  }
+
+  const ccIdNum = parsePositiveIntId(ccRaw)
+  let candidates = list
+  if (ccRaw) {
+    if (ccIdNum != null) {
+      candidates = list.filter((r) => Number(r.centro_cobro_id) === ccIdNum)
+    } else {
+      candidates = list.filter((r) => keysMatch(r.cc_nombre, ccRaw))
+    }
+  }
+
+  const matches = candidates.filter((r) => {
+    return keysMatch(r.clave_interna, cajaRaw) || keysMatch(r.nombre_exterior, cajaRaw)
+  })
+
+  if (!matches.length) return null
+  if (matches.length === 1) return Number(matches[0].id)
+
+  const byKey = matches.find((r) => keysMatch(r.clave_interna, cajaRaw))
+  return Number((byKey || matches[0]).id)
+}
+
 module.exports = {
   HEADERS_GASTOS,
   HEADERS_ASIGNACIONES,
@@ -367,6 +426,8 @@ module.exports = {
   mapTipoDocumento,
   mapOrigenPago,
   keysMatch,
+  parsePositiveIntId,
+  resolveCajaIdFromCatalog,
   cellToString,
   tipoAceptaNumeroDocumento,
   tipoRequiereNumeroDocumento,

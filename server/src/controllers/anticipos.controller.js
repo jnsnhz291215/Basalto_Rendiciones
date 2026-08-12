@@ -23,8 +23,8 @@ const {
   parseMonto,
   cleanRut,
   normalizeNumeroDocumento,
-  keysMatch,
-  cellToString
+  cellToString,
+  resolveCajaIdFromCatalog
 } = require('../utils/excelImport')
 const { ensureImportacionesSchema } = require('../utils/ensureImportacionesSchema')
 const {
@@ -392,26 +392,14 @@ async function getCentroCobroIdFromCaja(cajaId) {
 }
 
 async function findCajaIdByCcYCaja(ccNombre, cajaClave) {
-  const ccRaw = cellToString(ccNombre)
-  const cajaRaw = cellToString(cajaClave)
-  if (!cajaRaw) return null
   const rows = await query(
-    `SELECT c.id, c.clave_interna, c.nombre_exterior, COALESCE(cc.nombre, '') AS cc_nombre
+    `SELECT c.id, c.clave_interna, c.nombre_exterior, c.centro_cobro_id,
+            COALESCE(cc.nombre, '') AS cc_nombre
      FROM cajas_chicas c
      LEFT JOIN centros_costo cc ON cc.id = c.centro_cobro_id AND cc.is_deleted = FALSE
      WHERE c.is_deleted = FALSE`
   )
-  const matches = rows.filter((r) => {
-    const cajaOk =
-      keysMatch(r.clave_interna, cajaRaw) || keysMatch(r.nombre_exterior, cajaRaw)
-    if (!cajaOk) return false
-    if (!ccRaw) return true
-    return keysMatch(r.cc_nombre, ccRaw)
-  })
-  if (!matches.length) return null
-  if (matches.length === 1) return Number(matches[0].id)
-  const byKey = matches.find((r) => keysMatch(r.clave_interna, cajaRaw))
-  return Number((byKey || matches[0]).id)
+  return resolveCajaIdFromCatalog(rows, ccNombre, cajaClave)
 }
 
 async function importAsignacionesExcel(req, res) {

@@ -3,6 +3,8 @@
  * Genera ZIP OOXML válido para Excel / Google Sheets / LibreOffice.
  */
 
+import { listCajas, listCentrosCosto } from '../api/resources'
+
 function escapeXml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -306,8 +308,114 @@ function blankRows(colCount, count) {
   return Array.from({ length: count }, () => Array(colCount).fill(''))
 }
 
+/**
+ * Catálogo real para hoja Referencia (listCajas + centros; CC se deriva de cajas si no hay permiso admin).
+ * @returns {Promise<{ centros: { id: number, nombre: string }[], cajas: object[] }>}
+ */
+async function fetchCatalogoReferencia() {
+  const [cajas, centrosApi] = await Promise.all([
+    listCajas().catch(() => []),
+    listCentrosCosto().catch(() => [])
+  ])
+
+  let centros = (centrosApi || [])
+    .map((c) => ({
+      id: Number(c.id),
+      nombre: String(c.nombre || '').trim()
+    }))
+    .filter((c) => Number.isFinite(c.id) && c.id > 0)
+
+  if (!centros.length) {
+    const byId = new Map()
+    for (const caja of cajas || []) {
+      const id = Number(caja.centro_cobro_id)
+      if (!Number.isFinite(id) || id <= 0 || byId.has(id)) continue
+      byId.set(id, {
+        id,
+        nombre: String(caja.centro_cobro_nombre || '').trim()
+      })
+    }
+    centros = [...byId.values()].sort((a, b) =>
+      a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' })
+    )
+  } else {
+    centros.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
+  }
+
+  const cajasSorted = [...(cajas || [])].sort((a, b) => {
+    const cc = String(a.centro_cobro_nombre || '').localeCompare(
+      String(b.centro_cobro_nombre || ''),
+      'es',
+      { sensitivity: 'base' }
+    )
+    if (cc !== 0) return cc
+    return String(a.clave_interna || '').localeCompare(String(b.clave_interna || ''), 'es', {
+      sensitivity: 'base'
+    })
+  })
+
+  return { centros, cajas: cajasSorted }
+}
+
+/**
+ * Hoja "Referencia" con tablas de CC y cajas (ids reales).
+ * @param {{ centros: { id: number, nombre: string }[], cajas: object[] }} catalogo
+ */
+function buildReferenciaSheet(catalogo) {
+  const { centros = [], cajas = [] } = catalogo || {}
+
+  const ccTable = [
+    ['Centros de cobro (CC)'],
+    ['id', 'nombre'],
+    ...centros.map((c) => [c.id, c.nombre || '']),
+    ...(centros.length ? [] : [['', '(sin centros disponibles)']])
+  ]
+
+  const gapStart = ccTable.length + 2
+  const cajasHeaderRow = gapStart
+  const cajasTable = [
+    ['Cajas'],
+    ['id', 'nombre_exterior', 'clave_interna', 'cc_id', 'cc_nombre'],
+    ...cajas.map((c) => [
+      Number(c.id) || '',
+      c.nombre_exterior || '',
+      c.clave_interna || c.nombre_interior || '',
+      c.centro_cobro_id != null && c.centro_cobro_id !== '' ? Number(c.centro_cobro_id) : '',
+      c.centro_cobro_nombre || ''
+    ]),
+    ...(cajas.length ? [] : [['', '', '', '', '(sin cajas disponibles)']])
+  ]
+
+  const notaRows = [
+    ['Cómo usar'],
+    [
+      'En columnas cc y caja de la hoja de datos puedes poner el id (recomendado) o el nombre/clave. Preferir id evita ambigüedad (ej. varias cajas "Basalto").'
+    ],
+    ['Ejemplo: cc = 1 y caja = 2 según esta hoja.']
+  ]
+
+  const cells = [
+    ...tableCells(1, 0, ccTable, { headerRows: 2 }),
+    ...tableCells(cajasHeaderRow, 0, cajasTable, { headerRows: 2 }),
+    ...tableCells(cajasHeaderRow + cajasTable.length + 1, 0, notaRows, { headerRows: 1 })
+  ]
+
+  return {
+    name: 'Referencia',
+    xml: worksheetFromCells(cells, [
+      { width: 10 },
+      { width: 22 },
+      { width: 18 },
+      { width: 10 },
+      { width: 22 }
+    ])
+  }
+}
+
 /** Plantilla de importación de gastos / rendiciones */
-export function descargarPlantillaGastos() {
+export async function descargarPlantillaGastos() {
+  const catalogo = await fetchCatalogoReferencia()
+
   const headers = [
     'fecha',
     'trabajador_rut',
@@ -344,8 +452,8 @@ export function descargarPlantillaGastos() {
   const notas = [
     ['Notas'],
     ['fecha: DD/MM/AAAA'],
-    ['cc: nombre del centro de cobro / empresa'],
-    ['caja: clave interna de la caja'],
+    ['cc: id del centro (recomendado) o nombre — ver hoja Referencia'],
+    ['caja: id de la caja (recomendado) o clave/nombre — ver hoja Referencia'],
     ['monto: solo números (ej. 15000)'],
     ['tarjeta_ultimos4: obligatorio solo si d o c; vacío/opcional si e'],
     ['patente: opcional (ABCD12 o AB-CD-12 → ABCD12)'],
@@ -379,8 +487,16 @@ export function descargarPlantillaGastos() {
     ['fecha', 'Sí', 'Fecha del documento. Formato DD/MM/AAAA'],
     ['trabajador_rut', 'Sí', 'RUT del trabajador (con o sin puntos)'],
     ['trabajador_nombre', 'No (opcional)', 'Solo referencia; se busca por RUT'],
-    ['cc', 'Sí', 'Centro de cobro / empresa (nombre como en el sistema)'],
-    ['caja', 'Sí', 'Clave interna / nombre de la caja en el sistema'],
+    [
+      'cc',
+      'Sí',
+      'Id del centro de cobro (recomendado) o nombre. Ver hoja Referencia.'
+    ],
+    [
+      'caja',
+      'Sí',
+      'Id de la caja (recomendado) o clave_interna / nombre_exterior. Ver hoja Referencia.'
+    ],
     [
       'tipo_documento',
       'Sí',
@@ -403,7 +519,7 @@ export function descargarPlantillaGastos() {
     [
       'NOTA',
       '',
-      'Se crean como Legacy sin comprobante; adjuntar después en el sistema. No borre la fila de encabezados.'
+      'Preferir ids de la hoja Referencia en cc y caja. Se crean como Legacy sin comprobante; adjuntar después. No borre la fila de encabezados.'
     ]
   ]
 
@@ -419,12 +535,15 @@ export function descargarPlantillaGastos() {
         { width: 14 },
         { width: 70 }
       ])
-    }
+    },
+    buildReferenciaSheet(catalogo)
   ])
 }
 
 /** Plantilla de importación de asignaciones */
-export function descargarPlantillaAsignaciones() {
+export async function descargarPlantillaAsignaciones() {
+  const catalogo = await fetchCatalogoReferencia()
+
   const headers = [
     'fecha',
     'trabajador_rut',
@@ -452,8 +571,8 @@ export function descargarPlantillaAsignaciones() {
   const notas = [
     ['Notas'],
     ['fecha: DD/MM/AAAA'],
-    ['cc: centro de cobro / empresa'],
-    ['caja: clave interna (fondo fijo)'],
+    ['cc: id del centro (recomendado) o nombre — ver hoja Referencia'],
+    ['caja: id de la caja (recomendado) o clave/nombre — ver hoja Referencia'],
     ['monto: solo números'],
     ['numero_cuenta: obligatorio'],
     ['banco_origen: obligatorio'],
@@ -484,8 +603,16 @@ export function descargarPlantillaAsignaciones() {
     ['fecha', 'Sí', 'Fecha de la asignación. Formato DD/MM/AAAA'],
     ['trabajador_rut', 'Sí', 'RUT del trabajador (con o sin puntos)'],
     ['trabajador_nombre', 'No', 'Solo referencia; se busca por RUT'],
-    ['cc', 'Sí', 'Centro de cobro / empresa (nombre como en el sistema)'],
-    ['caja', 'Sí', 'Clave interna / nombre de la caja (fondo fijo)'],
+    [
+      'cc',
+      'Sí',
+      'Id del centro de cobro (recomendado) o nombre. Ver hoja Referencia.'
+    ],
+    [
+      'caja',
+      'Sí',
+      'Id de la caja (recomendado) o clave_interna / nombre_exterior. Ver hoja Referencia.'
+    ],
     ['n_doc_vale', 'No', 'Número de documento / vale'],
     ['monto', 'Sí', 'Monto en pesos (sin $ ni puntos)'],
     ['numero_cuenta', 'Sí', 'Número de cuenta bancaria (solo dígitos)'],
@@ -494,7 +621,7 @@ export function descargarPlantillaAsignaciones() {
     [
       'NOTA',
       '',
-      'Se crean como Legacy sin comprobante; adjuntar después en el sistema. No borre la fila de encabezados.'
+      'Preferir ids de la hoja Referencia en cc y caja. Se crean como Legacy sin comprobante; adjuntar después. No borre la fila de encabezados.'
     ]
   ]
 
@@ -510,7 +637,8 @@ export function descargarPlantillaAsignaciones() {
         { width: 14 },
         { width: 55 }
       ])
-    }
+    },
+    buildReferenciaSheet(catalogo)
   ])
 }
 
