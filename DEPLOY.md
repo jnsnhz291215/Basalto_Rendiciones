@@ -2,7 +2,7 @@
 
 ## Flags temporales Dev (leer primero)
 
-Flags de prueba para Super Admin Dev. **Apagarlos antes de dejar reglas de producción estrictas.**
+Flags de prueba para Super Admin Dev. **Estado actual en repo: todos off (reglas estrictas).** Reactivar solo en local si hace falta.
 
 | Flag | Front (`src/devFlags.js`) | API (`server/.env`) | Efecto |
 |------|---------------------------|---------------------|--------|

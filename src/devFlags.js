@@ -9,21 +9,21 @@ export const DEV_FLAGS = {
    * Acepta el RUT del Super Admin Dev aunque venga incompleto o sin DV.
    * Completo: 21.191.911-6 → 211919116
    */
-  RUT_BYPASS_ENABLED: true,
+  RUT_BYPASS_ENABLED: false,
   DEV_RUT_CLEAN: '211919116',
 
   /**
    * Super Admin - Dev puede hard-delete (DELETE real) rendiciones, anticipos,
    * y saltar bloqueos de “tiene datos” en cajas/CC.
    */
-  HARD_DELETE_ENABLED: true,
+  HARD_DELETE_ENABLED: false,
 
   /**
    * Super Admin - Dev: al rendir o registrar anticipo, salta la IA de comprobante
    * (no valida coincidencia de monto ni N° de documento).
    * Sigue siendo obligatorio adjuntar el archivo.
    */
-  COMPROBANTE_VERIFY_BYPASS: true
+  COMPROBANTE_VERIFY_BYPASS: false
 }
 
 function isSuperAdminDev(rolOrNivel) {

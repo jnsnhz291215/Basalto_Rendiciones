@@ -2,10 +2,10 @@
  * Flags temporales de desarrollo / pruebas (API).
  * Alinear con `src/devFlags.js` del frontend.
  *
- * Env (opcionales, default = habilitado si no se define):
- *   DEV_RUT_BYPASS=0              → desactiva bypass de RUT
- *   DEV_HARD_DELETE=0             → desactiva hard delete
- *   DEV_COMPROBANTE_VERIFY_BYPASS=0 → exige IA monto/N° documento
+ * Env (opcionales, default = desactivado si no se define):
+ *   DEV_RUT_BYPASS=1              → activa bypass de RUT
+ *   DEV_HARD_DELETE=1             → activa hard delete
+ *   DEV_COMPROBANTE_VERIFY_BYPASS=1 → omite IA monto/N° documento
  *   SYNC_BIDIRECCIONAL_ENABLED=0    → desactiva sync Turnos ↔ Rendiciones
  *
  * Buscar: DEV_FLAGS
@@ -18,12 +18,12 @@ function envEnabled(name, defaultOn = true) {
 }
 
 const DEV_FLAGS = {
-  RUT_BYPASS_ENABLED: envEnabled('DEV_RUT_BYPASS', true),
+  RUT_BYPASS_ENABLED: envEnabled('DEV_RUT_BYPASS', false),
   DEV_RUT_CLEAN: String(process.env.DEV_RUT_CLEAN || '211919116')
     .replace(/[^0-9kK]/g, '')
     .toUpperCase(),
-  HARD_DELETE_ENABLED: envEnabled('DEV_HARD_DELETE', true),
-  COMPROBANTE_VERIFY_BYPASS: envEnabled('DEV_COMPROBANTE_VERIFY_BYPASS', true),
+  HARD_DELETE_ENABLED: envEnabled('DEV_HARD_DELETE', false),
+  COMPROBANTE_VERIFY_BYPASS: envEnabled('DEV_COMPROBANTE_VERIFY_BYPASS', false),
   SYNC_BIDIRECCIONAL_ENABLED: envEnabled('SYNC_BIDIRECCIONAL_ENABLED', true)
 }
 
