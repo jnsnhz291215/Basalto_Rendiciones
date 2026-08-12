@@ -77,6 +77,7 @@ module.exports = {
   DEV_FLAGS,
   SYNC_BIDIRECCIONAL_DISABLED_MSG,
   isSyncBidireccionalEnabled,
+  isSuperAdminDev,
   isDevRutBypass,
   normalizeDevRut,
   canDevHardDelete,

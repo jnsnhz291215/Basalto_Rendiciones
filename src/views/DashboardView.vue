@@ -2947,7 +2947,11 @@
                   v-if="lote.puede_anular"
                   class="dash-btn-icon dash-btn-icon--danger"
                   type="button"
-                  title="Anular / borrar importación"
+                  :title="
+                    lote.estado === 'confirmado'
+                      ? 'Anular lote confirmado (solo Super Admin Dev)'
+                      : 'Anular / borrar importación'
+                  "
                   :disabled="importacionAnulandoId === lote.id"
                   @click="onAnularImportacion(lote)"
                 >
@@ -8041,11 +8045,12 @@ async function submitConfirmarImportacion() {
 async function onAnularImportacion(lote) {
   if (!lote?.id || !lote.puede_anular) return
   const tipo = labelTipoImportacion(lote.tipo)
-  if (
-    !confirm(
-      `¿Anular el lote #${lote.id} (${tipo})?\nSe eliminarán (soft-delete) los ${lote.creados || 0} registro(s) creados por esta importación.`
-    )
-  ) {
+  const n = Number(lote.creados) || 0
+  const esConfirmado = String(lote.estado || '').toLowerCase() === 'confirmado'
+  const msg = esConfirmado
+    ? `LOTE CONFIRMADO\n\nEsto anulará el lote #${lote.id} (${tipo}) y sus ${n} movimiento(s) (soft-delete).\nLos registros dejarán de aparecer en saldos y listados.\n\n¿Continuar?`
+    : `¿Anular el lote #${lote.id} (${tipo})?\nSe eliminarán (soft-delete) los ${n} registro(s) creados por esta importación.`
+  if (!confirm(msg)) {
     return
   }
   importacionAnulandoId.value = lote.id

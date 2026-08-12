@@ -4,6 +4,7 @@ const { query } = require('../config/db')
 const { registrarAuditoria } = require('../utils/audit')
 const { ensureImportacionesSchema } = require('../utils/ensureImportacionesSchema')
 const { calcularArrastreMes, mesActualYYYYMM } = require('../utils/helpers')
+const { isSuperAdminDev } = require('../config/devFlags')
 const {
   ESTADOS_FLUJO,
   normalizeEstadoFlujo,
@@ -124,7 +125,7 @@ async function fetchMovimientosLote(lote) {
   return []
 }
 
-async function mapLote(row, { withMovimientos = false } = {}) {
+async function mapLote(row, { withMovimientos = false, user = null } = {}) {
   if (!row) return null
   const estado = normalizeEstadoFlujo(row.estado)
   const errores = parseJsonField(row.errores_json, [])
@@ -141,6 +142,11 @@ async function mapLote(row, { withMovimientos = false } = {}) {
     conflictosPendientes
   })
 
+  const pendienteOk = estado === ESTADOS_FLUJO.PENDIENTE && !row.is_deleted
+  // Solo Super Admin Dev puede anular lotes ya confirmados (soft-delete del lote + movimientos)
+  const confirmadoDevOk =
+    estado === ESTADOS_FLUJO.CONFIRMADO && !row.is_deleted && isSuperAdminDev(user)
+
   const base = {
     ...row,
     estado,
@@ -156,7 +162,7 @@ async function mapLote(row, { withMovimientos = false } = {}) {
       !row.is_deleted &&
       Number(row.creados) > 0 &&
       conflictosPendientes === 0,
-    puede_anular: estado === ESTADOS_FLUJO.PENDIENTE && !row.is_deleted
+    puede_anular: pendienteOk || confirmadoDevOk
   }
 
   if (withMovimientos) {
@@ -189,7 +195,7 @@ async function listImportaciones(req, res) {
     )
     const mapped = []
     for (const row of rows) {
-      mapped.push(await mapLote(row))
+      mapped.push(await mapLote(row, { user: req.user }))
     }
     return res.json(mapped)
   } catch (err) {
@@ -206,7 +212,7 @@ async function getImportacion(req, res) {
     if (!rows[0]) {
       return res.status(404).json({ error: 'Lote de importación no encontrado' })
     }
-    return res.json(await mapLote(rows[0], { withMovimientos: true }))
+    return res.json(await mapLote(rows[0], { withMovimientos: true, user: req.user }))
   } catch (err) {
     console.error('[getImportacion]', err)
     return res.status(500).json({ error: err?.message || 'Error al obtener importación' })
@@ -269,7 +275,7 @@ async function confirmarImportacion(req, res) {
     )
 
     const updated = await query(`SELECT * FROM importaciones_lotes WHERE id = ? LIMIT 1`, [id])
-    return res.json(await mapLote(updated[0], { withMovimientos: true }))
+    return res.json(await mapLote(updated[0], { withMovimientos: true, user: req.user }))
   } catch (err) {
     console.error('[confirmarImportacion]', err)
     return res.status(500).json({ error: err?.message || 'Error al confirmar importación' })
@@ -288,10 +294,15 @@ async function anularImportacion(req, res) {
     if (isLoteAnulado(lote)) {
       return res.status(400).json({ error: 'El lote ya está anulado' })
     }
-    if (isLoteConfirmado(lote)) {
+
+    const eraConfirmado = isLoteConfirmado(lote)
+    if (eraConfirmado && !isSuperAdminDev(req.user)) {
       return res.status(400).json({
         error: 'El lote está confirmado: no se puede anular ni borrar'
       })
+    }
+    if (!eraConfirmado && !isLotePendiente(lote)) {
+      return res.status(400).json({ error: 'Solo se pueden anular lotes pendientes' })
     }
 
     const tipo = String(lote.tipo || '')
@@ -332,15 +343,16 @@ async function anularImportacion(req, res) {
       [id]
     )
 
+    const auditExtra = eraConfirmado ? ' (forzado Dev sobre lote confirmado)' : ''
     await registrarAuditoria(
       req.user.id,
       req.user.nombre,
       'ELIMINAR',
       'Importaciones',
-      `Anular lote id=${id} tipo=${tipo}: ${anulados} registro(s)`
+      `Anular lote id=${id} tipo=${tipo}: ${anulados} registro(s)${auditExtra}`
     )
 
-    return res.json({ ok: true, id, tipo, anulados })
+    return res.json({ ok: true, id, tipo, anulados, era_confirmado: eraConfirmado })
   } catch (err) {
     console.error('[anularImportacion]', err)
     return res.status(500).json({ error: err?.message || 'Error al anular importación' })
@@ -528,7 +540,7 @@ async function resolverConflictoImportacion(req, res) {
     const updated = await query(`SELECT * FROM importaciones_lotes WHERE id = ? LIMIT 1`, [
       loteId
     ])
-    return res.json(await mapLote(updated[0], { withMovimientos: true }))
+    return res.json(await mapLote(updated[0], { withMovimientos: true, user: req.user }))
   } catch (err) {
     console.error('[resolverConflictoImportacion]', err)
     return res.status(500).json({
