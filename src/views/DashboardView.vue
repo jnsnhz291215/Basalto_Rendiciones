@@ -7687,13 +7687,15 @@ async function onSaveAsignarCajas() {
   }
 }
 
+function nombreMesCartola(yyyyMm) {
+  const full = String(labelMes(yyyyMm) || '')
+  return full.split(/\s+/)[0] || 'Mes'
+}
+
 function syncInformeResultado() {
-  const ccLabel = labelCentroCobroInforme(filtrosInforme.centroCobroId)
-  const cajaLabel = filtrosInforme.caja ? labelCajaGroup(filtrosInforme.caja) : 'Todas'
-  const q = String(filtrosInforme.busqueda || '').trim()
-  const busquedaLabel = q ? ` | Buscar: ${q}` : ''
-  informeResultado.titulo = 'Cartola Consolidada del Mes'
-  informeResultado.periodo = `Período: ${labelMesCerradoCompleto(filtrosInforme.mes)} | CC: ${ccLabel} | Caja: ${cajaLabel}${busquedaLabel}`
+  const mesNombre = nombreMesCartola(filtrosInforme.mes)
+  informeResultado.titulo = `Cartola Consolidada del mes ${mesNombre}`
+  informeResultado.periodo = `Período: ${labelMesCerradoCompleto(filtrosInforme.mes)}`
   informeResultado.total = `${cartolaFiltrada.value.length} Registros`
 }
 
@@ -7759,12 +7761,14 @@ function confirmExportCartola() {
   try {
     if (format === 'pdf') {
       exportarCartolaPdf(mapped, {
+        titulo: informeResultado.titulo,
         periodo: informeResultado.periodo,
         totales: cartolaTotales.value,
         filename: `cartola_${mes}_${rows.length}reg.pdf`
       })
     } else {
       exportarCartolaVisible(mapped, {
+        titulo: informeResultado.titulo,
         periodo: informeResultado.periodo,
         totales: cartolaTotales.value,
         filename: `cartola_${mes}_${rows.length}reg.xlsx`

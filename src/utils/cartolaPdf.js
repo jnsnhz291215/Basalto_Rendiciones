@@ -11,6 +11,7 @@ function cellMonto(value) {
  * Exporta la cartola filtrada a PDF: fecha, detalle, responsable, abono, cargo + saldo.
  * @param {object[]} rows Filas ya filtradas (mismas que en pantalla)
  * @param {{
+ *   titulo?: string,
  *   periodo?: string,
  *   totales?: { abono?: string, cargo?: string, saldo?: string, saldoNegativo?: boolean },
  *   filename?: string
@@ -24,7 +25,8 @@ export function exportarCartolaPdf(rows, meta = {}) {
 
   doc.setFontSize(14)
   doc.setTextColor(15, 23, 42)
-  doc.text('Cartola Consolidada del Mes', margin, 16)
+  const titulo = meta.titulo || 'Cartola Consolidada del Mes'
+  doc.text(titulo, margin, 16)
 
   doc.setFontSize(9)
   doc.setTextColor(71, 85, 105)
@@ -56,7 +58,7 @@ export function exportarCartolaPdf(rows, meta = {}) {
     body,
     foot: [
       ['', '', 'Totales', totAbono, totCargo],
-      ['', '', 'Saldo (abono − cargo)', totSaldo, '']
+      ['', '', 'Saldo', totSaldo, '']
     ],
     theme: 'striped',
     styles: {
@@ -105,15 +107,6 @@ export function exportarCartolaPdf(rows, meta = {}) {
     },
     margin: { left: margin, right: margin }
   })
-
-  const afterTable = doc.lastAutoTable?.finalY || startY + 20
-  doc.setFontSize(8)
-  doc.setTextColor(71, 85, 105)
-  doc.text(
-    'Saldo = abono − cargo. Si el saldo es negativo, se debe plata al trabajador.',
-    margin,
-    afterTable + 8
-  )
 
   const stamp = new Date().toISOString().slice(0, 10)
   const filename = meta.filename || `cartola_filtrada_${stamp}.pdf`

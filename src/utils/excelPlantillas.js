@@ -725,19 +725,17 @@ export function exportarCartolaVisible(rows, meta = {}) {
     ...dataRows,
     [],
     ['', '', 'Totales', totAbono, totCargo],
-    ['', '', 'Saldo (abono − cargo)', totSaldo, ''],
-    ['', '', 'Saldo negativo = se debe al trabajador', '', '']
+    ['', '', 'Saldo', totSaldo, '']
   ]
   const cells = tableCells(1, 0, table)
 
   const filtroRows = [
     ['Filtro', 'Valor'],
-    ['Período / filtros', meta.periodo || ''],
+    ['Período', meta.periodo || ''],
     ['Registros exportados', dataRows.length],
     ['Total abono', totAbono],
     ['Total cargo', totCargo],
-    ['Saldo', totSaldo],
-    ['NOTA', 'Saldo = abono − cargo. Si es negativo, se debe plata al trabajador.']
+    ['Saldo', totSaldo]
   ]
 
   const stamp = new Date().toISOString().slice(0, 10)
