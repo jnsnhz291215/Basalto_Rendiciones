@@ -783,9 +783,39 @@
 
       <main class="dash-main">
         <p v-if="dataLoading" class="dash-banner dash-banner--info">Cargando datos…</p>
-        <p v-if="dataError" class="dash-banner dash-banner--danger">{{ dataError }}</p>
-        <p v-if="saveError" class="dash-banner dash-banner--danger">{{ saveError }}</p>
-        <p v-if="saveOk" class="dash-banner dash-banner--ok">{{ saveOk }}</p>
+        <div v-if="dataError" class="dash-banner dash-banner--danger dash-banner--dismiss">
+          <span>{{ dataError }}</span>
+          <button
+            type="button"
+            class="dash-banner-close"
+            aria-label="Cerrar"
+            @click="dataError = ''"
+          >
+            ×
+          </button>
+        </div>
+        <div v-if="saveError" class="dash-banner dash-banner--danger dash-banner--dismiss">
+          <span>{{ saveError }}</span>
+          <button
+            type="button"
+            class="dash-banner-close"
+            aria-label="Cerrar"
+            @click="saveError = ''"
+          >
+            ×
+          </button>
+        </div>
+        <div v-if="saveOk" class="dash-banner dash-banner--ok dash-banner--dismiss">
+          <span>{{ saveOk }}</span>
+          <button
+            type="button"
+            class="dash-banner-close"
+            aria-label="Cerrar"
+            @click="saveOk = ''"
+          >
+            ×
+          </button>
+        </div>
         <section v-if="isOperacionView && isAdminSession" class="dash-metrics">
           <div class="dash-metrics-head">
             <div class="dash-metrics-title">
@@ -1031,13 +1061,15 @@
                     guardar.
                   </p>
                   <p>
-                    <strong>N° documento:</strong> Peaje no requiere; Boleta opcional;
+                    <strong>N° documento:</strong> Peaje, Viático y Otro pago no requieren;
+                    Boleta opcional;
                     <strong>Factura</strong>, <strong>Guía Despacho</strong> y
                     <strong>Orden de compra</strong> obligatorio (debe verse en la foto).
                   </p>
                   <p>
-                    <strong>Opcionales:</strong> Patente; N° docto en Boleta; últimos 4 dígitos
-                    de tarjeta si la forma de pago es Efectivo.
+                    <strong>Opcionales:</strong> Patente (no aplica en Viático); N° docto en Boleta;
+                    comprobante en Viático / Otro pago; últimos 4 dígitos de tarjeta si la forma
+                    de pago es Efectivo.
                   </p>
                   <p>
                     Si adjunta una <strong>foto</strong> (no PDF), asegúrese de que se vea
@@ -1118,14 +1150,15 @@
                     <option>Peaje</option>
                     <option>Guía Despacho</option>
                     <option>Orden de compra</option>
+                    <option>Viático</option>
+                    <option>Otro pago</option>
                   </select>
                 </div>
-                <div class="dash-field">
+                <div v-if="gastoMuestraNumeroDocto" class="dash-field">
                   <label class="dash-label-inline">
                     N° Docto
-                    <span v-if="gasto.tipo === 'Peaje'" class="dash-label-aside">(no aplica)</span>
                     <span
-                      v-else-if="!gastoRequiereNumeroDocto"
+                      v-if="!gastoRequiereNumeroDocto"
                       class="dash-label-aside"
                     >(opcional)</span>
                   </label>
@@ -1133,8 +1166,6 @@
                     v-model="gasto.numero"
                     type="text"
                     placeholder="12345"
-                    :disabled="gasto.tipo === 'Peaje'"
-                    :class="{ 'dash-input-locked': gasto.tipo === 'Peaje' }"
                   />
                 </div>
               </div>
@@ -1153,7 +1184,7 @@
                   />
                 </div>
 
-                <div class="dash-field">
+                <div v-if="gastoMuestraPatente" class="dash-field">
                   <label>
                     Patente
                     <span class="dash-label-aside">(opcional)</span>
@@ -1191,12 +1222,20 @@
 
                 <div class="dash-field">
                   <label>Forma de Pago</label>
-                  <select v-model="gasto.metodoPago" @change="onGastoMetodoPagoChange">
+                  <select
+                    v-model="gasto.metodoPago"
+                    :disabled="gastoFuerzaEfectivo"
+                    :class="{ 'dash-input-locked': gastoFuerzaEfectivo }"
+                    @change="onGastoMetodoPagoChange"
+                  >
                     <option value="efectivo">Efectivo</option>
                     <option value="debito">Débito</option>
                     <option value="credito">Crédito</option>
                   </select>
-                  <p v-if="gasto.metodoPago === 'efectivo'" class="dash-field-hint">
+                  <p v-if="gastoFuerzaEfectivo" class="dash-field-hint">
+                    Viático y Otro pago se registran solo como efectivo.
+                  </p>
+                  <p v-else-if="gasto.metodoPago === 'efectivo'" class="dash-field-hint">
                     Con efectivo no se requieren dígitos de tarjeta.
                   </p>
                 </div>
@@ -1229,13 +1268,17 @@
                   class="dash-field"
                   :class="{ 'dash-gasto-span-4': true }"
                 >
-                  <label>Adjuntar Comprobante (PDF / PNG / JPG) *</label>
+                  <label>
+                    Adjuntar Comprobante (PDF / PNG / JPG)
+                    <span v-if="gastoComprobanteOpcional" class="dash-label-aside">(opcional)</span>
+                    <span v-else> *</span>
+                  </label>
                   <input
                     ref="gastoFileInputEl"
                     type="file"
                     accept=".pdf,image/png,image/jpeg"
                     class="dash-file"
-                    required
+                    :required="!gastoComprobanteOpcional"
                     @change="onGastoFile"
                   />
                   <span v-if="gasto.comprobanteNombre" class="dash-field-hint">
@@ -1892,6 +1935,8 @@
                     <option>Peaje</option>
                     <option>Guía Despacho</option>
                     <option>Orden de compra</option>
+                    <option>Viático</option>
+                    <option>Otro pago</option>
                   </select>
                 </div>
                 <div v-if="modalCorregir.campos.monto" class="dash-field">
@@ -2634,7 +2679,13 @@
                                   <td class="dash-table-right dash-rinde">
                                     {{ cajaGrupo.totales.cargo }}
                                   </td>
-                                  <td colspan="2"></td>
+                                  <td
+                                    colspan="2"
+                                    class="dash-table-right"
+                                    :class="cajaGrupo.totales.saldoNegativo ? 'dash-rinde' : 'dash-metric-value--ok'"
+                                  >
+                                    Saldo {{ cajaGrupo.totales.saldo }}
+                                  </td>
                                 </tr>
                               </tfoot>
                             </table>
@@ -2647,6 +2698,11 @@
                     <span class="dash-tfoot-label">Totales {{ ccGrupo.titulo }}:</span>
                     <span class="dash-metric-value--ok">Abono {{ ccGrupo.totales.abono }}</span>
                     <span class="dash-rinde">Cargo {{ ccGrupo.totales.cargo }}</span>
+                    <span
+                      :class="ccGrupo.totales.saldoNegativo ? 'dash-rinde' : 'dash-metric-value--ok'"
+                    >
+                      Saldo {{ ccGrupo.totales.saldo }}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -2657,6 +2713,14 @@
             <span class="dash-tfoot-label">Totales acumulados:</span>
             <span class="dash-metric-value--ok">Abono {{ cartolaTotales.abono }}</span>
             <span class="dash-rinde">Cargo {{ cartolaTotales.cargo }}</span>
+            <span
+              :class="cartolaTotales.saldoNegativo ? 'dash-rinde' : 'dash-metric-value--ok'"
+            >
+              Saldo total {{ cartolaTotales.saldo }}
+            </span>
+            <span v-if="cartolaTotales.saldoNegativo" class="dash-muted">
+              (saldo negativo: se debe al trabajador)
+            </span>
           </div>
         </div>
 
@@ -5544,6 +5608,14 @@ function onGastoTipoChange() {
   if (!gastoMuestraNumeroDocto.value) {
     gasto.numero = ''
   }
+  if (!gastoMuestraPatente.value) {
+    gasto.patente = ''
+    gasto.patenteDisplay = ''
+  }
+  if (gastoFuerzaEfectivo.value) {
+    gasto.metodoPago = 'efectivo'
+    gasto.tarjetaUltimos4 = ''
+  }
 }
 
 function onGastoPatenteInput(event) {
@@ -5689,11 +5761,23 @@ const personalModalRutStatus = computed(() => rutStatusLabel(modalPersonal.rut))
 const tarjetasEmpresa = ref([])
 const cuentasBanco = ref([])
 
-const gastoRequiereTarjetaDigits = computed(
-  () => gasto.metodoPago === 'debito' || gasto.metodoPago === 'credito'
+const gastoFuerzaEfectivo = computed(
+  () => gasto.tipo === 'Viático' || gasto.tipo === 'Otro pago'
 )
 
-/** N° docto: Peaje no; Boleta opcional; Factura / Guía / OC obligatorio */
+const gastoMuestraPatente = computed(() => gasto.tipo !== 'Viático')
+
+const gastoComprobanteOpcional = computed(
+  () => gasto.tipo === 'Viático' || gasto.tipo === 'Otro pago'
+)
+
+const gastoRequiereTarjetaDigits = computed(
+  () =>
+    !gastoFuerzaEfectivo.value &&
+    (gasto.metodoPago === 'debito' || gasto.metodoPago === 'credito')
+)
+
+/** N° docto: Peaje / Viático / Otro pago no; Boleta opcional; Factura / Guía / OC obligatorio */
 const gastoMuestraNumeroDocto = computed(
   () =>
     gasto.tipo === 'Boleta' ||
@@ -6406,9 +6490,15 @@ function totalesFilasCartola(rows) {
     abono += parseMontoNumber(row.abono)
     cargo += parseMontoNumber(row.cargo)
   }
+  const saldo = abono - cargo
   return {
     abono: formatMonto(abono),
-    cargo: formatMonto(cargo)
+    cargo: formatMonto(cargo),
+    saldo: formatMonto(saldo),
+    saldoNegativo: saldo < 0,
+    abonoNum: abono,
+    cargoNum: cargo,
+    saldoNum: saldo
   }
 }
 
@@ -7180,7 +7270,9 @@ async function onSaveCorreccion() {
   if (campos.tipo_docto) {
     payload.tipo_documento = modalCorregir.tipo
     if (
-      modalCorregir.tipo === 'Peaje'
+      modalCorregir.tipo === 'Peaje' ||
+      modalCorregir.tipo === 'Viático' ||
+      modalCorregir.tipo === 'Otro pago'
     ) {
       payload.numero_documento = null
     } else if (
@@ -7310,7 +7402,7 @@ async function onSaveGasto() {
     return
   }
   if (!gasto.cajaGroupKey) return
-  if (!gastoComprobanteFile.value) {
+  if (!gastoComprobanteFile.value && !gastoComprobanteOpcional.value) {
     saveError.value = 'El comprobante es obligatorio. Adjunta PDF, PNG o JPG.'
     return
   }
@@ -7360,12 +7452,27 @@ async function onSaveGasto() {
     numero_documento: gastoMuestraNumeroDocto.value
       ? gasto.numero.trim() || null
       : null,
-    patente: normalizePatente(gasto.patente) || null,
+    patente: gastoMuestraPatente.value ? normalizePatente(gasto.patente) || null : null,
     monto: montoNum,
-    origen_pago: origenFromMetodo(gasto.metodoPago),
+    origen_pago: origenFromMetodo(
+      gastoFuerzaEfectivo.value ? 'efectivo' : gasto.metodoPago
+    ),
     tarjeta_id:
-      gasto.metodoPago === 'efectivo' ? null : resolveTarjetaIdParaGasto(),
+      gastoFuerzaEfectivo.value || gasto.metodoPago === 'efectivo'
+        ? null
+        : resolveTarjetaIdParaGasto(),
     descripcion: String(gasto.descripcion || '').trim()
+  }
+  if (!gastoComprobanteFile.value && gastoComprobanteOpcional.value) {
+    try {
+      await api.createRendicion({ ...pendingGastoSave, comprobante_url: null })
+      pendingGastoSave = null
+      await loadDashboardData()
+      closeFormGasto()
+    } catch (err) {
+      saveError.value = err?.message || 'No se pudo guardar el gasto.'
+    }
+    return
   }
   await ejecutarVerificacionYGuardado()
 }
@@ -7659,6 +7766,7 @@ function confirmExportCartola() {
     } else {
       exportarCartolaVisible(mapped, {
         periodo: informeResultado.periodo,
+        totales: cartolaTotales.value,
         filename: `cartola_${mes}_${rows.length}reg.xlsx`
       })
     }

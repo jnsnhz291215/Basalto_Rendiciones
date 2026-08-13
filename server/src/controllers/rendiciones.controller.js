@@ -23,6 +23,9 @@ const {
   cellToString,
   resolveCajaIdFromCatalog,
   tipoRequiereNumeroDocumento,
+  tipoFuerzaEfectivo,
+  tipoOcultaPatente,
+  tipoComprobanteOpcional,
   normalizePatente
 } = require('../utils/excelImport')
 const { ensureImportacionesSchema } = require('../utils/ensureImportacionesSchema')
@@ -213,7 +216,16 @@ async function createRendicion(req, res) {
       return res.status(400).json({ error: 'Faltan campos obligatorios' })
     }
 
-    if (!String(comprobante_url || '').trim()) {
+    const tipoNorm = mapTipoDocumento(tipo_documento) || String(tipo_documento || '').trim()
+    const origenNorm = tipoFuerzaEfectivo(tipoNorm) ? 'Efectivo' : origen_pago
+    const patenteNorm = tipoOcultaPatente(tipoNorm)
+      ? null
+      : normalizePatente(patente) || null
+
+    if (
+      !String(comprobante_url || '').trim() &&
+      !tipoComprobanteOpcional(tipoNorm)
+    ) {
       return res.status(400).json({
         error: 'El comprobante es obligatorio. Ningún cobro puede guardarse sin documento.'
       })
@@ -223,14 +235,14 @@ async function createRendicion(req, res) {
       return res.status(400).json({ error: 'La descripción / observación es obligatoria.' })
     }
 
-    const numeroDoc = valorNumeroDocumentoPersistible(tipo_documento, numero_documento)
+    const numeroDoc = valorNumeroDocumentoPersistible(tipoNorm, numero_documento)
     if (
-      tipoRequiereNumeroDocumento(tipo_documento) &&
+      tipoRequiereNumeroDocumento(tipoNorm) &&
       !numeroDoc &&
       !canSkipComprobanteVerify(req.user)
     ) {
       return res.status(400).json({
-        error: `numero_documento es obligatorio para ${tipo_documento}`
+        error: `numero_documento es obligatorio para ${tipoNorm}`
       })
     }
 
@@ -256,8 +268,8 @@ async function createRendicion(req, res) {
     }
 
     const tarjetaCheck = await assertTarjetaPermitePago({
-      tarjetaId: tarjeta_id,
-      origenPago: origen_pago,
+      tarjetaId: tipoFuerzaEfectivo(tipoNorm) ? null : tarjeta_id,
+      origenPago: origenNorm,
       fechaDocumento: fecha_documento
     })
     if (tarjetaCheck) {
@@ -287,12 +299,12 @@ async function createRendicion(req, res) {
         caja_id,
         trabajadorId,
         fecha_documento,
-        tipo_documento,
+        tipoNorm,
         numeroDoc,
-        normalizePatente(patente) || null,
+        patenteNorm,
         Number(monto),
-        origen_pago,
-        origen_pago === 'Efectivo' ? null : tarjeta_id || null,
+        origenNorm,
+        origenNorm === 'Efectivo' ? null : tarjeta_id || null,
         comprobante_url || null,
         String(descripcion).trim(),
         arrastre
@@ -813,10 +825,11 @@ async function importRendicionesExcel(req, res) {
         if (!caja) throw new Error('caja es obligatoria')
 
         const tipo = mapTipoDocumento(row.tipo_documento)
-        if (!tipo) throw new Error('tipo_documento inválido (b/f/p/g/oc)')
+        if (!tipo) throw new Error('tipo_documento inválido (b/f/p/g/oc/v/op)')
 
         // forma_pago (plantilla nueva) o legado vía alias → valor DB origen_pago
-        const origen = mapOrigenPago(row.forma_pago)
+        let origen = mapOrigenPago(row.forma_pago)
+        if (tipoFuerzaEfectivo(tipo)) origen = 'Efectivo'
         if (!origen) throw new Error('forma_pago inválido (e/d/c)')
 
         const monto = parseMonto(row.__raw?.monto ?? row.monto)
@@ -831,8 +844,10 @@ async function importRendicionesExcel(req, res) {
           throw new Error(`numero_documento obligatorio para ${tipo}`)
         }
 
-        // patente opcional: vacío → null (no error)
-        const patente = normalizePatente(row.patente) || null
+        // patente: no aplica en Viático; opcional en el resto
+        const patente = tipoOcultaPatente(tipo)
+          ? null
+          : normalizePatente(row.patente) || null
 
         const trabajadorId = await findTrabajadorIdByRut(rut)
         if (!trabajadorId) throw new Error(`trabajador_rut no encontrado (${row.trabajador_rut})`)

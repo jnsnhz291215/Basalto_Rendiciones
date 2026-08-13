@@ -270,6 +270,16 @@ function mapTipoDocumento(value) {
   ) {
     return 'Orden de compra'
   }
+  if (raw === 'v' || raw === 'viatico' || raw === 'biatico') return 'Viático'
+  if (
+    raw === 'op' ||
+    raw === 'otro' ||
+    raw === 'otro pago' ||
+    raw === 'otropago' ||
+    raw === 'otro_pago'
+  ) {
+    return 'Otro pago'
+  }
   return null
 }
 
@@ -317,7 +327,7 @@ function formatPatenteDisplay(value) {
 
 /**
  * N° documento:
- * - Peaje: no aplica
+ * - Peaje / Viático / Otro pago: no aplica
  * - Boleta: opcional
  * - Factura / Guía Despacho / Orden de compra: obligatorio
  */
@@ -336,6 +346,18 @@ function tipoRequiereNumeroDocumento(tipo) {
     tipo === 'Guía Despacho' ||
     tipo === 'Orden de compra'
   )
+}
+
+function tipoFuerzaEfectivo(tipo) {
+  return tipo === 'Viático' || tipo === 'Otro pago'
+}
+
+function tipoOcultaPatente(tipo) {
+  return tipo === 'Viático'
+}
+
+function tipoComprobanteOpcional(tipo) {
+  return tipo === 'Viático' || tipo === 'Otro pago'
 }
 
 function resolveNumeroDocumentoForTipo(tipo, value) {
@@ -431,6 +453,9 @@ module.exports = {
   cellToString,
   tipoAceptaNumeroDocumento,
   tipoRequiereNumeroDocumento,
+  tipoFuerzaEfectivo,
+  tipoOcultaPatente,
+  tipoComprobanteOpcional,
   resolveNumeroDocumentoForTipo,
   normalizePatente,
   formatPatenteDisplay

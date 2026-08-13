@@ -308,48 +308,68 @@ function blankRows(colCount, count) {
   return Array.from({ length: count }, () => Array(colCount).fill(''))
 }
 
+function asList(data) {
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.data)) return data.data
+  if (Array.isArray(data?.cajas)) return data.cajas
+  if (Array.isArray(data?.centros)) return data.centros
+  return []
+}
+
+function normalizeCentroRef(c) {
+  const id = Number(c?.id)
+  return {
+    id: Number.isFinite(id) && id > 0 ? id : null,
+    nombre: String(c?.nombre || '').trim()
+  }
+}
+
+function normalizeCajaRef(c) {
+  const id = Number(c?.id)
+  const ccIdRaw = c?.centro_cobro_id ?? c?.centroCobroId
+  const ccId = Number(ccIdRaw)
+  return {
+    id: Number.isFinite(id) && id > 0 ? id : null,
+    nombre: String(c?.nombre_exterior || c?.nombreExterior || c?.displayName || '').trim(),
+    clave: String(c?.clave_interna || c?.claveInterna || c?.groupKey || '').trim(),
+    ccId: Number.isFinite(ccId) && ccId > 0 ? ccId : '',
+    ccNombre: String(c?.centro_cobro_nombre || c?.centroCobroNombre || '').trim()
+  }
+}
+
 /**
- * Catálogo real para hoja Referencia (listCajas + centros; CC se deriva de cajas si no hay permiso admin).
+ * Catálogo real para hoja CC y Cajas (listCajas + centros).
  * @returns {Promise<{ centros: { id: number, nombre: string }[], cajas: object[] }>}
  */
 async function fetchCatalogoReferencia() {
-  const [cajas, centrosApi] = await Promise.all([
+  const [cajasRaw, centrosRaw] = await Promise.all([
     listCajas().catch(() => []),
     listCentrosCosto().catch(() => [])
   ])
 
-  let centros = (centrosApi || [])
-    .map((c) => ({
-      id: Number(c.id),
-      nombre: String(c.nombre || '').trim()
-    }))
-    .filter((c) => Number.isFinite(c.id) && c.id > 0)
+  const cajasNorm = asList(cajasRaw).map(normalizeCajaRef).filter((c) => c.id)
+
+  let centros = asList(centrosRaw)
+    .map(normalizeCentroRef)
+    .filter((c) => c.id)
 
   if (!centros.length) {
     const byId = new Map()
-    for (const caja of cajas || []) {
-      const id = Number(caja.centro_cobro_id)
+    for (const caja of cajasNorm) {
+      const id = Number(caja.ccId)
       if (!Number.isFinite(id) || id <= 0 || byId.has(id)) continue
-      byId.set(id, {
-        id,
-        nombre: String(caja.centro_cobro_nombre || '').trim()
-      })
+      byId.set(id, { id, nombre: caja.ccNombre })
     }
-    centros = [...byId.values()].sort((a, b) =>
-      a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' })
-    )
-  } else {
-    centros.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
+    centros = [...byId.values()]
   }
 
-  const cajasSorted = [...(cajas || [])].sort((a, b) => {
-    const cc = String(a.centro_cobro_nombre || '').localeCompare(
-      String(b.centro_cobro_nombre || ''),
-      'es',
-      { sensitivity: 'base' }
-    )
+  centros.sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }))
+  const cajasSorted = [...cajasNorm].sort((a, b) => {
+    const cc = String(a.ccNombre || '').localeCompare(String(b.ccNombre || ''), 'es', {
+      sensitivity: 'base'
+    })
     if (cc !== 0) return cc
-    return String(a.clave_interna || '').localeCompare(String(b.clave_interna || ''), 'es', {
+    return String(a.nombre || a.clave).localeCompare(String(b.nombre || b.clave), 'es', {
       sensitivity: 'base'
     })
   })
@@ -357,39 +377,59 @@ async function fetchCatalogoReferencia() {
   return { centros, cajas: cajasSorted }
 }
 
+function catalogoResumenRows(catalogo) {
+  const { centros = [], cajas = [] } = catalogo || {}
+  const rows = [
+    ['CC y Cajas (usa estos id)'],
+    ['tipo', 'nombre', 'id', 'cc_id']
+  ]
+  for (const c of centros) {
+    rows.push(['cc', c.nombre || '', c.id, ''])
+  }
+  if (!centros.length) rows.push(['cc', '(sin centros — recarga e intenta de nuevo)', '', ''])
+  rows.push(['', '', '', ''])
+  for (const caja of cajas) {
+    rows.push(['caja', caja.nombre || caja.clave || '', caja.id, caja.ccId || ''])
+  }
+  if (!cajas.length) rows.push(['caja', '(sin cajas — recarga e intenta de nuevo)', '', ''])
+  rows.push(['', '', '', ''])
+  rows.push(['Cómo llenar cc / caja', '', '', ''])
+  rows.push(['Escribe el id (recomendado), ej. cc=1 y caja=2', '', '', ''])
+  return rows
+}
+
 /**
- * Hoja "Referencia" con tablas de CC y cajas (ids reales).
+ * Hoja "CC y Cajas" con tablas de ids reales.
  * @param {{ centros: { id: number, nombre: string }[], cajas: object[] }} catalogo
  */
 function buildReferenciaSheet(catalogo) {
   const { centros = [], cajas = [] } = catalogo || {}
 
   const ccTable = [
-    ['Centros de cobro (CC)'],
+    ['Centros de cobro / empresa (CC)'],
     ['id', 'nombre'],
     ...centros.map((c) => [c.id, c.nombre || '']),
     ...(centros.length ? [] : [['', '(sin centros disponibles)']])
   ]
 
-  const gapStart = ccTable.length + 2
-  const cajasHeaderRow = gapStart
+  const cajasHeaderRow = ccTable.length + 2
   const cajasTable = [
     ['Cajas'],
-    ['id', 'nombre_exterior', 'clave_interna', 'cc_id', 'cc_nombre'],
-    ...cajas.map((c) => [
-      Number(c.id) || '',
-      c.nombre_exterior || '',
-      c.clave_interna || c.nombre_interior || '',
-      c.centro_cobro_id != null && c.centro_cobro_id !== '' ? Number(c.centro_cobro_id) : '',
-      c.centro_cobro_nombre || ''
-    ]),
+    ['id', 'caja (nombre)', 'clave_interna', 'cc_id', 'cc / empresa'],
+    ...cajas.map((c) => [c.id, c.nombre || '', c.clave || '', c.ccId || '', c.ccNombre || '']),
     ...(cajas.length ? [] : [['', '', '', '', '(sin cajas disponibles)']])
+  ]
+
+  const compacto = [
+    ['Resumen (cc - empresa = id / caja - nombre = id)'],
+    ...centros.map((c) => [`cc - ${c.nombre || ''} = ${c.id}`]),
+    ...cajas.map((c) => [`caja - ${c.nombre || c.clave || ''} = ${c.id}`])
   ]
 
   const notaRows = [
     ['Cómo usar'],
     [
-      'En columnas cc y caja de la hoja de datos puedes poner el id (recomendado) o el nombre/clave. Preferir id evita ambigüedad (ej. varias cajas "Basalto").'
+      'En las columnas cc y caja de la hoja de datos pon el id (recomendado) o el nombre. El id evita ambigüedad (BASALTO vs CENTINELA).'
     ],
     ['Ejemplo: cc = 1 y caja = 2 según esta hoja.']
   ]
@@ -397,17 +437,23 @@ function buildReferenciaSheet(catalogo) {
   const cells = [
     ...tableCells(1, 0, ccTable, { headerRows: 2 }),
     ...tableCells(cajasHeaderRow, 0, cajasTable, { headerRows: 2 }),
-    ...tableCells(cajasHeaderRow + cajasTable.length + 1, 0, notaRows, { headerRows: 1 })
+    ...tableCells(cajasHeaderRow + cajasTable.length + 2, 0, compacto, { headerRows: 1 }),
+    ...tableCells(
+      cajasHeaderRow + cajasTable.length + compacto.length + 4,
+      0,
+      notaRows,
+      { headerRows: 1 }
+    )
   ]
 
   return {
-    name: 'Referencia',
+    name: 'CC y Cajas',
     xml: worksheetFromCells(cells, [
-      { width: 10 },
+      { width: 14 },
+      { width: 28 },
       { width: 22 },
-      { width: 18 },
       { width: 10 },
-      { width: 22 }
+      { width: 28 }
     ])
   }
 }
@@ -446,19 +492,20 @@ export async function descargarPlantillaGastos() {
     ['f / F', 'Factura (requiere numero_documento)'],
     ['p / P', 'Peaje (sin N° docto)'],
     ['g / G', 'Guía Despacho (requiere numero_documento)'],
-    ['oc / OC', 'Orden de compra (requiere numero_documento)']
+    ['oc / OC', 'Orden de compra (requiere numero_documento)'],
+    ['v / V', 'Viático (sin N° docto ni patente; forma_pago = e; comprobante opcional)'],
+    ['op / OP', 'Otro pago (sin N° docto; patente opcional; forma_pago = e; comprobante opcional)']
   ]
 
   const notas = [
     ['Notas'],
     ['fecha: DD/MM/AAAA'],
-    ['cc: id del centro (recomendado) o nombre — ver hoja Referencia'],
-    ['caja: id de la caja (recomendado) o clave/nombre — ver hoja Referencia'],
+    ['cc y caja: usa el id de la tabla a la derecha o de la hoja CC y Cajas'],
     ['monto: solo números (ej. 15000)'],
     ['tarjeta_ultimos4: obligatorio solo si d o c; vacío/opcional si e'],
-    ['patente: opcional (ABCD12 o AB-CD-12 → ABCD12)'],
+    ['patente: opcional (ABCD12 o AB-CD-12 → ABCD12); no aplica en Viático'],
     ['descripcion: obligatoria (máx. 500)'],
-    ['Letras e/d/c y b/f/p/g/oc: mayúscula o minúscula'],
+    ['Letras e/d/c y b/f/p/g/oc/v/op: mayúscula o minúscula'],
     ['Compat: columna origen_pago antigua también se acepta al importar'],
     ['Se crean como Legacy sin comprobante; adjuntar después en el sistema']
   ]
@@ -467,7 +514,8 @@ export async function descargarPlantillaGastos() {
     ...tableCells(1, 0, dataTable),
     ...tableCells(1, 13, leyendaFormaPago),
     ...tableCells(7, 13, leyendaTipo),
-    ...tableCells(15, 13, notas, { headerRows: 1 })
+    ...tableCells(17, 13, notas, { headerRows: 1 }),
+    ...tableCells(1, 17, catalogoResumenRows(catalogo), { headerRows: 2 })
   ]
 
   const cols = [
@@ -478,7 +526,12 @@ export async function descargarPlantillaGastos() {
       })),
     { width: 3 },
     { width: 16 },
-    { width: 42 }
+    { width: 42 },
+    { width: 3 },
+    { width: 12 },
+    { width: 28 },
+    { width: 8 },
+    { width: 8 }
   ]
 
   const instrHeaders = ['Campo', 'Obligatorio', 'Descripción']
@@ -490,22 +543,22 @@ export async function descargarPlantillaGastos() {
     [
       'cc',
       'Sí',
-      'Id del centro de cobro (recomendado) o nombre. Ver hoja Referencia.'
+      'Id del centro de cobro (recomendado) o nombre. Ver hoja CC y Cajas (y tabla a la derecha en Gastos).'
     ],
     [
       'caja',
       'Sí',
-      'Id de la caja (recomendado) o clave_interna / nombre_exterior. Ver hoja Referencia.'
+      'Id de la caja (recomendado) o clave_interna / nombre_exterior. Ver hoja CC y Cajas.'
     ],
     [
       'tipo_documento',
       'Sí',
-      'b = Boleta | f = Factura | p = Peaje | g = Guía Despacho | oc = Orden de compra'
+      'b = Boleta | f = Factura | p = Peaje | g = Guía | oc = OC | v = Viático | op = Otro pago'
     ],
     [
       'numero_documento',
       'Condicional',
-      'Obligatorio si tipo_documento = f, g u oc; opcional en b; vacío en p'
+      'Obligatorio si f, g u oc; opcional en b; vacío en p, v y op'
     ],
     ['monto', 'Sí', 'Monto en pesos (sin $ ni puntos)'],
     ['forma_pago', 'Sí', 'e = Efectivo | d = Débito | c = Crédito (alias import: origen_pago)'],
@@ -519,7 +572,7 @@ export async function descargarPlantillaGastos() {
     [
       'NOTA',
       '',
-      'Preferir ids de la hoja Referencia en cc y caja. Se crean como Legacy sin comprobante; adjuntar después. No borre la fila de encabezados.'
+      'Preferir ids de la hoja CC y Cajas. v/op: forma_pago=e, comprobante opcional. No borre la fila de encabezados.'
     ]
   ]
 
@@ -571,8 +624,7 @@ export async function descargarPlantillaAsignaciones() {
   const notas = [
     ['Notas'],
     ['fecha: DD/MM/AAAA'],
-    ['cc: id del centro (recomendado) o nombre — ver hoja Referencia'],
-    ['caja: id de la caja (recomendado) o clave/nombre — ver hoja Referencia'],
+    ['cc y caja: usa el id de la tabla a la derecha o de la hoja CC y Cajas'],
     ['monto: solo números'],
     ['numero_cuenta: obligatorio'],
     ['banco_origen: obligatorio'],
@@ -583,7 +635,8 @@ export async function descargarPlantillaAsignaciones() {
   const cells = [
     ...tableCells(1, 0, dataTable),
     ...tableCells(1, 11, leyendaBanco),
-    ...tableCells(9, 11, notas, { headerRows: 1 })
+    ...tableCells(9, 11, notas, { headerRows: 1 }),
+    ...tableCells(1, 15, catalogoResumenRows(catalogo), { headerRows: 2 })
   ]
 
   const cols = [
@@ -594,7 +647,12 @@ export async function descargarPlantillaAsignaciones() {
       })),
     { width: 3 },
     { width: 18 },
-    { width: 20 }
+    { width: 20 },
+    { width: 3 },
+    { width: 12 },
+    { width: 28 },
+    { width: 8 },
+    { width: 8 }
   ]
 
   const instrHeaders = ['Campo', 'Obligatorio', 'Descripción']
@@ -606,12 +664,12 @@ export async function descargarPlantillaAsignaciones() {
     [
       'cc',
       'Sí',
-      'Id del centro de cobro (recomendado) o nombre. Ver hoja Referencia.'
+      'Id del centro de cobro (recomendado) o nombre. Ver hoja CC y Cajas.'
     ],
     [
       'caja',
       'Sí',
-      'Id de la caja (recomendado) o clave_interna / nombre_exterior. Ver hoja Referencia.'
+      'Id de la caja (recomendado) o clave_interna / nombre_exterior. Ver hoja CC y Cajas.'
     ],
     ['n_doc_vale', 'No', 'Número de documento / vale'],
     ['monto', 'Sí', 'Monto en pesos (sin $ ni puntos)'],
@@ -621,7 +679,7 @@ export async function descargarPlantillaAsignaciones() {
     [
       'NOTA',
       '',
-      'Preferir ids de la hoja Referencia en cc y caja. Se crean como Legacy sin comprobante; adjuntar después. No borre la fila de encabezados.'
+      'Preferir ids de la hoja CC y Cajas en cc y caja. Se crean como Legacy sin comprobante; adjuntar después. No borre la fila de encabezados.'
     ]
   ]
 
@@ -648,42 +706,38 @@ export async function descargarPlantillaAsignaciones() {
  * @param {{ periodo?: string, filename?: string }} [meta]
  */
 export function exportarCartolaVisible(rows, meta = {}) {
-  const headers = [
-    'fecha',
-    'cc',
-    'caja',
-    'rinde_doc',
-    'tipo',
-    'detalle',
-    'responsable',
-    'abono',
-    'cargo',
-    'estado',
-    'comprobante'
-  ]
+  const headers = ['fecha', 'detalle', 'responsable', 'abono', 'cargo']
 
   const dataRows = (rows || []).map((row) => [
     row.fecha || '',
-    row.centroCobroNombre || '',
-    row.cajaGroupKey || '',
-    row.doc || '',
-    row.tipo || '',
     row.detalle || '',
     row.responsable || '',
     row.abono === '-' ? '' : row.abono || '',
-    row.cargo === '-' ? '' : row.cargo || '',
-    row.estado || '',
-    row.comprobanteNombre || ''
+    row.cargo === '-' ? '' : row.cargo || ''
   ])
 
-  const table = [headers, ...dataRows]
+  const totAbono = meta.totales?.abono || ''
+  const totCargo = meta.totales?.cargo || ''
+  const totSaldo = meta.totales?.saldo || ''
+
+  const table = [
+    headers,
+    ...dataRows,
+    [],
+    ['', '', 'Totales', totAbono, totCargo],
+    ['', '', 'Saldo (abono − cargo)', totSaldo, ''],
+    ['', '', 'Saldo negativo = se debe al trabajador', '', '']
+  ]
   const cells = tableCells(1, 0, table)
 
   const filtroRows = [
     ['Filtro', 'Valor'],
     ['Período / filtros', meta.periodo || ''],
     ['Registros exportados', dataRows.length],
-    ['NOTA', 'Solo incluye lo visible con los filtros actuales de la cartola.']
+    ['Total abono', totAbono],
+    ['Total cargo', totCargo],
+    ['Saldo', totSaldo],
+    ['NOTA', 'Saldo = abono − cargo. Si es negativo, se debe plata al trabajador.']
   ]
 
   const stamp = new Date().toISOString().slice(0, 10)
@@ -694,16 +748,10 @@ export function exportarCartolaVisible(rows, meta = {}) {
       name: 'Cartola',
       xml: worksheetFromCells(cells, [
         { width: 12 },
-        { width: 18 },
+        { width: 36 },
+        { width: 22 },
         { width: 14 },
-        { width: 12 },
-        { width: 16 },
-        { width: 28 },
-        { width: 18 },
-        { width: 12 },
-        { width: 12 },
-        { width: 14 },
-        { width: 28 }
+        { width: 14 }
       ])
     },
     {
