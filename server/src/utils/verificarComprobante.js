@@ -8,7 +8,7 @@ const {
   removeComprobanteFile,
   normalizeTipoMovimiento
 } = require('./comprobanteStorage')
-const { tipoRequiereNumeroDocumento } = require('./excelImport')
+const { tipoRequiereNumeroDocumento, tipoComprobanteOpcional } = require('./excelImport')
 
 const ALLOWED_MIME = new Set(['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'])
 
@@ -51,6 +51,7 @@ function resolveMime(file) {
 
 function buildPrompt({ tipoDocumento, montoEsperado, numeroEsperado }) {
   const requiereNumero = tipoRequiereNumeroDocumento(tipoDocumento)
+  const montoFlexible = tipoComprobanteOpcional(tipoDocumento)
   return `Eres un validador de comprobantes chilenos (boleta, factura, peaje, guía de despacho u otro).
 Analiza el documento adjunto y responde SOLO un JSON con esta forma exacta:
 {
@@ -69,6 +70,11 @@ Reglas:
 - No inventes valores. Si dudás, marca visible=false y null.
 - Tipo declarado por el usuario: ${tipoDocumento || 'desconocido'}.
 - Monto declarado por el usuario: ${montoEsperado}.
+${
+  montoFlexible
+    ? '- Este tipo (Viático / Otro pago) puede no traer un monto claro. Si no lo ves, monto_total=null y monto_visible=false; no bloquees ni inventes.'
+    : ''
+}
 ${
   requiereNumero
     ? `- Número de documento declarado: ${numeroEsperado || '(vacío)'}. Debe coincidir si es legible.`
@@ -161,6 +167,7 @@ async function guardarYVerificarComprobante({
     }
   }
 
+  const montoFlexible = tipoComprobanteOpcional(tipoDocumento)
   const base64Data = file.buffer.toString('base64')
   let parsed
   try {
@@ -175,6 +182,23 @@ async function guardarYVerificarComprobante({
     })
     parsed = result.parsed || {}
   } catch (err) {
+    if (montoFlexible) {
+      return {
+        ok: true,
+        comprobante_url: relPath,
+        errores: [],
+        detalle: {
+          monto_detectado: null,
+          monto_declarado: montoNorm,
+          monto_encontrado: false,
+          confirmacion_monto: true,
+          numero_detectado: null,
+          notas:
+            err?.message ||
+            'No se pudo leer el monto en el comprobante. Se puede continuar y guardar.'
+        }
+      }
+    }
     removeComprobanteFile(relPath)
     return {
       ok: false,
@@ -188,14 +212,16 @@ async function guardarYVerificarComprobante({
 
   const montoDetectado = normalizeMonto(parsed.monto_total)
   const montoVisible = parsed.monto_visible !== false && montoDetectado != null
-  if (!montoVisible || montoDetectado == null) {
-    errores.push(
-      'No se pudo leer el monto total en el comprobante. Sube una foto/PDF más clara donde se vea el cobro.'
-    )
-  } else if (!montosCoinciden(montoNorm, montoDetectado)) {
-    errores.push(
-      `El monto del comprobante ($${montoDetectado.toLocaleString('es-CL')}) no coincide con el monto declarado ($${montoNorm.toLocaleString('es-CL')}).`
-    )
+  if (!montoFlexible) {
+    if (!montoVisible || montoDetectado == null) {
+      errores.push(
+        'No se pudo leer el monto total en el comprobante. Sube una foto/PDF más clara donde se vea el cobro.'
+      )
+    } else if (!montosCoinciden(montoNorm, montoDetectado)) {
+      errores.push(
+        `El monto del comprobante ($${montoDetectado.toLocaleString('es-CL')}) no coincide con el monto declarado ($${montoNorm.toLocaleString('es-CL')}).`
+      )
+    }
   }
 
   const numeroDetectado = parsed.numero_documento != null ? String(parsed.numero_documento) : null
@@ -232,6 +258,9 @@ async function guardarYVerificarComprobante({
     errores: [],
     detalle: {
       monto_detectado: montoDetectado,
+      monto_declarado: montoNorm,
+      monto_encontrado: Boolean(montoVisible && montoDetectado != null),
+      confirmacion_monto: montoFlexible,
       numero_detectado: numeroDetectado,
       notas: parsed.notas || null
     }

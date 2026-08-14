@@ -503,7 +503,7 @@ export async function descargarPlantillaGastos() {
     ['cc y caja: usa el id de la tabla a la derecha o de la hoja CC y Cajas'],
     ['monto: solo números (ej. 15000)'],
     ['tarjeta_ultimos4: obligatorio solo si d o c; vacío/opcional si e'],
-    ['patente: opcional (ABCD12 o AB-CD-12 → ABCD12); no aplica en Viático'],
+    ['patente: opcional (patente/máquina, máx. 10 caracteres); no aplica en Viático'],
     ['descripcion: obligatoria (máx. 500)'],
     ['Letras e/d/c y b/f/p/g/oc/v/op: mayúscula o minúscula'],
     ['Compat: columna origen_pago antigua también se acepta al importar'],
@@ -567,7 +567,7 @@ export async function descargarPlantillaGastos() {
       'Condicional',
       'Obligatorio solo si forma_pago = d o c; opcional/vacío si e'
     ],
-    ['patente', 'No (opcional)', 'Opcional. Se normaliza a XXXXNN (ej. AB-CD-12 → ABCD12)'],
+    ['patente', 'No (opcional)', 'Patente / máquina (máx. 10). No aplica en Viático.'],
     ['descripcion', 'Sí', 'Descripción / observación (máx. 500 caracteres)'],
     [
       'NOTA',

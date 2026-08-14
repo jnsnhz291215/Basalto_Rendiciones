@@ -1067,9 +1067,9 @@
                     <strong>Orden de compra</strong> obligatorio (debe verse en la foto).
                   </p>
                   <p>
-                    <strong>Opcionales:</strong> Patente (no aplica en Viático); N° docto en Boleta;
-                    comprobante en Viático / Otro pago; últimos 4 dígitos de tarjeta si la forma
-                    de pago es Efectivo.
+                    <strong>Opcionales:</strong> Patente / máquina (máx. 10; no aplica en Viático);
+                    N° docto en Boleta; comprobante en Viático / Otro pago; últimos 4 dígitos de
+                    tarjeta si la forma de pago es Efectivo.
                   </p>
                   <p>
                     Si adjunta una <strong>foto</strong> (no PDF), asegúrese de que se vea
@@ -1185,15 +1185,23 @@
                 </div>
 
                 <div v-if="gastoMuestraPatente" class="dash-field">
-                  <label>
-                    Patente
-                    <span class="dash-label-aside">(opcional)</span>
-                  </label>
+                  <div class="dash-desc-head">
+                    <label class="dash-label-inline">
+                      Patente / Máquina
+                      <span class="dash-label-aside">(opcional)</span>
+                    </label>
+                    <span
+                      class="dash-word-count"
+                      :class="{ 'dash-word-count--over': letrasPatente > PATENTE_MAX_CHARS }"
+                    >
+                      {{ letrasPatente }} / {{ PATENTE_MAX_CHARS }}
+                    </span>
+                  </div>
                   <input
                     :value="gasto.patenteDisplay"
                     type="text"
-                    placeholder="AB-CD-12"
-                    maxlength="8"
+                    placeholder="ABC123 o MAQ-01"
+                    :maxlength="PATENTE_MAX_CHARS"
                     autocomplete="off"
                     class="dash-mono"
                     @input="onGastoPatenteInput"
@@ -1671,6 +1679,31 @@
                   @click="retryVerificarYGuardar"
                 >
                   Reintentar verificación
+                </button>
+              </div>
+            </div>
+
+            <div v-else-if="modalVerificar.phase === 'confirm'" class="dash-verify-body">
+              <p class="dash-verify-status">Revisión de monto (Viático / Otro pago)</p>
+              <p v-if="modalVerificar.montoEncontrado" class="dash-field-hint">
+                El monto declarado es:
+                <strong>{{ formatMonto(modalVerificar.montoDeclarado) }}</strong>
+                y se encontró el siguiente:
+                <strong>{{ formatMonto(modalVerificar.montoDetectado) }}</strong>.
+                Confirma para continuar y guardar.
+              </p>
+              <p v-else class="dash-field-hint">
+                El monto declarado es:
+                <strong>{{ formatMonto(modalVerificar.montoDeclarado) }}</strong>.
+                No se encontró el monto en el comprobante. Aun así puedes continuar y guardar
+                normalmente.
+              </p>
+              <div class="dash-modal-actions">
+                <button class="dash-btn-secondary" type="button" @click="onCloseModalVerificar">
+                  Cancelar
+                </button>
+                <button class="dash-btn-primary" type="button" @click="confirmarVerificacionYGuardar">
+                  Continuar y guardar
                 </button>
               </div>
             </div>
@@ -4634,7 +4667,7 @@ import {
   rutStatusLabel,
   validarRutChileno
 } from '../utils/rut'
-import { fromPatenteInput, normalizePatente } from '../utils/patente'
+import { fromPatenteInput, normalizePatente, PATENTE_MAX_CHARS } from '../utils/patente'
 import {
   estaDentroVentanaEdicion,
   hintFueraVentanaEdicion,
@@ -5068,13 +5101,17 @@ const anticipoComprobanteFile = ref(null)
 const anticipoFileInputEl = ref(null)
 const modalVerificar = reactive({
   open: false,
-  phase: 'loading', // loading | error | ok
+  phase: 'loading', // loading | error | confirm | ok
   error: '',
-  errores: []
+  errores: [],
+  montoDeclarado: null,
+  montoDetectado: null,
+  montoEncontrado: false
 })
 const pendingVerifyKind = ref(null)
 let pendingGastoSave = null
 let pendingAnticipoSave = null
+let pendingVerifyResult = null
 
 const verifyComprobanteFile = computed(() =>
   pendingVerifyKind.value === 'anticipo' || pendingVerifyKind.value === 'anticipo-adjunto'
@@ -5104,6 +5141,7 @@ const tarjetaFormOpen = ref(false)
 const cuentaBancoFormOpen = ref(false)
 
 const letrasDescripcion = computed(() => String(gasto.descripcion || '').length)
+const letrasPatente = computed(() => String(gasto.patenteDisplay || gasto.patente || '').length)
 
 const nombreSesion = computed(() => user.value?.nombre || 'Usuario Demo')
 
@@ -6679,10 +6717,14 @@ function onCloseModalVerificar() {
   modalVerificar.phase = 'loading'
   modalVerificar.error = ''
   modalVerificar.errores = []
+  modalVerificar.montoDeclarado = null
+  modalVerificar.montoDetectado = null
+  modalVerificar.montoEncontrado = false
   pendingVerifyKind.value = null
   pendingGastoSave = null
   pendingAnticipoSave = null
   pendingLegacyAttach.value = null
+  pendingVerifyResult = null
 }
 
 async function verificarComprobanteConIa() {
@@ -6765,71 +6807,102 @@ async function ejecutarVerificacionYGuardado() {
 
     if (!verifyResult?.ok || !verifyResult?.comprobante_url) {
       throw Object.assign(new Error('No se pudo validar el comprobante'), {
-        errores: ['No se pudo validar el comprobante']
+        errores: verifyResult?.errores || ['No se pudo validar el comprobante']
       })
     }
 
-    modalVerificar.phase = 'ok'
-    if (pendingVerifyKind.value === 'anticipo-adjunto') {
-      const row = pendingLegacyAttach.value?.row
-      if (!row?.id) throw new Error('No hay asignación para adjuntar comprobante')
-      await api.updateAnticipo(row.id, {
-        comprobante_url: verifyResult.comprobante_url
-      })
-      await loadDashboardData()
-      if (pendingImportLoteRefreshId.value) {
-        await refreshImportLoteDetalle(pendingImportLoteRefreshId.value)
-        pendingImportLoteRefreshId.value = null
-        closeImportComprobanteModal()
-      }
-      modalVerificar.open = false
-      pendingVerifyKind.value = null
-      pendingLegacyAttach.value = null
-      anticipoComprobanteFile.value = null
-    } else if (pendingVerifyKind.value === 'gasto-adjunto') {
-      const row = pendingLegacyAttach.value?.row
-      if (!row?.id) throw new Error('No hay gasto para adjuntar comprobante')
-      await api.updateRendicion(row.id, {
-        comprobante_url: verifyResult.comprobante_url
-      })
-      await loadDashboardData()
-      if (pendingImportLoteRefreshId.value) {
-        await refreshImportLoteDetalle(pendingImportLoteRefreshId.value)
-        pendingImportLoteRefreshId.value = null
-        closeImportComprobanteModal()
-      }
-      modalVerificar.open = false
-      pendingVerifyKind.value = null
-      pendingLegacyAttach.value = null
-      gastoComprobanteFile.value = null
-    } else if (pendingVerifyKind.value === 'anticipo') {
-      if (!pendingAnticipoSave) throw new Error('No hay anticipo pendiente de guardar')
-      await api.createAnticipo({
-        ...pendingAnticipoSave,
-        comprobante_url: verifyResult.comprobante_url
-      })
-      await loadDashboardData()
-      modalVerificar.open = false
-      pendingVerifyKind.value = null
-      pendingAnticipoSave = null
-      closeFormAnticipo()
-    } else {
-      if (!pendingGastoSave) throw new Error('No hay rendición pendiente de guardar')
-      await api.createRendicion({
-        ...pendingGastoSave,
-        comprobante_url: verifyResult.comprobante_url
-      })
-      await loadDashboardData()
-      modalVerificar.open = false
-      pendingVerifyKind.value = null
-      pendingGastoSave = null
-      closeFormGasto()
+    const detalle = verifyResult.detalle || {}
+    if (detalle.confirmacion_monto) {
+      pendingVerifyResult = verifyResult
+      modalVerificar.montoDeclarado = detalle.monto_declarado ?? pendingGastoSave?.monto ?? null
+      modalVerificar.montoDetectado = detalle.monto_detectado ?? null
+      modalVerificar.montoEncontrado = Boolean(detalle.monto_encontrado)
+      modalVerificar.phase = 'confirm'
+      return
     }
+
+    modalVerificar.phase = 'ok'
+    await aplicarResultadoVerificacion(verifyResult)
   } catch (err) {
     modalVerificar.phase = 'error'
     modalVerificar.error =
       err?.message || 'No se pudo verificar el comprobante. Sube un documento más claro.'
     modalVerificar.errores = Array.isArray(err?.errores) ? err.errores : [modalVerificar.error]
+  }
+}
+
+async function aplicarResultadoVerificacion(verifyResult) {
+  if (pendingVerifyKind.value === 'anticipo-adjunto') {
+    const row = pendingLegacyAttach.value?.row
+    if (!row?.id) throw new Error('No hay asignación para adjuntar comprobante')
+    await api.updateAnticipo(row.id, {
+      comprobante_url: verifyResult.comprobante_url
+    })
+    await loadDashboardData()
+    if (pendingImportLoteRefreshId.value) {
+      await refreshImportLoteDetalle(pendingImportLoteRefreshId.value)
+      pendingImportLoteRefreshId.value = null
+      closeImportComprobanteModal()
+    }
+    modalVerificar.open = false
+    pendingVerifyKind.value = null
+    pendingLegacyAttach.value = null
+    pendingVerifyResult = null
+    anticipoComprobanteFile.value = null
+  } else if (pendingVerifyKind.value === 'gasto-adjunto') {
+    const row = pendingLegacyAttach.value?.row
+    if (!row?.id) throw new Error('No hay gasto para adjuntar comprobante')
+    await api.updateRendicion(row.id, {
+      comprobante_url: verifyResult.comprobante_url
+    })
+    await loadDashboardData()
+    if (pendingImportLoteRefreshId.value) {
+      await refreshImportLoteDetalle(pendingImportLoteRefreshId.value)
+      pendingImportLoteRefreshId.value = null
+      closeImportComprobanteModal()
+    }
+    modalVerificar.open = false
+    pendingVerifyKind.value = null
+    pendingLegacyAttach.value = null
+    pendingVerifyResult = null
+    gastoComprobanteFile.value = null
+  } else if (pendingVerifyKind.value === 'anticipo') {
+    if (!pendingAnticipoSave) throw new Error('No hay anticipo pendiente de guardar')
+    await api.createAnticipo({
+      ...pendingAnticipoSave,
+      comprobante_url: verifyResult.comprobante_url
+    })
+    await loadDashboardData()
+    modalVerificar.open = false
+    pendingVerifyKind.value = null
+    pendingAnticipoSave = null
+    pendingVerifyResult = null
+    closeFormAnticipo()
+  } else {
+    if (!pendingGastoSave) throw new Error('No hay rendición pendiente de guardar')
+    await api.createRendicion({
+      ...pendingGastoSave,
+      comprobante_url: verifyResult.comprobante_url
+    })
+    await loadDashboardData()
+    modalVerificar.open = false
+    pendingVerifyKind.value = null
+    pendingGastoSave = null
+    pendingVerifyResult = null
+    closeFormGasto()
+  }
+}
+
+async function confirmarVerificacionYGuardar() {
+  const verifyResult = pendingVerifyResult
+  if (!verifyResult?.comprobante_url) return
+  modalVerificar.phase = 'ok'
+  try {
+    await aplicarResultadoVerificacion(verifyResult)
+  } catch (err) {
+    modalVerificar.phase = 'error'
+    modalVerificar.error = err?.message || 'No se pudo guardar.'
+    modalVerificar.errores = [modalVerificar.error]
   }
 }
 
@@ -7936,7 +8009,7 @@ const CONFLICT_COMPARE_FIELDS = [
   { key: 'monto', label: 'Monto' },
   { key: 'origen_pago', label: 'Forma de pago' },
   { key: 'descripcion', label: 'Descripción' },
-  { key: 'patente', label: 'Patente' },
+  { key: 'patente', label: 'Patente / Máquina' },
   { key: 'trabajador_rut', label: 'RUT' },
   { key: 'caja', label: 'Caja' },
   { key: 'cc', label: 'CC' },
