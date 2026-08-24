@@ -30,13 +30,26 @@ async function authMiddleware(req, res, next) {
       return res.status(401).json({ error: 'Unauthorized', message: 'Token inválido o expirado' })
     }
 
-    const rows = await query(
-      `SELECT id, trabajador_id, rut, correo, rol, estado, is_deleted
-       FROM usuarios
-       WHERE id = ? AND is_deleted = FALSE
-       LIMIT 1`,
-      [payload.id]
-    )
+    let rows
+    try {
+      rows = await query(
+        `SELECT id, trabajador_id, rut, correo, rol, estado, is_deleted, persona_confianza
+         FROM usuarios
+         WHERE id = ? AND is_deleted = FALSE
+         LIMIT 1`,
+        [payload.id]
+      )
+    } catch (err) {
+      if (err?.code !== 'ER_BAD_FIELD_ERROR' && err?.errno !== 1054) throw err
+      rows = await query(
+        `SELECT id, trabajador_id, rut, correo, rol, estado, is_deleted
+         FROM usuarios
+         WHERE id = ? AND is_deleted = FALSE
+         LIMIT 1`,
+        [payload.id]
+      )
+      if (rows[0]) rows[0].persona_confianza = 0
+    }
 
     const user = rows[0]
     if (!user || user.estado !== 'activo') {
@@ -49,7 +62,8 @@ async function authMiddleware(req, res, next) {
       rut: user.rut,
       correo: user.correo,
       rol: user.rol,
-      nombre: payload.nombre || user.correo
+      nombre: payload.nombre || user.correo,
+      persona_confianza: Boolean(user.persona_confianza)
     }
 
     return next()

@@ -109,7 +109,30 @@ function parseGeminiError(error) {
   return { code: '', status: '', message: rawMessage }
 }
 
+function getGeminiTimeoutMs() {
+  const n = Number(process.env.GEMINI_TIMEOUT_MS || 20000)
+  return Number.isFinite(n) && n >= 5000 ? n : 20000
+}
+
+function getGeminiTotalTimeoutMs() {
+  const n = Number(process.env.GEMINI_TOTAL_TIMEOUT_MS || 45000)
+  return Number.isFinite(n) && n >= 8000 ? n : 45000
+}
+
+function withTimeout(promise, ms, message) {
+  let timer
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const err = new Error(message)
+      err.code = 'GEMINI_TIMEOUT'
+      reject(err)
+    }, ms)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
 function shouldTryNextModel(error) {
+  if (error?.code === 'GEMINI_TIMEOUT') return true
   const info = parseGeminiError(error)
   const code = Number(info.code || 0)
   const status = String(info.status || '').toUpperCase()
@@ -133,38 +156,55 @@ function shouldTryNextModel(error) {
 async function procesarDocumentoConGemini({ base64Data, mimeType, prompt }) {
   const ai = createGeminiClient()
   const modelCandidates = getGeminiModelCandidates()
+  const perModelMs = getGeminiTimeoutMs()
+  const totalMs = getGeminiTotalTimeoutMs()
+  const started = Date.now()
   let lastError = null
 
   for (let i = 0; i < modelCandidates.length; i += 1) {
+    const remaining = totalMs - (Date.now() - started)
+    if (remaining < 3000) {
+      const err = new Error(
+        'La verificación con IA tardó demasiado. Prueba con una foto más liviana o reintenta.'
+      )
+      err.code = 'GEMINI_TIMEOUT'
+      throw err
+    }
     const model = modelCandidates[i]
+    const budget = Math.min(perModelMs, remaining)
     try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: String(prompt || '') },
-              {
-                inlineData: {
-                  data: String(base64Data || ''),
-                  mimeType: String(mimeType || 'application/octet-stream')
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model,
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { text: String(prompt || '') },
+                {
+                  inlineData: {
+                    data: String(base64Data || ''),
+                    mimeType: String(mimeType || 'application/octet-stream')
+                  }
                 }
-              }
-            ]
+              ]
+            }
+          ],
+          config: {
+            responseMimeType: 'application/json'
           }
-        ],
-        config: {
-          responseMimeType: 'application/json'
-        }
-      })
+        }),
+        budget,
+        'La verificación con IA tardó demasiado. Prueba con una foto más liviana o reintenta.'
+      )
       const rawText = await extractJsonTextFromResponse(response)
       const parsed = parseStrictJson(rawText)
       return { parsed, modelUsed: model }
     } catch (error) {
       lastError = error
       const hasNext = i < modelCandidates.length - 1
-      if (!hasNext || !shouldTryNextModel(error)) throw error
+      const leftover = totalMs - (Date.now() - started)
+      if (!hasNext || leftover < 3000 || !shouldTryNextModel(error)) throw error
     }
   }
 

@@ -69,6 +69,12 @@ function canDevHardDelete(user) {
 }
 
 function canSkipComprobanteVerify(user) {
+  if (user?.persona_confianza) return true
+  return canSkipComprobanteVerifyDev(user)
+}
+
+/** Solo Super Admin Dev + flag: también puede omitir N° documento obligatorio. */
+function canSkipComprobanteVerifyDev(user) {
   if (!DEV_FLAGS.COMPROBANTE_VERIFY_BYPASS) return false
   return isSuperAdminDev(user)
 }
@@ -82,5 +88,6 @@ module.exports = {
   normalizeDevRut,
   canDevHardDelete,
   canSkipComprobanteVerify,
+  canSkipComprobanteVerifyDev,
   cleanRut
 }

@@ -28,6 +28,7 @@ const PROFILE_KEYS = [
   'user_correo',
   'user_id',
   'user_trabajador_id',
+  'user_persona_confianza',
   'user_admin_nivel',
   'user_api_rol',
   'usuarioActivo',
@@ -78,7 +79,8 @@ export function normalizeAuthUser(data) {
     /** Compat UI legacy (turnos usaba role admin|...) */
     role: isAdminRol(rolApi) ? 'admin' : rolApi === 'USER_RENDIDOR' ? 'usuario' : rolApi,
     adminNivel: mapAdminNivel(rolApi),
-    trabajador_id: source.trabajador_id ?? null
+    trabajador_id: source.trabajador_id ?? null,
+    persona_confianza: Boolean(source.persona_confianza ?? source.personaConfianza)
   }
 
   return user.rut || user.rol ? user : null
@@ -99,6 +101,7 @@ export function persistSessionProfile(data) {
   if (user.trabajador_id != null) {
     localStorage.setItem('user_trabajador_id', String(user.trabajador_id))
   }
+  localStorage.setItem('user_persona_confianza', user.persona_confianza ? '1' : '0')
 
   localStorage.setItem(
     'usuarioActivo',
@@ -110,7 +113,8 @@ export function persistSessionProfile(data) {
       correo: user.correo,
       isAdmin: user.role === 'admin',
       adminNivel: user.adminNivel || '',
-      trabajador_id: user.trabajador_id
+      trabajador_id: user.trabajador_id,
+      persona_confianza: Boolean(user.persona_confianza)
     })
   )
 
@@ -124,7 +128,8 @@ export function persistSessionProfile(data) {
         correo: user.correo,
         rol: user.rol,
         isAdmin: true,
-        adminNivel: user.adminNivel
+        adminNivel: user.adminNivel,
+        persona_confianza: Boolean(user.persona_confianza)
       })
     )
     localStorage.setItem('userRUT', user.rut)
@@ -192,6 +197,7 @@ export function readCachedUser() {
   const rol = localStorage.getItem('user_api_rol') || ''
   const adminNivel = localStorage.getItem('user_admin_nivel') || ''
   const correo = localStorage.getItem('user_correo') || ''
+  const persona_confianza = localStorage.getItem('user_persona_confianza') === '1'
   if (!rut && !role && !rol) return null
-  return { rut, nombre, role, rol, adminNivel, correo }
+  return { rut, nombre, role, rol, adminNivel, correo, persona_confianza }
 }

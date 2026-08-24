@@ -363,7 +363,7 @@ async function setTrabajadorCajas(req, res) {
 async function listUsuarios(req, res) {
   try {
     const params = []
-    let sql = `SELECT u.id, u.trabajador_id, u.rut, u.correo, u.rol, u.estado, u.created_at,
+    let sql = `SELECT u.id, u.trabajador_id, u.rut, u.correo, u.rol, u.estado, u.persona_confianza, u.created_at,
               t.nombre_completo AS trabajador_nombre, t.cargo
        FROM usuarios u
        LEFT JOIN trabajadores t ON t.id = u.trabajador_id
@@ -384,7 +384,7 @@ async function listUsuarios(req, res) {
 
 async function createUsuario(req, res) {
   try {
-    const { trabajador_id, rut, correo, password, rol, estado } = req.body || {}
+    const { trabajador_id, rut, correo, password, rol, estado, persona_confianza } = req.body || {}
     if (!rut?.trim() || !correo?.trim() || !password || !rol) {
       return res.status(400).json({ error: 'rut, correo, password y rol son requeridos' })
     }
@@ -427,17 +427,24 @@ async function createUsuario(req, res) {
       }
     }
 
+    const personaConfianza =
+      SUPER_ADMINS.includes(req.user.rol) &&
+      (persona_confianza === true || persona_confianza === 1 || persona_confianza === '1')
+        ? 1
+        : 0
+
     const hash = await bcrypt.hash(password, 10)
     const result = await query(
-      `INSERT INTO usuarios (trabajador_id, rut, correo, password_hash, rol, estado)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO usuarios (trabajador_id, rut, correo, password_hash, rol, estado, persona_confianza)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         trabajadorId,
         rut.trim(),
         correo.trim(),
         hash,
         rol,
-        estado === 'inactivo' ? 'inactivo' : 'activo'
+        estado === 'inactivo' ? 'inactivo' : 'activo',
+        personaConfianza
       ]
     )
 
@@ -454,7 +461,7 @@ async function createUsuario(req, res) {
     )
 
     const created = await query(
-      `SELECT u.id, u.trabajador_id, u.rut, u.correo, u.rol, u.estado, u.created_at,
+      `SELECT u.id, u.trabajador_id, u.rut, u.correo, u.rol, u.estado, u.persona_confianza, u.created_at,
               t.nombre_completo AS trabajador_nombre
        FROM usuarios u
        LEFT JOIN trabajadores t ON t.id = u.trabajador_id
@@ -484,7 +491,7 @@ function adminFormNombre(body) {
 async function updateUsuario(req, res) {
   try {
     const id = Number(req.params.id)
-    const { correo, rol, estado, password } = req.body || {}
+    const { correo, rol, estado, password, persona_confianza } = req.body || {}
     const nombre = adminFormNombre(req.body)
 
     const existing = await query(
@@ -582,17 +589,33 @@ async function updateUsuario(req, res) {
         ? estado
         : row.estado
     const nextNombre = nombre || prevNombre
+    let nextPersonaConfianza = row.persona_confianza ? 1 : 0
+    if (persona_confianza !== undefined) {
+      if (!SUPER_ADMINS.includes(req.user.rol)) {
+        return res.status(403).json({ error: 'No puedes asignar el permiso de persona de confianza' })
+      }
+      nextPersonaConfianza =
+        persona_confianza === true || persona_confianza === 1 || persona_confianza === '1'
+          ? 1
+          : 0
+    }
 
     const cambios = []
     pushCambio(cambios, 'correo', row.correo, nextCorreo)
     pushCambio(cambios, 'rol', row.rol, nextRol)
     pushCambio(cambios, 'estado', row.estado, nextEstado)
     pushCambio(cambios, 'nombre', prevNombre, nextNombre)
+    pushCambio(
+      cambios,
+      'persona_confianza',
+      row.persona_confianza ? 1 : 0,
+      nextPersonaConfianza
+    )
     if (passwordChanged) pushPasswordReset(cambios)
 
     await query(
       `UPDATE usuarios
-       SET correo = ?, rol = ?, estado = ?, password_hash = ?, trabajador_id = ?
+       SET correo = ?, rol = ?, estado = ?, password_hash = ?, trabajador_id = ?, persona_confianza = ?
        WHERE id = ? AND is_deleted = FALSE`,
       [
         nextCorreo,
@@ -600,6 +623,7 @@ async function updateUsuario(req, res) {
         nextEstado,
         passwordHash,
         trabajadorId,
+        nextPersonaConfianza,
         id
       ]
     )
@@ -619,7 +643,7 @@ async function updateUsuario(req, res) {
     )
 
     const updated = await query(
-      `SELECT u.id, u.trabajador_id, u.rut, u.correo, u.rol, u.estado, u.created_at,
+      `SELECT u.id, u.trabajador_id, u.rut, u.correo, u.rol, u.estado, u.persona_confianza, u.created_at,
               t.nombre_completo AS trabajador_nombre, t.cargo
        FROM usuarios u
        LEFT JOIN trabajadores t ON t.id = u.trabajador_id

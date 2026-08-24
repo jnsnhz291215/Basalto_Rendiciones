@@ -652,6 +652,16 @@
               <option value="inactivo">Inactivo</option>
             </select>
           </div>
+          <div class="dash-personal-access-toggle">
+            <label class="dash-switch">
+              <input v-model="modalEditAdmin.personaConfianza" type="checkbox" />
+              <span class="dash-switch-ui" aria-hidden="true"></span>
+              <span class="dash-switch-label">Persona de confianza</span>
+            </label>
+            <p class="dash-field-hint">
+              Omite la validación IA de monto y N° de documento al cargar comprobantes.
+            </p>
+          </div>
           <p v-if="modalEditAdmin.error" class="error" role="alert">{{ modalEditAdmin.error }}</p>
           <div class="dash-modal-actions">
             <button class="dash-btn-secondary" type="button" @click="closeModalEditAdmin">
@@ -1293,8 +1303,11 @@
                     Archivo: {{ gasto.comprobanteNombre }}
                   </span>
                   <p v-if="canSkipComprobanteIa" class="dash-field-hint dash-hint--ok">
-                    Bypass Dev activo: se omite la validación IA de monto / N° documento (sigue
-                    obligatorio adjuntar archivo).
+                    {{
+                      user?.persona_confianza
+                        ? 'Persona de confianza: se omite la validación IA de monto / N° documento (sigue obligatorio adjuntar archivo).'
+                        : 'Bypass Dev activo: se omite la validación IA de monto / N° documento (sigue obligatorio adjuntar archivo).'
+                    }}
                   </p>
                 </div>
               </div>
@@ -1606,7 +1619,12 @@
                 <h3 id="modal-verificar-title">Confirmando carga de documento</h3>
                 <p class="dash-hint">
                   <template v-if="canSkipComprobanteIa">
-                    Bypass Super Admin Dev: se guarda el comprobante sin validar monto
+                    <template v-if="user?.persona_confianza">
+                      Persona de confianza: se guarda el comprobante sin validar monto
+                    </template>
+                    <template v-else>
+                      Bypass Super Admin Dev: se guarda el comprobante sin validar monto
+                    </template>
                     <template v-if="pendingVerifyKind === 'gasto' && gastoRequiereNumeroDocto">
                       ni N° de documento
                     </template>
@@ -1622,7 +1640,6 @@
                 </p>
               </div>
               <button
-                v-if="modalVerificar.phase !== 'loading'"
                 class="dash-modal-close"
                 type="button"
                 @click="onCloseModalVerificar"
@@ -1636,17 +1653,26 @@
               <p class="dash-verify-status">
                 {{
                   canSkipComprobanteIa
-                    ? 'Guardando comprobante (bypass IA)…'
+                    ? user?.persona_confianza
+                      ? 'Guardando comprobante (persona de confianza)…'
+                      : 'Guardando comprobante (bypass IA)…'
                     : 'Analizando comprobante…'
                 }}
               </p>
               <p class="dash-field-hint">
                 {{
                   canSkipComprobanteIa
-                    ? 'Modo Super Admin Dev: sin validación de monto.'
-                    : 'Esto puede tomar unos segundos.'
+                    ? user?.persona_confianza
+                      ? 'Sin validación IA de monto ni N° de documento.'
+                      : 'Modo Super Admin Dev: sin validación de monto.'
+                    : 'Suele tardar unos segundos (máx. ~45 s). Si se queda así, cancela y reintenta con una foto más liviana.'
                 }}
               </p>
+              <div class="dash-modal-actions">
+                <button class="dash-btn-secondary" type="button" @click="onCloseModalVerificar">
+                  Cancelar
+                </button>
+              </div>
             </div>
 
             <div v-else-if="modalVerificar.phase === 'error'" class="dash-verify-body">
@@ -2314,8 +2340,11 @@
                     Archivo: {{ asignacion.comprobanteNombre }}
                   </span>
                   <p v-if="canSkipComprobanteIa" class="dash-field-hint dash-hint--ok">
-                    Bypass Dev activo: se omite la validación IA de monto (sigue obligatorio adjuntar
-                    archivo).
+                    {{
+                      user?.persona_confianza
+                        ? 'Persona de confianza: se omite la validación IA de monto (sigue obligatorio adjuntar archivo).'
+                        : 'Bypass Dev activo: se omite la validación IA de monto (sigue obligatorio adjuntar archivo).'
+                    }}
                   </p>
                 </div>
               </div>
@@ -3814,6 +3843,8 @@
                 <h3 class="dash-cajas-toolbar-title">Administradores del Sistema</h3>
                 <p class="dash-cajas-toolbar-hint">
                   Gestión de usuarios con permisos globales de configuración.
+                  El permiso <strong>Persona de confianza</strong> omite la validación IA al
+                  cargar comprobantes.
                 </p>
               </div>
               <button
@@ -3920,6 +3951,18 @@
                   </div>
                 </div>
 
+                <div class="dash-personal-access-toggle dash-admin-form-section">
+                  <label class="dash-switch">
+                    <input v-model="adminForm.personaConfianza" type="checkbox" />
+                    <span class="dash-switch-ui" aria-hidden="true"></span>
+                    <span class="dash-switch-label">Persona de confianza</span>
+                  </label>
+                  <p class="dash-field-hint">
+                    Al cargar rendiciones, guarda el comprobante sin validar monto ni N° de
+                    documento con IA.
+                  </p>
+                </div>
+
                 <div class="dash-caja-form-actions">
                   <button class="dash-btn-secondary" type="button" @click="closeFormAdminUser">
                     Cancelar
@@ -3962,6 +4005,7 @@
                     <th>Nombre</th>
                     <th>Correo</th>
                     <th>Rol</th>
+                    <th class="dash-table-center">Confianza</th>
                     <th class="dash-table-center">Estado</th>
                     <th v-if="canCreateAdmins" class="dash-table-center">Acciones</th>
                   </tr>
@@ -3973,6 +4017,24 @@
                     <td>{{ admin.correo || '-' }}</td>
                     <td>
                       <span class="dash-badge dash-badge--accent">{{ admin.rol }}</span>
+                    </td>
+                    <td class="dash-table-center">
+                      <label
+                        class="dash-switch"
+                        :title="
+                          admin.personaConfianza
+                            ? 'Persona de confianza: omite validación IA'
+                            : 'Marcar como persona de confianza'
+                        "
+                      >
+                        <input
+                          type="checkbox"
+                          :checked="Boolean(admin.personaConfianza)"
+                          :disabled="!canEditAdmins || togglingConfianzaId === admin.id"
+                          @click.prevent="onTogglePersonaConfianza(admin)"
+                        />
+                        <span class="dash-switch-ui" aria-hidden="true"></span>
+                      </label>
                     </td>
                     <td class="dash-table-center">
                       <button
@@ -4757,6 +4819,7 @@ const modalEditAdmin = reactive({
   correo: '',
   rol: '',
   estado: 'activo',
+  personaConfianza: false,
   error: ''
 })
 
@@ -5112,6 +5175,8 @@ const pendingVerifyKind = ref(null)
 let pendingGastoSave = null
 let pendingAnticipoSave = null
 let pendingVerifyResult = null
+let verifyAbortController = null
+let verifyCancelRequested = false
 
 const verifyComprobanteFile = computed(() =>
   pendingVerifyKind.value === 'anticipo' || pendingVerifyKind.value === 'anticipo-adjunto'
@@ -5302,7 +5367,8 @@ const adminForm = reactive({
   correo: '',
   rol: 'Administrador de Caja',
   passType: 'rut',
-  password: ''
+  password: '',
+  personaConfianza: false
 })
 
 const adminRutStatus = computed(() => rutStatusLabel(adminForm.rut))
@@ -5435,12 +5501,19 @@ const canDevForceDelete = computed(
 /** Flag temporal: salta IA monto / N° documento al subir comprobante */
 const canSkipComprobanteIa = computed(
   () =>
+    Boolean(user.value?.persona_confianza) ||
+    canSkipComprobanteVerify(user.value?.rol) ||
+    canSkipComprobanteVerify(sessionAdminNivel.value)
+)
+const canSkipNumeroDoctoRequired = computed(
+  () =>
     canSkipComprobanteVerify(user.value?.rol) ||
     canSkipComprobanteVerify(sessionAdminNivel.value)
 )
 /** Reiniciar contraseña de usuarios: solo Super Admin / Super Admin Dev */
 const canResetPassword = canCreateAdmins
 const togglingEstadoId = ref(null)
+const togglingConfianzaId = ref(null)
 const togglingTarjetaId = ref(null)
 
 /** Admin / Super Admin / Dev pueden rendir a nombre de cualquier trabajador */
@@ -5997,7 +6070,8 @@ async function loadDashboardData(opts = {}) {
               rol: u.rol,
               estado: u.estadoApi,
               trabajador_nombre: u.nombre || null,
-              trabajador_id: u.trabajadorId
+              trabajador_id: u.trabajadorId,
+              persona_confianza: u.personaConfianza
             })
           )
       } else {
@@ -6711,8 +6785,7 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function onCloseModalVerificar() {
-  if (modalVerificar.phase === 'loading') return
+function resetModalVerificarState() {
   modalVerificar.open = false
   modalVerificar.phase = 'loading'
   modalVerificar.error = ''
@@ -6725,6 +6798,16 @@ function onCloseModalVerificar() {
   pendingAnticipoSave = null
   pendingLegacyAttach.value = null
   pendingVerifyResult = null
+}
+
+function onCloseModalVerificar() {
+  if (modalVerificar.phase === 'loading') {
+    verifyCancelRequested = true
+    verifyAbortController?.abort()
+    resetModalVerificarState()
+    return
+  }
+  resetModalVerificarState()
 }
 
 async function verificarComprobanteConIa() {
@@ -6789,21 +6872,25 @@ async function verificarComprobanteConIa() {
       fd.append('numero_documento', gasto.numero.trim())
     }
   }
-  return api.verificarComprobante(fd)
+  return api.verificarComprobante(fd, { signal: verifyAbortController?.signal })
 }
 
 async function ejecutarVerificacionYGuardado() {
+  verifyCancelRequested = false
+  verifyAbortController = new AbortController()
   modalVerificar.open = true
   modalVerificar.phase = 'loading'
   modalVerificar.error = ''
   modalVerificar.errores = []
 
   try {
-    const waitMs = canSkipComprobanteIa.value ? 400 : 5000
+    const waitMs = 400
     const [verifyResult] = await Promise.all([
       verificarComprobanteConIa(),
       sleep(waitMs)
     ])
+
+    if (verifyCancelRequested) return
 
     if (!verifyResult?.ok || !verifyResult?.comprobante_url) {
       throw Object.assign(new Error('No se pudo validar el comprobante'), {
@@ -6824,6 +6911,10 @@ async function ejecutarVerificacionYGuardado() {
     modalVerificar.phase = 'ok'
     await aplicarResultadoVerificacion(verifyResult)
   } catch (err) {
+    if (verifyCancelRequested || err?.code === 'VERIFY_CANCELLED') {
+      resetModalVerificarState()
+      return
+    }
     modalVerificar.phase = 'error'
     modalVerificar.error =
       err?.message || 'No se pudo verificar el comprobante. Sube un documento más claro.'
@@ -7469,7 +7560,7 @@ async function onSaveGasto() {
   if (
     gastoRequiereNumeroDocto.value &&
     !gasto.numero.trim() &&
-    !canSkipComprobanteIa.value
+    !canSkipNumeroDoctoRequired.value
   ) {
     saveError.value = `N° de documento es obligatorio para ${gasto.tipo}.`
     return
@@ -8570,6 +8661,7 @@ function resetAdminForm() {
   adminForm.rol = creatableAdminRoles.value[0] || ROLE_ADMIN_CAJA
   adminForm.passType = 'rut'
   adminForm.password = ''
+  adminForm.personaConfianza = false
 }
 
 function toggleFormAdminUser() {
@@ -8746,6 +8838,7 @@ function onEditAdmin(admin) {
   modalEditAdmin.correo = admin.correo || ''
   modalEditAdmin.rol = adminRolLabelForEdit(admin)
   modalEditAdmin.estado = admin.estadoApi || (admin.estado === 'Inactivo' ? 'inactivo' : 'activo')
+  modalEditAdmin.personaConfianza = Boolean(admin.personaConfianza)
   modalEditAdmin.error = ''
 }
 
@@ -8757,6 +8850,7 @@ function closeModalEditAdmin() {
   modalEditAdmin.correo = ''
   modalEditAdmin.rol = ''
   modalEditAdmin.estado = 'activo'
+  modalEditAdmin.personaConfianza = false
   modalEditAdmin.error = ''
 }
 
@@ -8769,13 +8863,15 @@ async function onSaveEditAdmin() {
     const payload = {
       correo: modalEditAdmin.correo.trim(),
       estado: modalEditAdmin.estado,
-      nombre: modalEditAdmin.nombre.trim()
+      nombre: modalEditAdmin.nombre.trim(),
+      persona_confianza: Boolean(modalEditAdmin.personaConfianza)
     }
     // No permitir cambiar hacia/desde Super Admin - Dev desde la UI
     if (!isEditingSuperAdminDev.value) {
       payload.rol = rolApiFromUi(shortAdminRol(modalEditAdmin.rol))
     }
     await api.updateUsuario(modalEditAdmin.id, payload)
+    syncSessionPersonaConfianza(modalEditAdmin.id, Boolean(modalEditAdmin.personaConfianza))
     await loadDashboardData()
     closeModalEditAdmin()
   } catch (err) {
@@ -8826,6 +8922,31 @@ function onToggleEstadoAdmin(admin) {
     listRef: admins,
     label: 'el administrador'
   })
+}
+
+function syncSessionPersonaConfianza(userId, next) {
+  if (!user.value || Number(user.value.id) !== Number(userId)) return
+  user.value.persona_confianza = Boolean(next)
+  persistSessionProfile({ user: user.value })
+}
+
+async function onTogglePersonaConfianza(admin) {
+  if (!canEditAdmins.value || !admin?.id) return
+  const next = !admin.personaConfianza
+  try {
+    togglingConfianzaId.value = admin.id
+    saveError.value = ''
+    await api.updateUsuario(admin.id, { persona_confianza: next })
+    const idx = admins.value.findIndex((x) => x.id === admin.id)
+    if (idx >= 0) {
+      admins.value[idx] = { ...admins.value[idx], personaConfianza: next }
+    }
+    syncSessionPersonaConfianza(admin.id, next)
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo actualizar el permiso de confianza'
+  } finally {
+    togglingConfianzaId.value = null
+  }
 }
 
 function onToggleEstadoPersonal(p) {
@@ -9053,7 +9174,8 @@ async function onSaveAdmin() {
       password: passwordTemporal,
       rol: rolApiFromUi(shortAdminRol(adminForm.rol)),
       estado: 'activo',
-      nombre: adminForm.nombre.trim()
+      nombre: adminForm.nombre.trim(),
+      persona_confianza: Boolean(adminForm.personaConfianza)
     })
     await loadDashboardData()
     closeFormAdminUser()

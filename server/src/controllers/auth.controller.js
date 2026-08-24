@@ -112,7 +112,8 @@ async function login(req, res) {
         correo: user.correo,
         rol: user.rol,
         trabajador_id: user.trabajador_id,
-        nombre
+        nombre,
+        persona_confianza: Boolean(user.persona_confianza)
       }
     })
   } catch (err) {
@@ -129,7 +130,8 @@ async function me(req, res) {
       correo: req.user.correo,
       rol: req.user.rol,
       trabajador_id: req.user.trabajador_id,
-      nombre: req.user.nombre
+      nombre: req.user.nombre,
+      persona_confianza: Boolean(req.user.persona_confianza)
     }
   })
 }
@@ -205,7 +207,8 @@ async function updateMe(req, res) {
         correo: nextCorreo,
         rol: user.rol,
         trabajador_id: user.trabajador_id,
-        nombre: req.user.nombre
+        nombre: req.user.nombre,
+        persona_confianza: Boolean(req.user.persona_confianza)
       }
     })
   } catch (err) {

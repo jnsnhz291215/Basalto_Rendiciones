@@ -11,6 +11,7 @@ const { ensureAsignacionesSchema } = require('./utils/ensureAsignacionesSchema')
 const { ensureRendicionesTipoDocto } = require('./utils/ensureRendicionesTipoDocto')
 const { ensureImportacionesSchema } = require('./utils/ensureImportacionesSchema')
 const { ensureCuentasBancoSchema } = require('./utils/ensureCuentasBancoSchema')
+const { ensureUsuariosSchema } = require('./utils/ensureUsuariosSchema')
 const { ensureIndexes } = require('./utils/ensureIndexes')
 
 const authRoutes = require('./routes/auth.routes')
@@ -115,6 +116,12 @@ app.listen(PORT, async () => {
     console.log(`Sirviendo frontend desde ${distPath}`)
   } else {
     console.warn(`AVISO: no hay dist/ en ${distPath} - el front no se servirá`)
+  }
+  try {
+    await ensureUsuariosSchema()
+    console.log('[schema] usuarios.persona_confianza OK')
+  } catch (err) {
+    console.warn('[schema] ensureUsuariosSchema:', err.message)
   }
   try {
     await ensureCajasSchema()

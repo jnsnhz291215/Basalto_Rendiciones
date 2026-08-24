@@ -206,7 +206,8 @@ export function mapUsuario(row) {
     rol: row.rol,
     rolLabel: rolUiFromApi(row.rol),
     estado: row.estado === 'inactivo' ? 'Inactivo' : 'Activo',
-    estadoApi: row.estado === 'inactivo' ? 'inactivo' : 'activo'
+    estadoApi: row.estado === 'inactivo' ? 'inactivo' : 'activo',
+    personaConfianza: Boolean(row.persona_confianza ?? row.personaConfianza)
   }
 }
 
@@ -228,7 +229,8 @@ export function mapAdminFromUsuario(row) {
     rolApi: row.rol,
     estado: row.estado === 'activo' ? 'Activo' : 'Inactivo',
     estadoApi: row.estado === 'inactivo' ? 'inactivo' : 'activo',
-    trabajadorId: row.trabajador_id ?? null
+    trabajadorId: row.trabajador_id ?? null,
+    personaConfianza: Boolean(row.persona_confianza ?? row.personaConfianza)
   }
 }
 

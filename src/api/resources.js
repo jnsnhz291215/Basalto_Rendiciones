@@ -140,34 +140,63 @@ export async function importAsignacionesExcel(formData) {
 }
 
 /** Verifica comprobante con IA (FormData: comprobante, monto, tipo_documento, numero_documento?) */
-export async function verificarComprobante(formData) {
+export async function verificarComprobante(formData, { signal, timeoutMs = 50000 } = {}) {
   const headers = {}
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
 
-  const res = await fetch(apiUrl('/api/rendiciones/verificar-comprobante'), {
-    method: 'POST',
-    headers,
-    body: formData,
-    credentials: 'omit'
-  })
+  const controller = new AbortController()
+  let timedOut = false
+  const timeoutId = setTimeout(() => {
+    timedOut = true
+    controller.abort()
+  }, timeoutMs)
 
-  let data = null
+  if (signal) {
+    if (signal.aborted) controller.abort()
+    else signal.addEventListener('abort', () => controller.abort(), { once: true })
+  }
+
   try {
-    data = await res.json()
-  } catch {
-    data = null
-  }
+    const res = await fetch(apiUrl('/api/rendiciones/verificar-comprobante'), {
+      method: 'POST',
+      headers,
+      body: formData,
+      credentials: 'omit',
+      signal: controller.signal
+    })
 
-  if (!res.ok) {
-    const err = new Error(
-      data?.error || data?.errores?.[0] || data?.message || `Error ${res.status}`
-    )
-    err.errores = data?.errores || [err.message]
-    err.detalle = data?.detalle || null
-    throw err
+    let data = null
+    try {
+      data = await res.json()
+    } catch {
+      data = null
+    }
+
+    if (!res.ok) {
+      const err = new Error(
+        data?.error || data?.errores?.[0] || data?.message || `Error ${res.status}`
+      )
+      err.errores = data?.errores || [err.message]
+      err.detalle = data?.detalle || null
+      throw err
+    }
+    return data
+  } catch (e) {
+    if (e?.name === 'AbortError') {
+      const err = new Error(
+        timedOut
+          ? 'La verificación con IA tardó demasiado. Prueba con una foto más liviana o reintenta.'
+          : 'Verificación cancelada.'
+      )
+      err.code = timedOut ? 'VERIFY_TIMEOUT' : 'VERIFY_CANCELLED'
+      err.errores = [err.message]
+      throw err
+    }
+    throw e
+  } finally {
+    clearTimeout(timeoutId)
   }
-  return data
 }
 
 export async function updateRendicion(id, payload) {

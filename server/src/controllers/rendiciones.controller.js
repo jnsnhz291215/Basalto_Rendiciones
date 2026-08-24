@@ -10,7 +10,7 @@ const {
 const { ROLES, ADMINS } = require('../middlewares/role.middleware')
 const { assertTarjetaPermitePago } = require('../utils/tarjetaPago')
 const { guardarYVerificarComprobante } = require('../utils/verificarComprobante')
-const { canDevHardDelete, canSkipComprobanteVerify } = require('../config/devFlags')
+const { canDevHardDelete, canSkipComprobanteVerify, canSkipComprobanteVerifyDev } = require('../config/devFlags')
 const {
   HEADERS_GASTOS,
   parseExcelConHeaders,
@@ -239,7 +239,7 @@ async function createRendicion(req, res) {
     if (
       tipoRequiereNumeroDocumento(tipoNorm) &&
       !numeroDoc &&
-      !canSkipComprobanteVerify(req.user)
+      !canSkipComprobanteVerifyDev(req.user)
     ) {
       return res.status(400).json({
         error: `numero_documento es obligatorio para ${tipoNorm}`
