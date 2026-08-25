@@ -2603,6 +2603,18 @@
                 </option>
               </select>
             </div>
+            <div class="dash-historial-filter">
+              <label class="dash-sr-only" for="cartola-legacy">Importados</label>
+              <select
+                id="cartola-legacy"
+                :value="filtrosInforme.mostrarLegacy ? '1' : '0'"
+                class="dash-historial-select"
+                @change="onCartolaLegacyChange"
+              >
+                <option value="0">Ocultar importados</option>
+                <option value="1">Mostrar importados</option>
+              </select>
+            </div>
             <div class="dash-historial-search dash-cartola-search">
               <label class="dash-sr-only" for="cartola-buscar">Buscar trabajador o RUT</label>
               <input
@@ -2692,6 +2704,10 @@
                                     <span class="dash-badge" :class="row.badgeClass">{{
                                       row.tipo
                                     }}</span>
+                                    <span
+                                      v-if="row.legacy"
+                                      class="dash-badge dash-badge--legacy"
+                                    >Legacy</span>
                                   </td>
                                   <td>{{ row.detalle }}</td>
                                   <td>{{ row.responsable }}</td>
@@ -5339,6 +5355,7 @@ const filtrosInforme = reactive({
   mes: '2026-07',
   persona: '',
   busqueda: '',
+  mostrarLegacy: false,
   tipos: informeTiposDefault()
 })
 
@@ -6495,7 +6512,16 @@ const asignacionesFiltradas = computed(() =>
 )
 
 function parseMontoNumber(montoStr) {
-  const n = Number(String(montoStr || '').replace(/\D/g, ''))
+  if (montoStr == null || montoStr === '' || montoStr === '-') return 0
+  if (typeof montoStr === 'number' && Number.isFinite(montoStr)) {
+    return Math.round(montoStr)
+  }
+  const s = String(montoStr).trim()
+  if (/^-?\d+(\.\d+)?$/.test(s)) {
+    const n = Number(s)
+    return Number.isFinite(n) ? Math.round(n) : 0
+  }
+  const n = Number(s.replace(/\D/g, ''))
   return Number.isFinite(n) ? n : 0
 }
 
@@ -6575,6 +6601,7 @@ const cartolaFiltrada = computed(() => {
     if (filtrosInforme.caja && row.cajaGroupKey !== filtrosInforme.caja) return false
     if (!filtrosInforme.tipos[row.tipoKey]) return false
     if (filtrosInforme.persona && row.responsable !== filtrosInforme.persona) return false
+    if (!filtrosInforme.mostrarLegacy && row.legacy) return false
     if (q) {
       const nombre = String(row.responsable || '').toLowerCase()
       const rut = rutTrabajadorCartola(row.trabajadorId)
@@ -7410,7 +7437,7 @@ function onAsignacionMontoInput(event) {
 }
 
 function formatMontoCl(value) {
-  const n = Number(String(value).replace(/\D/g, ''))
+  const n = parseMontoNumber(value)
   if (!Number.isFinite(n) || n <= 0) return '$ 0'
   return `$ ${n.toLocaleString('es-CL')}`
 }
@@ -7883,6 +7910,11 @@ function onCartolaCcChange(event) {
 function onCartolaCajaChange(event) {
   const caja = event?.target?.value || ''
   filtrosInforme.caja = caja
+  syncInformeResultado()
+}
+
+function onCartolaLegacyChange(event) {
+  filtrosInforme.mostrarLegacy = String(event?.target?.value || '') === '1'
   syncInformeResultado()
 }
 

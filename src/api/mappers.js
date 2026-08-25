@@ -392,7 +392,6 @@ export function buildCartola({ cajas, movimientos, asignaciones }) {
   }
 
   for (const m of movimientos) {
-    if (m.legacy) continue
     const mes = mesFromDDMMYYYY(m.fecha)
     const meta = metaCaja(m.cajaGroupKey)
     rows.push({
@@ -419,7 +418,8 @@ export function buildCartola({ cajas, movimientos, asignaciones }) {
       observacionAdmin: m.observacionAdmin || '',
       pago: m.pago || '',
       docto: m.docto || '',
-      subidoEl: m.subidoEl || ''
+      subidoEl: m.subidoEl || '',
+      legacy: Boolean(m.legacy)
     })
   }
 
@@ -451,7 +451,8 @@ export function buildCartola({ cajas, movimientos, asignaciones }) {
       observacionAdmin: '',
       pago: '',
       docto: '',
-      subidoEl: ''
+      subidoEl: '',
+      legacy: Boolean(a.legacy)
     })
   }
 
