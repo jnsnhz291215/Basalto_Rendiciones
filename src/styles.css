@@ -2906,6 +2906,10 @@ input[type='number'].dash-input-strong,
   font-size: 0.8125rem;
 }
 
+.dash-search-input--desc {
+  min-width: 13rem;
+}
+
 .dash-search-input::placeholder {
   color: #64748b;
 }

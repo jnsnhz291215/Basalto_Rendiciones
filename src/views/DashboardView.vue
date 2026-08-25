@@ -1398,6 +1398,18 @@
                   class="dash-search-input"
                 />
               </div>
+              <div class="dash-historial-search">
+                <label class="dash-sr-only" for="historial-buscar-desc">
+                  Descripción / Observación
+                </label>
+                <input
+                  id="historial-buscar-desc"
+                  v-model="historialBusquedaDesc"
+                  type="search"
+                  placeholder="Descripción / Observación..."
+                  class="dash-search-input dash-search-input--desc"
+                />
+              </div>
             </div>
           </div>
 
@@ -2431,6 +2443,18 @@
                   class="dash-search-input"
                 />
               </div>
+              <div class="dash-historial-search">
+                <label class="dash-sr-only" for="anticipo-buscar-obs">
+                  Observaciones / Motivo
+                </label>
+                <input
+                  id="anticipo-buscar-obs"
+                  v-model="anticipoBusquedaObs"
+                  type="search"
+                  placeholder="Observaciones / Motivo..."
+                  class="dash-search-input dash-search-input--desc"
+                />
+              </div>
             </div>
           </div>
 
@@ -2624,6 +2648,19 @@
                 placeholder="Buscar trabajador o RUT…"
                 class="dash-search-input"
                 @input="onCartolaBusquedaInput"
+              />
+            </div>
+            <div class="dash-historial-search dash-cartola-search">
+              <label class="dash-sr-only" for="cartola-buscar-desc">
+                Descripción / Observación
+              </label>
+              <input
+                id="cartola-buscar-desc"
+                :value="filtrosInforme.busquedaDetalle"
+                type="search"
+                placeholder="Descripción / Observación…"
+                class="dash-search-input dash-search-input--desc"
+                @input="onCartolaBusquedaDetalleInput"
               />
             </div>
           </div>
@@ -5205,12 +5242,14 @@ const gastoTrabajadorOpen = ref(false)
 const gastoTrabajadorHighlight = ref(0)
 
 const historialBusqueda = ref('')
+const historialBusquedaDesc = ref('')
 const historialFiltroCaja = ref('')
 const historialFiltroMes = ref('')
 const gastoFormOpen = ref(false)
 
 const anticipoFormOpen = ref(false)
 const anticipoBusqueda = ref('')
+const anticipoBusquedaObs = ref('')
 const anticipoFiltroCaja = ref('')
 const anticipoFiltroMes = ref('')
 const anticipoTrabajadorQuery = ref('')
@@ -5355,6 +5394,7 @@ const filtrosInforme = reactive({
   mes: '2026-07',
   persona: '',
   busqueda: '',
+  busquedaDetalle: '',
   mostrarLegacy: false,
   tipos: informeTiposDefault()
 })
@@ -6405,7 +6445,8 @@ const historialFiltroActivo = computed(
   () =>
     historialFiltroCaja.value !== '' ||
     historialFiltroMes.value !== '' ||
-    historialBusqueda.value.trim() !== ''
+    historialBusqueda.value.trim() !== '' ||
+    historialBusquedaDesc.value.trim() !== ''
 )
 
 const MESES_ES = [
@@ -6465,9 +6506,11 @@ function arrastreMesFromFechas(fechaDoctoDDMMYYYY, uploadDate = new Date()) {
   return ''
 }
 
-function matchHistorialFiltros({ nombre, cajaGroupKey, fecha }) {
+function matchHistorialFiltros({ nombre, cajaGroupKey, fecha, descripcion }) {
   const q = historialBusqueda.value.trim().toLowerCase()
   if (q && !String(nombre || '').toLowerCase().includes(q)) return false
+  const qDesc = historialBusquedaDesc.value.trim().toLowerCase()
+  if (qDesc && !String(descripcion || '').toLowerCase().includes(qDesc)) return false
   if (historialFiltroCaja.value) {
     if (!cajaGroupKey || cajaGroupKey !== historialFiltroCaja.value) return false
   }
@@ -6482,14 +6525,17 @@ const movimientosFiltrados = computed(() =>
     matchHistorialFiltros({
       nombre: m.trabajador,
       cajaGroupKey: m.cajaGroupKey,
-      fecha: m.fecha
+      fecha: m.fecha,
+      descripcion: m.descripcion
     })
   )
 )
 
-function matchAnticipoFiltros({ nombre, rut, cajaGroupKey, fecha }) {
+function matchAnticipoFiltros({ nombre, rut, cajaGroupKey, fecha, observaciones }) {
   const q = anticipoBusqueda.value.trim()
   if (q && !coincideNombreORut({ nombre, rut }, q)) return false
+  const qObs = anticipoBusquedaObs.value.trim().toLowerCase()
+  if (qObs && !String(observaciones || '').toLowerCase().includes(qObs)) return false
   if (anticipoFiltroCaja.value) {
     if (!cajaGroupKey || cajaGroupKey !== anticipoFiltroCaja.value) return false
   }
@@ -6506,7 +6552,8 @@ const asignacionesFiltradas = computed(() =>
       nombre: a.conductor,
       rut: trab?.rut || '',
       cajaGroupKey: a.cajaGroupKey || a.fondo,
-      fecha: a.fecha
+      fecha: a.fecha,
+      observaciones: a.observaciones
     })
   })
 )
@@ -6609,6 +6656,8 @@ const cartolaFiltrada = computed(() => {
       const matchRut = rutQ.length >= 2 && rut.includes(rutQ)
       if (!matchNombre && !matchRut) return false
     }
+    const qDet = String(filtrosInforme.busquedaDetalle || '').trim().toLowerCase()
+    if (qDet && !String(row.detalle || '').toLowerCase().includes(qDet)) return false
     return true
   })
 })
@@ -7921,6 +7970,11 @@ function onCartolaLegacyChange(event) {
 function onCartolaBusquedaInput(event) {
   const q = event?.target?.value || ''
   filtrosInforme.busqueda = q
+  syncInformeResultado()
+}
+
+function onCartolaBusquedaDetalleInput(event) {
+  filtrosInforme.busquedaDetalle = event?.target?.value || ''
   syncInformeResultado()
 }
 
