@@ -1,19 +1,8 @@
 <template>
   <div class="shell">
-    <aside class="brand-panel">
-      <div class="brand-grid" aria-hidden="true"></div>
-      <div class="brand-top" aria-hidden="true"></div>
-
-      <div class="brand-hero">
-        <span class="brand-pill">Módulo Operativo</span>
-        <h1>Gestión de Rendiciones y Caja Chica</h1>
-        <p>
-          Plataforma centralizada para la digitación, control y reporte de gastos
-          de faenas y anticipos a conductores.
-        </p>
-      </div>
-
-      <div class="brand-footer">&copy; 2026 Basalto Drilling SpA</div>
+    <aside class="brand-panel" aria-hidden="true">
+      <div class="brand-grid"></div>
+      <div class="brand-footer">&copy; {{ new Date().getFullYear() }} Basalto Drilling SpA</div>
     </aside>
 
     <section class="auth-panel">

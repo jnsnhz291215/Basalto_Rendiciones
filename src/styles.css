@@ -74,7 +74,7 @@ a:hover {
   position: relative;
   width: 50%;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 3rem;
   background: var(--bg-dark);
   border-right: 1px solid #1e293b;
@@ -93,51 +93,9 @@ a:hover {
   background-size: 32px 32px;
 }
 
-.brand-top,
-.brand-hero,
 .brand-footer {
   position: relative;
   z-index: 1;
-}
-
-.brand-top {
-  min-height: 1rem;
-}
-
-.brand-hero {
-  max-width: 32rem;
-}
-
-.brand-pill {
-  display: inline-block;
-  margin-bottom: 1rem;
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--accent);
-  background: rgba(234, 88, 12, 0.1);
-  border: 1px solid rgba(234, 88, 12, 0.3);
-}
-
-.brand-hero h1 {
-  margin: 0 0 1rem;
-  font-size: 2.25rem;
-  font-weight: 800;
-  line-height: 1.2;
-  color: #fff;
-}
-
-.brand-hero p {
-  margin: 0;
-  font-size: 0.875rem;
-  line-height: 1.6;
-  color: #94a3b8;
-}
-
-.brand-footer {
   font-size: 0.75rem;
   font-weight: 500;
   color: #64748b;
