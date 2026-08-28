@@ -1454,6 +1454,7 @@
                 <th>ID / Origen</th>
                 <th>Arrastre</th>
                 <th>Trabajador</th>
+                <th>Descripción / Observación</th>
                 <th>Pago / Docto</th>
                 <th class="dash-table-right">Monto</th>
                 <th class="dash-table-center">Estado Devolución</th>
@@ -1464,7 +1465,7 @@
             </thead>
             <tbody>
               <tr
-                v-for="row in movimientosFiltrados"
+                v-for="row in movimientosVisibles"
                 :key="row.rinde"
                 :class="{
                   'dash-row-legacy': row.legacy,
@@ -1487,6 +1488,14 @@
                   <span v-else class="dash-muted">-</span>
                 </td>
                 <td class="dash-table-strong">{{ row.trabajador }}</td>
+                <td class="dash-desc-cell">
+                  <span
+                    class="dash-desc-text"
+                    :title="row.descripcion || row.observacionAdmin || ''"
+                  >
+                    {{ row.descripcion || row.observacionAdmin || '-' }}
+                  </span>
+                </td>
                 <td>
                   <span>{{ row.pago }}</span>
                   <span v-if="row.docto" class="dash-subline">{{ row.docto }}</span>
@@ -1618,6 +1627,19 @@
               </tr>
             </tbody>
           </table>
+
+          <div v-if="movimientosFiltrados.length === 0" class="dash-table-empty">
+            No hay rendiciones para los filtros seleccionados.
+          </div>
+
+          <div v-if="historialPuedeCargarMas" class="dash-historial-more">
+            <button type="button" class="dash-btn-secondary" @click="cargarMasHistorial">
+              Cargar más
+              <span class="dash-historial-more-count">
+                ({{ movimientosVisibles.length }} de {{ movimientosFiltrados.length }})
+              </span>
+            </button>
+          </div>
         </div>
 
         <!-- Modal verificación IA del comprobante -->
@@ -5271,6 +5293,9 @@ const historialBusqueda = ref('')
 const historialBusquedaDesc = ref('')
 const historialFiltroCaja = ref('')
 const historialFiltroMes = ref('')
+/** Cuántas filas del historial filtrado se muestran (páginas de 15). */
+const historialVisibleCount = ref(15)
+const HISTORIAL_PAGE_SIZE = 15
 const gastoFormOpen = ref(false)
 
 const anticipoFormOpen = ref(false)
@@ -6532,11 +6557,16 @@ function arrastreMesFromFechas(fechaDoctoDDMMYYYY, uploadDate = new Date()) {
   return ''
 }
 
-function matchHistorialFiltros({ nombre, cajaGroupKey, fecha, descripcion }) {
+function matchHistorialFiltros({ nombre, cajaGroupKey, fecha, descripcion, observacionAdmin }) {
   const q = historialBusqueda.value.trim().toLowerCase()
   if (q && !String(nombre || '').toLowerCase().includes(q)) return false
   const qDesc = historialBusquedaDesc.value.trim().toLowerCase()
-  if (qDesc && !String(descripcion || '').toLowerCase().includes(qDesc)) return false
+  if (qDesc) {
+    const hay =
+      String(descripcion || '').toLowerCase().includes(qDesc) ||
+      String(observacionAdmin || '').toLowerCase().includes(qDesc)
+    if (!hay) return false
+  }
   if (historialFiltroCaja.value) {
     if (!cajaGroupKey || cajaGroupKey !== historialFiltroCaja.value) return false
   }
@@ -6552,9 +6582,29 @@ const movimientosFiltrados = computed(() =>
       nombre: m.trabajador,
       cajaGroupKey: m.cajaGroupKey,
       fecha: m.fecha,
-      descripcion: m.descripcion
+      descripcion: m.descripcion,
+      observacionAdmin: m.observacionAdmin
     })
   )
+)
+
+const movimientosVisibles = computed(() =>
+  movimientosFiltrados.value.slice(0, historialVisibleCount.value)
+)
+
+const historialPuedeCargarMas = computed(
+  () => movimientosVisibles.value.length < movimientosFiltrados.value.length
+)
+
+function cargarMasHistorial() {
+  historialVisibleCount.value += HISTORIAL_PAGE_SIZE
+}
+
+watch(
+  [historialBusqueda, historialBusquedaDesc, historialFiltroCaja, historialFiltroMes],
+  () => {
+    historialVisibleCount.value = HISTORIAL_PAGE_SIZE
+  }
 )
 
 function matchAnticipoFiltros({ nombre, rut, cajaGroupKey, fecha, observaciones }) {

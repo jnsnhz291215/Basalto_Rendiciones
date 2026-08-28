@@ -7,6 +7,7 @@
     <div class="app-main">
       <router-view />
     </div>
+    <BasaltoFooter />
     <ToastHost />
     <ConfirmModal />
     <LoadingOverlay />
@@ -24,6 +25,7 @@ import ConfirmModal from './components/ConfirmModal.vue'
 import LoadingOverlay from './components/LoadingOverlay.vue'
 import TempPasswordGate from './components/TempPasswordGate.vue'
 import ContactConsentGate from './components/ContactConsentGate.vue'
+import BasaltoFooter from './components/BasaltoFooter.vue'
 import { useAuth } from './composables/useAuth'
 
 const { user } = useAuth()
