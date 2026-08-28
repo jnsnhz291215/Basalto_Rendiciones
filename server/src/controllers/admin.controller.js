@@ -753,7 +753,11 @@ async function resetPasswordUsuario(req, res) {
 
     const hash = await bcrypt.hash(passwordPlain, 10)
     await query(
-      `UPDATE usuarios SET password_hash = ? WHERE id = ? AND is_deleted = FALSE`,
+      `UPDATE usuarios
+       SET password_hash = ?,
+           must_change_password = 1,
+           temp_password_grace_started_at = NULL
+       WHERE id = ? AND is_deleted = FALSE`,
       [hash, id]
     )
 

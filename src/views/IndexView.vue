@@ -106,6 +106,12 @@
 
               <p v-if="error || formError" class="error" role="alert">{{ error || formError }}</p>
 
+              <p class="login-forgot">
+                <button type="button" class="login-forgot-btn" @click="showResetModal = true">
+                  ¿Olvidaste tu contraseña?
+                </button>
+              </p>
+
               <button class="btn btn-primary" type="submit" :disabled="loading">
                 <span>{{ loading ? 'Entrando…' : 'INGRESAR AL SISTEMA' }}</span>
                 <svg
@@ -131,6 +137,8 @@
 
       <div class="auth-footer-mobile">&copy; 2026 Basalto Drilling SpA</div>
     </section>
+
+    <PasswordResetRequestModal v-model="showResetModal" />
   </div>
 </template>
 
@@ -140,6 +148,7 @@ import { useAuth } from '../composables/useAuth'
 // TEMP_AUTH_BYPASS - revertir antes de commit
 import { TEMP_AUTH_BYPASS } from '../TEMP_AUTH_BYPASS'
 import { cleanRut, fromRutInput } from '../utils/rut'
+import PasswordResetRequestModal from '../components/PasswordResetRequestModal.vue'
 
 const { user, loading, error, bootstrapped, bootstrap, login } = useAuth()
 
@@ -152,6 +161,7 @@ const rutClean = ref('')
 const password = ref('')
 const showPassword = ref(false)
 const formError = ref('')
+const showResetModal = ref(false)
 
 /** Solo letras, números, @ y . */
 function filterCorreoChars(value) {

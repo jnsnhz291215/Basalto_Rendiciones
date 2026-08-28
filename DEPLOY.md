@@ -151,6 +151,7 @@ Si solo cambió una capa, reinicia solo ese proceso PM2.
   - UPDATE comunes: email↔correo, password↔password_hash; trabajadores solo nombre. Conflictos: `updated_at` más reciente gana; empate → Turnos.
   - Exclusividad Turnos: admin XOR trabajador. La ficha `trabajadores` de un admin en Rendiciones **no** se copia a Turnos (solo `admin_users`).
   - **Avisos emergencia:** banner compartido. Rendiciones lee `avisos_emergencia` de Turnos vía `TURNOS_DB_*` (`GET /api/avisos/emergencia/activa`). Crear solo en Turnos.
+  - **Reset de clave (Rendiciones → campana Turnos):** `POST /api/public/solicitar-reset-password` inserta también en `solicitudes_operativas` de Turnos (`Origen: Rendiciones`). El Super Admin aprueba en la campana del SPA. En el servidor de **Turnos** configura `RENDICIONES_DB_*` (o `DB_RENDICIONES_*`; default DB `Basalto_Rendiciones`) para aplicar el hash al aprobar.
 - En producción, `CORS_ORIGIN` debería incluir `https://rendiciones.basalto.app` (además o en lugar de localhost).
 - Archivos `*.ndjson` / `debug-*.ndjson` están en `.gitignore` (logs de debug).
 

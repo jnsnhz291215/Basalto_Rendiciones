@@ -11,7 +11,7 @@ const { ensureAsignacionesSchema } = require('./utils/ensureAsignacionesSchema')
 const { ensureRendicionesTipoDocto } = require('./utils/ensureRendicionesTipoDocto')
 const { ensureImportacionesSchema } = require('./utils/ensureImportacionesSchema')
 const { ensureCuentasBancoSchema } = require('./utils/ensureCuentasBancoSchema')
-const { ensureUsuariosSchema } = require('./utils/ensureUsuariosSchema')
+const { ensureUsuariosSchema, ensureNotificacionesSchema } = require('./utils/ensureUsuariosSchema')
 const { ensureIndexes } = require('./utils/ensureIndexes')
 
 const authRoutes = require('./routes/auth.routes')
@@ -23,6 +23,8 @@ const legacyRoutes = require('./routes/legacy.routes')
 const importacionesRoutes = require('./routes/importaciones.routes')
 const systemRoutes = require('./routes/system.routes')
 const avisosRoutes = require('./routes/avisos.routes')
+const notificacionesRoutes = require('./routes/notificaciones.routes')
+const publicRoutes = require('./routes/public.routes')
 const { initSystemVersion } = require('./utils/systemVersion')
 
 const app = express()
@@ -70,7 +72,9 @@ try {
 }
 
 app.use('/api/system', systemRoutes)
+app.use('/api/public', publicRoutes)
 app.use('/api/avisos', avisosRoutes)
+app.use('/api/notificaciones', notificacionesRoutes)
 app.use('/api/auth', authRoutes)
 app.use('/api/cajas', cajasRoutes)
 app.use('/api/rendiciones', rendicionesRoutes)
@@ -119,9 +123,10 @@ app.listen(PORT, async () => {
   }
   try {
     await ensureUsuariosSchema()
-    console.log('[schema] usuarios.persona_confianza OK')
+    await ensureNotificacionesSchema()
+    console.log('[schema] usuarios QoL + notificaciones OK')
   } catch (err) {
-    console.warn('[schema] ensureUsuariosSchema:', err.message)
+    console.warn('[schema] ensureUsuariosSchema/notificaciones:', err.message)
   }
   try {
     await ensureCajasSchema()

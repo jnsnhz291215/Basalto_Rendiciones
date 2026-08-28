@@ -80,7 +80,18 @@ export function normalizeAuthUser(data) {
     role: isAdminRol(rolApi) ? 'admin' : rolApi === 'USER_RENDIDOR' ? 'usuario' : rolApi,
     adminNivel: mapAdminNivel(rolApi),
     trabajador_id: source.trabajador_id ?? null,
-    persona_confianza: Boolean(source.persona_confianza ?? source.personaConfianza)
+    persona_confianza: Boolean(source.persona_confianza ?? source.personaConfianza),
+    must_change_password: Boolean(
+      source.must_change_password === true ||
+        source.must_change_password === 1 ||
+        source.must_change_password === '1'
+    ),
+    temp_password_grace_started_at: source.temp_password_grace_started_at || null,
+    temp_password_days_left:
+      source.temp_password_days_left == null ? null : Number(source.temp_password_days_left),
+    temp_password_expired: Boolean(source.temp_password_expired),
+    accepted_email: source.accepted_email || null,
+    accepted_privacy_at: source.accepted_privacy_at || null
   }
 
   return user.rut || user.rol ? user : null

@@ -7,6 +7,11 @@
     <div class="app-main">
       <router-view />
     </div>
+    <ToastHost />
+    <ConfirmModal />
+    <LoadingOverlay />
+    <TempPasswordGate v-if="user" />
+    <ContactConsentGate v-if="user" />
   </div>
 </template>
 
@@ -14,6 +19,14 @@
 import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import UpdateBanner from './components/UpdateBanner.vue'
 import EmergenciaBanner from './components/EmergenciaBanner.vue'
+import ToastHost from './components/ToastHost.vue'
+import ConfirmModal from './components/ConfirmModal.vue'
+import LoadingOverlay from './components/LoadingOverlay.vue'
+import TempPasswordGate from './components/TempPasswordGate.vue'
+import ContactConsentGate from './components/ContactConsentGate.vue'
+import { useAuth } from './composables/useAuth'
+
+const { user } = useAuth()
 
 const CHROME_LAYOUT_EVENT = 'rendiciones:chrome-layout'
 

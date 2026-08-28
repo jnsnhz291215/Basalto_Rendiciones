@@ -6,6 +6,10 @@
       </div>
 
       <div class="dash-header-actions">
+        <NotificacionesBell
+          @enviar="showEnviarAviso = true"
+          @reset-aprobado="onResetAprobado"
+        />
         <div class="dash-user-menu" ref="userMenuEl">
           <button
             class="dash-user-menu-btn"
@@ -29,7 +33,9 @@
       </div>
     </header>
 
-    <!-- Modal credenciales tras crear usuario -->
+    <EnviarAvisoModal v-model="showEnviarAviso" />
+
+    <!-- Modal credenciales tras crear usuario / reset -->
     <div
       v-if="modalCredenciales.open"
       class="dash-modal-backdrop"
@@ -37,7 +43,7 @@
     >
       <div class="dash-modal" role="dialog" aria-modal="true">
         <div class="dash-modal-head">
-          <h3>Usuario creado</h3>
+          <h3>{{ modalCredenciales.title || 'Usuario creado' }}</h3>
           <button class="dash-modal-close" type="button" aria-label="Cerrar" @click="closeModalCredenciales">
             ×
           </button>
@@ -4771,6 +4777,9 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useAuth } from '../composables/useAuth'
+import { useUi } from '../composables/useUi'
+import NotificacionesBell from '../components/NotificacionesBell.vue'
+import EnviarAvisoModal from '../components/EnviarAvisoModal.vue'
 // TEMP_AUTH_BYPASS - revertir antes de commit
 import { TEMP_AUTH_BYPASS } from '../TEMP_AUTH_BYPASS'
 import { canDevHardDelete, canSkipComprobanteVerify } from '../devFlags'
@@ -4819,13 +4828,16 @@ import {
 } from '../api/mappers'
 
 const { user, bootstrap, logout } = useAuth()
+const ui = useUi()
 
 const userMenuOpen = ref(false)
 const userMenuEl = ref(null)
 const credencialesCopied = ref(false)
+const showEnviarAviso = ref(false)
 
 const modalCredenciales = reactive({
   open: false,
+  title: 'Usuario creado',
   nombre: '',
   rut: '',
   correo: '',
@@ -4897,6 +4909,7 @@ function onDocPointerDown(event) {
 
 function openModalCredenciales(payload) {
   modalCredenciales.open = true
+  modalCredenciales.title = payload.title || 'Usuario creado'
   modalCredenciales.nombre = payload.nombre || payload.trabajador_nombre || '-'
   modalCredenciales.rut = formatRut(payload.rut || '')
   modalCredenciales.correo = payload.correo || ''
@@ -4905,8 +4918,21 @@ function openModalCredenciales(payload) {
   credencialesCopied.value = false
 }
 
+function onResetAprobado(data) {
+  const u = data?.usuario || {}
+  openModalCredenciales({
+    title: 'Clave temporal generada',
+    nombre: u.nombre || u.correo || u.rut || '-',
+    rut: u.rut || '',
+    correo: u.correo || '',
+    rol: u.rol || '',
+    password: data?.password_temporal || ''
+  })
+}
+
 function closeModalCredenciales() {
   modalCredenciales.open = false
+  modalCredenciales.title = 'Usuario creado'
   credencialesCopied.value = false
 }
 
@@ -8412,7 +8438,7 @@ async function onAnularImportacion(lote) {
   const msg = esConfirmado
     ? `LOTE CONFIRMADO\n\nEsto anulará el lote #${lote.id} (${tipo}) y sus ${n} movimiento(s) (soft-delete).\nLos registros dejarán de aparecer en saldos y listados.\n\n¿Continuar?`
     : `¿Anular el lote #${lote.id} (${tipo})?\nSe eliminarán (soft-delete) los ${n} registro(s) creados por esta importación.`
-  if (!confirm(msg)) {
+  if (!(await ui.confirm({ title: 'Anular importación', message: msg, okLabel: 'Anular', danger: true }))) {
     return
   }
   importacionAnulandoId.value = lote.id
@@ -8601,7 +8627,7 @@ async function onSaveCaja() {
 async function onDeleteCaja(caja) {
   if (!caja?.id || (caja.tieneDatos && !canDevForceDelete.value)) return
   const hardHint = canDevForceDelete.value ? ' (hard delete Dev)' : ''
-  if (!confirm(`¿Eliminar la caja "${caja.displayName}"?${hardHint}`)) return
+  if (!(await ui.confirm({ title: 'Eliminar caja', message: `¿Eliminar la caja "${caja.displayName}"?${hardHint}`, okLabel: 'Eliminar', danger: true }))) return
   try {
     saveError.value = ''
     await api.deleteCaja(caja.id)
@@ -8660,7 +8686,7 @@ async function onDeleteCentroCosto(cc) {
   const hardHint = canDevForceDelete.value
     ? ' (hard delete Dev — también borra cajas/gastos asociados)'
     : ''
-  if (!confirm(`¿Eliminar el centro de cobro / empresa "${cc.nombre}"?${hardHint}`)) return
+  if (!(await ui.confirm({ title: 'Eliminar centro de cobro', message: `¿Eliminar el centro de cobro / empresa "${cc.nombre}"?${hardHint}`, okLabel: 'Eliminar', danger: true }))) return
   try {
     saveError.value = ''
     await api.deleteCentroCosto(cc.id)
@@ -8672,11 +8698,12 @@ async function onDeleteCentroCosto(cc) {
 
 async function onSoftDeleteRendicion(row) {
   if (!puedeSoftDeleteAdmin(row)) return
-  if (
-    !confirm(
-      `¿Eliminar la rendición ${row.rinde}? (soft delete, solo dentro de 24 h desde Subido el)`
-    )
-  ) {
+  if (!(await ui.confirm({
+    title: 'Eliminar rendición',
+    message: `¿Eliminar la rendición ${row.rinde}? (soft delete, solo dentro de 24 h desde Subido el)`,
+    okLabel: 'Eliminar',
+    danger: true
+  }))) {
     return
   }
   try {
@@ -8690,11 +8717,12 @@ async function onSoftDeleteRendicion(row) {
 
 async function onHardDeleteRendicion(row) {
   if (!canDevForceDelete.value || !row?.id || esLegacyHistorico(row)) return
-  if (
-    !confirm(
-      `¿HARD DELETE de la rendición ${row.rinde}? Esta acción no se puede deshacer.`
-    )
-  ) {
+  if (!(await ui.confirm({
+    title: 'Hard delete rendición',
+    message: `¿HARD DELETE de la rendición ${row.rinde}? Esta acción no se puede deshacer.`,
+    okLabel: 'Eliminar',
+    danger: true
+  }))) {
     return
   }
   try {
@@ -8708,11 +8736,12 @@ async function onHardDeleteRendicion(row) {
 
 async function onSoftDeleteAnticipo(row) {
   if (!puedeSoftDeleteAdmin(row)) return
-  if (
-    !confirm(
-      `¿Eliminar la asignación ${row.doc}? (soft delete, solo dentro de 24 h desde Subido el)`
-    )
-  ) {
+  if (!(await ui.confirm({
+    title: 'Eliminar asignación',
+    message: `¿Eliminar la asignación ${row.doc}? (soft delete, solo dentro de 24 h desde Subido el)`,
+    okLabel: 'Eliminar',
+    danger: true
+  }))) {
     return
   }
   try {
@@ -8726,9 +8755,12 @@ async function onSoftDeleteAnticipo(row) {
 
 async function onHardDeleteAnticipo(row) {
   if (!canDevForceDelete.value || !row?.id) return
-  if (
-    !confirm(`¿HARD DELETE del anticipo ${row.doc}? Esta acción no se puede deshacer.`)
-  ) {
+  if (!(await ui.confirm({
+    title: 'Hard delete anticipo',
+    message: `¿HARD DELETE del anticipo ${row.doc}? Esta acción no se puede deshacer.`,
+    okLabel: 'Eliminar',
+    danger: true
+  }))) {
     return
   }
   try {
@@ -8979,7 +9011,7 @@ async function toggleEstadoCuenta(row, { canToggle, listRef, label, onSuccess })
   const next = actual === 'activo' ? 'inactivo' : 'activo'
   if (next === 'inactivo') {
     const nombre = row.nombre || row.correo || row.rut || label
-    if (!confirm(`¿Desactivar a "${nombre}"? No podrá iniciar sesión.`)) return
+    if (!(await ui.confirm({ title: 'Desactivar usuario', message: `¿Desactivar a "${nombre}"? No podrá iniciar sesión.`, okLabel: 'Desactivar', danger: true }))) return
   }
   try {
     togglingEstadoId.value = row.id
@@ -9071,7 +9103,7 @@ async function onDeletePersonal(p) {
   const msg = p.tieneUsuario
     ? `¿Eliminar la ficha de "${p.nombre}" (${formatRut(p.rut)})? También se desactivará el acceso de usuario (soft delete).`
     : `¿Eliminar la ficha de "${p.nombre}" (${formatRut(p.rut)})? (soft delete)`
-  if (!confirm(msg)) return
+  if (!(await ui.confirm({ title: 'Eliminar personal', message: msg, okLabel: 'Eliminar', danger: true }))) return
   try {
     saveError.value = ''
     if (p.usuarioId) {
@@ -9086,17 +9118,18 @@ async function onDeletePersonal(p) {
 
 async function onResetPasswordPersonal(p) {
   if (!canResetPassword.value || !p?.usuarioId) return
-  if (
-    !confirm(
-      `¿Reiniciar la contraseña de "${p.nombre}" (${formatRut(p.rut)})?\nSe generará una clave temporal basada en el RUT.`
-    )
-  ) {
+  if (!(await ui.confirm({
+    title: 'Reiniciar contraseña',
+    message: `¿Reiniciar la contraseña de "${p.nombre}" (${formatRut(p.rut)})?\nSe generará una clave temporal basada en el RUT.`,
+    okLabel: 'Reiniciar'
+  }))) {
     return
   }
   try {
     saveError.value = ''
     const result = await api.resetPasswordUsuario(p.usuarioId, { mode: 'rut' })
     openModalCredenciales({
+      title: 'Clave temporal generada',
       nombre: result.nombre || p.nombre,
       rut: result.rut || p.rut,
       correo: result.correo || p.correo,
@@ -9114,7 +9147,7 @@ async function onDeleteAdmin(admin) {
     saveError.value = 'No puedes eliminarte a ti mismo'
     return
   }
-  if (!confirm(`¿Eliminar al administrador "${admin.nombre || admin.correo || admin.rut}"? (soft delete)`)) return
+  if (!(await ui.confirm({ title: 'Eliminar administrador', message: `¿Eliminar al administrador "${admin.nombre || admin.correo || admin.rut}"? (soft delete)`, okLabel: 'Eliminar', danger: true }))) return
   try {
     saveError.value = ''
     await api.deleteUsuario(admin.id)
@@ -9130,17 +9163,18 @@ async function onResetPasswordAdmin(admin) {
     saveError.value = 'No puedes reiniciar tu propia contraseña desde aquí; usa Mi Perfil.'
     return
   }
-  if (
-    !confirm(
-      `¿Reiniciar la contraseña de "${admin.nombre || admin.correo || admin.rut}"?\nSe generará una clave temporal basada en el RUT.`
-    )
-  ) {
+  if (!(await ui.confirm({
+    title: 'Reiniciar contraseña',
+    message: `¿Reiniciar la contraseña de "${admin.nombre || admin.correo || admin.rut}"?\nSe generará una clave temporal basada en el RUT.`,
+    okLabel: 'Reiniciar'
+  }))) {
     return
   }
   try {
     saveError.value = ''
     const result = await api.resetPasswordUsuario(admin.id, { mode: 'rut' })
     openModalCredenciales({
+      title: 'Clave temporal generada',
       nombre: result.nombre || admin.nombre,
       rut: result.rut || admin.rut,
       correo: result.correo || admin.correo,
@@ -9187,7 +9221,7 @@ function onEditTarjeta(t) {
 
 async function onDeleteTarjeta(t) {
   if (!canHardDelete.value || !t?.id) return
-  if (!confirm(`¿Eliminar la tarjeta "${t.alias}"? (soft delete)`)) return
+  if (!(await ui.confirm({ title: 'Eliminar tarjeta', message: `¿Eliminar la tarjeta "${t.alias}"? (soft delete)`, okLabel: 'Eliminar', danger: true }))) return
   try {
     saveError.value = ''
     await api.deleteTarjeta(t.id)
@@ -9201,11 +9235,12 @@ async function onToggleEstadoTarjeta(t) {
   if (!t?.id) return
   const next = t.estadoApi === 'activa' ? 'inactiva' : 'activa'
   if (next === 'inactiva') {
-    if (
-      !confirm(
-        `¿Desactivar la tarjeta "${t.alias}"? No se podrán asignar pagos con fecha igual o posterior a hoy.`
-      )
-    ) {
+    if (!(await ui.confirm({
+      title: 'Desactivar tarjeta',
+      message: `¿Desactivar la tarjeta "${t.alias}"? No se podrán asignar pagos con fecha igual o posterior a hoy.`,
+      okLabel: 'Desactivar',
+      danger: true
+    }))) {
       return
     }
   }
@@ -9504,7 +9539,7 @@ function onEditCuentaBanco(c) {
 
 async function onDeleteCuentaBanco(c) {
   if (!canHardDelete.value || !c?.id) return
-  if (!confirm(`¿Eliminar la cuenta ${c.numeroCuenta} (${c.banco})?`)) return
+  if (!(await ui.confirm({ title: 'Eliminar cuenta', message: `¿Eliminar la cuenta ${c.numeroCuenta} (${c.banco})?`, okLabel: 'Eliminar', danger: true }))) return
   try {
     saveError.value = ''
     await api.deleteCuentaBanco(c.id)
