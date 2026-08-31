@@ -10,8 +10,8 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/', name: 'dashboard', component: DashboardView, meta: { requiresAuth: true } },
-    { path: '/login', name: 'login', component: IndexView },
-    { path: '/sin-permiso', name: 'sin-permiso', component: SinPermisoView }
+    { path: '/login', name: 'login', component: IndexView, meta: { hideFooter: true } },
+    { path: '/sin-permiso', name: 'sin-permiso', component: SinPermisoView, meta: { hideFooter: true } }
   ]
 })
 

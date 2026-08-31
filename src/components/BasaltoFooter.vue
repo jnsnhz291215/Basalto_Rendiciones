@@ -1,5 +1,5 @@
 <template>
-  <footer id="basalto-footer" class="basalto-footer basalto-footer--compact">
+  <footer id="basalto-footer" class="basalto-footer basalto-footer--rend">
     <div class="footer-compact-row">
       <p class="footer-compact-copy">© {{ year }} Basalto Drilling SpA</p>
 
@@ -69,34 +69,32 @@ const supportOpen = ref(false)
 </script>
 
 <style scoped>
-.basalto-footer--compact {
-  margin-top: auto;
-  background: #f1f5f9;
-  color: #475569;
-  border-top: 1px solid #e2e8f0;
-  padding: 12px 20px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
-  box-sizing: border-box;
+/* Tema oscuro alineado al dashboard de Rendiciones */
+.basalto-footer--rend {
   flex-shrink: 0;
   width: 100%;
-  position: relative;
+  box-sizing: border-box;
+  background: #0f172a;
+  color: #94a3b8;
+  border-top: 1px solid #1e293b;
+  padding: 0.55rem 1.25rem;
+  font-family: var(--font, inherit);
 }
 
 .footer-compact-row {
-  max-width: 1400px;
+  max-width: 100%;
   margin: 0 auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 10px 20px;
+  gap: 0.4rem 1rem;
 }
 
 .footer-compact-copy {
   margin: 0;
-  font-size: 0.8125rem;
-  line-height: 1.35;
+  font-size: 0.75rem;
+  line-height: 1.3;
   color: #64748b;
 }
 
@@ -104,43 +102,43 @@ const supportOpen = ref(false)
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px 16px;
+  gap: 0.65rem 1rem;
 }
 
 .footer-compact-status {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.45rem;
 }
 
 .footer-compact-status-text {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 600;
-  color: #059669;
+  color: #34d399;
   letter-spacing: 0.02em;
 }
 
 .status-indicator {
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
 .status-indicator.status-online {
   background: #10b981;
-  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45);
+  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
   animation: pulse-status 2s ease-in-out infinite;
 }
 
 @keyframes pulse-status {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.45);
+    opacity: 1;
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+    opacity: 0.55;
   }
 }
 
@@ -150,25 +148,25 @@ const supportOpen = ref(false)
   padding: 0;
   margin: 0;
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   font-weight: 600;
-  color: #475569;
+  color: #94a3b8;
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 3px;
-  text-decoration-color: #cbd5e1;
+  text-decoration-color: #475569;
 }
 
 .footer-compact-support:hover {
-  color: #1e293b;
-  text-decoration-color: #64748b;
+  color: #e2e8f0;
+  text-decoration-color: #94a3b8;
 }
 
 .footer-support-backdrop {
   position: fixed;
   inset: 0;
   z-index: 15000;
-  background: rgba(15, 23, 42, 0.55);
+  background: rgba(15, 23, 42, 0.72);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -177,11 +175,12 @@ const supportOpen = ref(false)
 
 .footer-support-card {
   width: min(420px, 100%);
-  background: #fff;
+  background: #1e293b;
+  border: 1px solid #334155;
   border-radius: 12px;
   padding: 1.15rem 1.25rem 1.25rem;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
-  color: #1e293b;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+  color: #e2e8f0;
 }
 
 .footer-support-card-head {
@@ -196,7 +195,7 @@ const supportOpen = ref(false)
   margin: 0;
   font-size: 1.1rem;
   font-weight: 700;
-  color: #1e293b;
+  color: #f1f5f9;
 }
 
 .footer-support-close {
@@ -211,8 +210,8 @@ const supportOpen = ref(false)
 
 .footer-support-modal-lead {
   margin: 0 0 12px;
-  color: #6b7280;
-  font-size: 0.92rem;
+  color: #94a3b8;
+  font-size: 0.9rem;
 }
 
 .footer-support-modal p {
@@ -220,18 +219,18 @@ const supportOpen = ref(false)
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #374151;
-  font-size: 0.95rem;
+  color: #cbd5e1;
+  font-size: 0.92rem;
 }
 
 .footer-support-modal i {
   width: 16px;
   text-align: center;
-  color: #2563eb;
+  color: #fb923c;
 }
 
 .footer-support-modal a {
-  color: #2563eb;
+  color: #fb923c;
   text-decoration: none;
 }
 
@@ -246,24 +245,25 @@ const supportOpen = ref(false)
   margin-top: 12px !important;
   padding: 10px 12px;
   border-radius: 8px;
-  background: #f8fafc;
-  color: #475569 !important;
-  font-size: 0.88rem !important;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #94a3b8 !important;
+  font-size: 0.85rem !important;
   line-height: 1.45;
 }
 
 .footer-support-modal-meta {
   margin-top: 14px !important;
   padding-top: 12px;
-  border-top: 1px solid #e5e7eb;
-  font-size: 0.8rem !important;
-  color: #9ca3af !important;
+  border-top: 1px solid #334155;
+  font-size: 0.75rem !important;
+  color: #64748b !important;
   display: block !important;
 }
 
 @media (max-width: 640px) {
-  .basalto-footer--compact {
-    padding: 12px 16px;
+  .basalto-footer--rend {
+    padding: 0.5rem 1rem;
   }
 
   .footer-compact-row {

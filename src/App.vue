@@ -7,7 +7,7 @@
     <div class="app-main">
       <router-view />
     </div>
-    <BasaltoFooter />
+    <BasaltoFooter v-if="showFooter" />
     <ToastHost />
     <ConfirmModal />
     <LoadingOverlay />
@@ -17,7 +17,8 @@
 </template>
 
 <script setup>
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import UpdateBanner from './components/UpdateBanner.vue'
 import EmergenciaBanner from './components/EmergenciaBanner.vue'
 import ToastHost from './components/ToastHost.vue'
@@ -29,6 +30,9 @@ import BasaltoFooter from './components/BasaltoFooter.vue'
 import { useAuth } from './composables/useAuth'
 
 const { user } = useAuth()
+const route = useRoute()
+
+const showFooter = computed(() => !route.meta.hideFooter)
 
 const CHROME_LAYOUT_EVENT = 'rendiciones:chrome-layout'
 
