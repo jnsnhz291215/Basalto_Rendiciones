@@ -19,6 +19,13 @@ const {
   normalizeNumeroCuenta,
   normalizeBancoNombre
 } = require('../utils/ensureCuentasBancoSchema')
+const { syncPasswordHashToCentral } = require('../utils/centralPasswordSync')
+const {
+  provisionCentralUsuario,
+  syncActivoToCentral,
+  syncProfileToCentral,
+  deactivateCentralUsuario,
+} = require('../utils/centralIdentitySync')
 
 /** Normaliza RUT para comparar (sin puntos/guión). */
 function cleanRutValue(rut) {
@@ -469,6 +476,15 @@ async function createUsuario(req, res) {
       [result.insertId]
     )
     const row = created[0] || {}
+    await provisionCentralUsuario({
+      rutLimpio: rut.trim(),
+      nombre: nombre || row.trabajador_nombre || correo.trim(),
+      correo: correo.trim(),
+      passwordHash: hash,
+      rendRol: rol,
+      mustChangePassword: false,
+      activo: estado !== 'inactivo',
+    })
     // password solo en esta respuesta inicial (nunca se vuelve a exponer)
     return res.status(201).json({
       ...row,
@@ -651,6 +667,22 @@ async function updateUsuario(req, res) {
       [id]
     )
     const out = updated[0] || {}
+    await syncProfileToCentral({
+      rutLimpio: row.rut,
+      nombre: out.trabajador_nombre || nombre || out.correo,
+      correo: nextCorreo,
+    })
+    if (passwordChanged) {
+      await syncPasswordHashToCentral({
+        rutLimpio: row.rut,
+        passwordHash,
+        mustChangePassword: false,
+        clearGrace: true,
+      })
+    }
+    if (nextEstado !== row.estado) {
+      await syncActivoToCentral({ rutLimpio: row.rut, activo: nextEstado === 'activo' })
+    }
     return res.json({
       ...out,
       nombre: out.trabajador_nombre || nombre || out.correo
@@ -705,6 +737,7 @@ async function softDeleteUsuario(req, res) {
       'Admin Users',
       `Soft delete: ${identidad} (rol=${rows[0].rol})`
     )
+    await deactivateCentralUsuario({ rutLimpio: rows[0].rut })
     return res.json({ ok: true })
   } catch (err) {
     console.error('[softDeleteUsuario]', err)
@@ -760,6 +793,13 @@ async function resetPasswordUsuario(req, res) {
        WHERE id = ? AND is_deleted = FALSE`,
       [hash, id]
     )
+
+    await syncPasswordHashToCentral({
+      rutLimpio: rows[0].rut,
+      passwordHash: hash,
+      mustChangePassword: true,
+      clearGrace: true,
+    })
 
     await registrarAuditoria(
       req.user.id,
@@ -858,8 +898,9 @@ async function createPersonal(req, res) {
     }
 
     let usuarioRow = null
+    let passwordHashForCentral = null
     if (crearUsuario) {
-      const hash = await bcrypt.hash(passwordPlain, 10)
+      passwordHashForCentral = await bcrypt.hash(passwordPlain, 10)
       const [userResult] = await conn.execute(
         `INSERT INTO usuarios (trabajador_id, rut, correo, password_hash, rol, estado)
          VALUES (?, ?, ?, ?, ?, ?)`,
@@ -867,7 +908,7 @@ async function createPersonal(req, res) {
           trabajadorId,
           rutClean,
           String(body.correo).trim(),
-          hash,
+          passwordHashForCentral,
           rolUsuario,
           body.estado === 'inactivo' ? 'inactivo' : 'activo'
         ]
@@ -881,6 +922,18 @@ async function createPersonal(req, res) {
     }
 
     await conn.commit()
+
+    if (crearUsuario && usuarioRow) {
+      await provisionCentralUsuario({
+        rutLimpio: rutClean,
+        nombre,
+        correo: String(body.correo).trim(),
+        passwordHash: passwordHashForCentral,
+        rendRol: rolUsuario,
+        mustChangePassword: false,
+        activo: body.estado !== 'inactivo',
+      })
+    }
 
     await registrarAuditoria(
       req.user.id,
@@ -1012,6 +1065,10 @@ async function updatePersonal(req, res) {
 
     let passwordPlain = null
     let nextCorreo = linkedUser?.correo || null
+    let createdNewUser = false
+    let passwordHashForCentral = null
+    let nextEstadoForCentral = null
+    const hadLinkedUserAtStart = Boolean(linkedUser)
 
     if (!linkedUser && crearUsuario) {
       const adminExistente = await findAdminForTrabajador({ ...existing, rut: nextRut })
@@ -1034,8 +1091,9 @@ async function updatePersonal(req, res) {
         return res.status(400).json({ error: 'Rol no permitido en Personal' })
       }
       passwordPlain = String(password)
-      const hash = await bcrypt.hash(passwordPlain, 10)
+      passwordHashForCentral = await bcrypt.hash(passwordPlain, 10)
       const estadoNuevo = body.estado === 'inactivo' ? 'inactivo' : 'activo'
+      nextEstadoForCentral = estadoNuevo
       await conn.execute(
         `INSERT INTO usuarios (trabajador_id, rut, correo, password_hash, rol, estado)
          VALUES (?, ?, ?, ?, ?, ?)`,
@@ -1043,27 +1101,28 @@ async function updatePersonal(req, res) {
           existing.id,
           nextRut,
           correo,
-          hash,
+          passwordHashForCentral,
           ROLES.USER_RENDIDOR,
           estadoNuevo
         ]
       )
+      createdNewUser = true
       nextCorreo = correo
       cambios.push({
         texto: `usuario creado correo=${correo} rol=${ROLES.USER_RENDIDOR} estado=${estadoNuevo}`
       })
     } else if (linkedUser && (crearUsuario || wantsUserUpdate)) {
       // Switch off no borra el usuario; solo actualiza si envían campos de acceso
-      let passwordHash = linkedUser.password_hash
       const passwordChanged = Boolean(body.password && String(body.password).trim())
       if (passwordChanged) {
         passwordPlain = String(body.password).trim()
-        passwordHash = await bcrypt.hash(passwordPlain, 10)
+        passwordHashForCentral = await bcrypt.hash(passwordPlain, 10)
       }
       const nextEstado =
         body.estado === 'inactivo' || body.estado === 'activo'
           ? body.estado
           : linkedUser.estado
+      nextEstadoForCentral = nextEstado
       nextCorreo =
         body.correo !== undefined ? String(body.correo).trim() || linkedUser.correo : linkedUser.correo
 
@@ -1076,11 +1135,48 @@ async function updatePersonal(req, res) {
         `UPDATE usuarios
          SET correo = ?, estado = ?, password_hash = ?, trabajador_id = ?, rut = ?
          WHERE id = ? AND is_deleted = FALSE`,
-        [nextCorreo, nextEstado, passwordHash, existing.id, nextRut, linkedUser.id]
+        [
+          nextCorreo,
+          nextEstado,
+          passwordHashForCentral || linkedUser.password_hash,
+          existing.id,
+          nextRut,
+          linkedUser.id
+        ]
       )
     }
 
     await conn.commit()
+
+    await syncProfileToCentral({
+      rutLimpio: nextRut,
+      nombre: nextNombre,
+      correo: nextCorreo !== undefined ? nextCorreo : undefined,
+    })
+    if (createdNewUser) {
+      await provisionCentralUsuario({
+        rutLimpio: nextRut,
+        nombre: nextNombre,
+        correo: nextCorreo,
+        passwordHash: passwordHashForCentral,
+        rendRol: ROLES.USER_RENDIDOR,
+        mustChangePassword: false,
+        activo: nextEstadoForCentral !== 'inactivo',
+      })
+    } else if (hadLinkedUserAtStart && wantsUserUpdate) {
+      if (nextEstadoForCentral != null) {
+        await syncActivoToCentral({
+          rutLimpio: nextRut,
+          activo: nextEstadoForCentral === 'activo',
+        })
+      }
+      if (passwordHashForCentral) {
+        await syncPasswordHashToCentral({
+          rutLimpio: nextRut,
+          passwordHash: passwordHashForCentral,
+        })
+      }
+    }
 
     const identidad = identificarEntidad('Personal', {
       correo: nextCorreo,

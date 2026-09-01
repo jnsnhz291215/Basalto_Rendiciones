@@ -1,5 +1,9 @@
 const jwt = require('jsonwebtoken')
 const { query } = require('../config/db')
+const { authUsesCentral } = require('../config/runtimeConfig')
+const { queryCentral } = require('../config/dbCentral')
+const { limpiarRut } = require('../utils/centralAuth')
+const { authLog } = require('../utils/authLogger')
 const {
   buildUserAuthFlags,
   EXPIRED_MESSAGE,
@@ -34,6 +38,35 @@ async function authMiddleware(req, res, next) {
       payload = jwt.verify(token, secret)
     } catch {
       return res.status(401).json({ error: 'Unauthorized', message: 'Token inválido o expirado' })
+    }
+
+    const identitySource = String(payload.identity_source || 'local').toLowerCase()
+    const tokenSessionVersion = Number(payload.session_version) || 1
+
+    if (identitySource === 'central' && authUsesCentral()) {
+      const rutLimpio = limpiarRut(payload.rut)
+      let centralRows
+      try {
+        centralRows = await queryCentral(
+          `SELECT activo, session_version FROM usuarios WHERE rut = ? LIMIT 1`,
+          [rutLimpio],
+        )
+      } catch (centralErr) {
+        console.error('[authMiddleware] Error verificando sesión Central:', centralErr.message)
+        return res.status(503).json({ error: 'Identidad Central no disponible' })
+      }
+      const centralRow = centralRows?.[0]
+      if (!centralRow || Number(centralRow.activo) !== 1) {
+        return res.status(401).json({ error: 'Unauthorized', message: 'Usuario inactivo en Central' })
+      }
+      const dbVersion = Number(centralRow.session_version) || 1
+      if (dbVersion !== tokenSessionVersion) {
+        authLog('central', 'session invalidada', `rut=${rutLimpio} jwt=${tokenSessionVersion} db=${dbVersion}`)
+        return res.status(401).json({
+          error: 'invalid_session_version',
+          message: 'Sesión invalidada. Vuelve a iniciar sesión.',
+        })
+      }
     }
 
     let rows
@@ -93,7 +126,9 @@ async function authMiddleware(req, res, next) {
       temp_password_grace_started_at: flags.temp_password_grace_started_at,
       temp_password_days_left: flags.temp_password_days_left,
       accepted_email: flags.accepted_email,
-      accepted_privacy_at: flags.accepted_privacy_at
+      accepted_privacy_at: flags.accepted_privacy_at,
+      identity_source: identitySource,
+      session_version: tokenSessionVersion,
     }
 
     return next()

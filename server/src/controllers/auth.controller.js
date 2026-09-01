@@ -5,6 +5,14 @@ const jwt = require('jsonwebtoken')
 const { query } = require('../config/db')
 const { getJwtSecret } = require('../middlewares/auth.middleware')
 const { registrarAuditoria } = require('../utils/audit')
+const { resolveAuthSource, authUsesCentral } = require('../config/runtimeConfig')
+const { authenticateCentral, limpiarRut } = require('../utils/centralAuth')
+const { authLog, authWarn } = require('../utils/authLogger')
+const {
+  verifyCurrentPasswordForChange,
+  syncPasswordHashToCentral,
+} = require('../utils/centralPasswordSync')
+const { syncAuthFlagsToCentral, syncProfileToCentral } = require('../utils/centralIdentitySync')
 const {
   buildUserAuthFlags,
   asFlag,
@@ -42,6 +50,201 @@ function publicUserPayload(userRow, nombre) {
   }
 }
 
+function normalizeRut(value) {
+  return String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/\./g, '')
+    .replace(/-/g, '')
+    .replace(/\s+/g, '')
+}
+
+async function fetchLocalUser(identifier, byCorreo) {
+  if (byCorreo) {
+    return query(
+      `SELECT u.*, t.nombre_completo
+       FROM usuarios u
+       LEFT JOIN trabajadores t ON t.id = u.trabajador_id AND t.is_deleted = FALSE
+       WHERE LOWER(u.correo) = LOWER(?) AND u.is_deleted = FALSE
+       LIMIT 1`,
+      [String(identifier).trim()],
+    )
+  }
+  return query(
+    `SELECT u.*, t.nombre_completo
+     FROM usuarios u
+     LEFT JOIN trabajadores t ON t.id = u.trabajador_id AND t.is_deleted = FALSE
+     WHERE REPLACE(REPLACE(UPPER(u.rut), '.', ''), '-', '') = ?
+       AND u.is_deleted = FALSE
+     LIMIT 1`,
+    [normalizeRut(identifier)],
+  )
+}
+
+function issueToken(user, nombre, flags, identitySource, sessionVersion) {
+  const secret = getJwtSecret()
+  return jwt.sign(
+    {
+      id: user.id,
+      rut: user.rut,
+      rol: user.rol,
+      trabajador_id: user.trabajador_id,
+      nombre,
+      must_change_password: flags.must_change_password,
+      identity_source: identitySource,
+      session_version: Number(sessionVersion) > 0 ? Number(sessionVersion) : 1,
+    },
+    secret,
+    { expiresIn: process.env.JWT_EXPIRES_IN || '8h' },
+  )
+}
+
+async function tryLoginViaCentral(identifier, plain) {
+  const mode = resolveAuthSource()
+  if (!authUsesCentral()) return null
+
+  authLog('dual', 'verificando credenciales en Basaltodrilling_Central', `id=${identifier}`)
+
+  let centralResult
+  try {
+    centralResult = await authenticateCentral(identifier, plain)
+  } catch (err) {
+    authWarn('central', 'error pool/query Central', err.message)
+    if (mode === 'central') {
+      return { error: { status: 503, body: { error: 'Identidad Central no disponible' } } }
+    }
+    return null
+  }
+
+  if (!centralResult.ok) {
+    if (mode === 'central') {
+      authLog('central', 'login rechazado', `reason=${centralResult.reason}`)
+      if (centralResult.reason === 'inactive') {
+        return {
+          error: {
+            status: 401,
+            body: { error: 'Tu cuenta está desactivada. Contacta a un administrador.' },
+          },
+        }
+      }
+      return { error: { status: 401, body: { error: 'Credenciales inválidas' } } }
+    }
+    authLog('dual', 'Central sin match → fallback BD local', `reason=${centralResult.reason}`)
+    return null
+  }
+
+  const { usuario, rendRol, rutLimpio } = centralResult
+  const localRows = await fetchLocalUser(rutLimpio, false)
+  let user = localRows?.[0]
+
+  if (!user) {
+    authWarn('central', 'password OK en Central; sin fila local usuarios', `rut=${rutLimpio}`)
+    return {
+      error: {
+        status: 403,
+        body: {
+          error: 'Usuario válido en Central pero sin cuenta local en Rendiciones. Contacta a un administrador.',
+        },
+      },
+    }
+  }
+
+  if (user.estado !== 'activo') {
+    return {
+      error: {
+        status: 401,
+        body: { error: 'Tu cuenta está desactivada. Contacta a un administrador.' },
+      },
+    }
+  }
+
+  const mergedUser = {
+    ...user,
+    rol: rendRol || user.rol,
+    must_change_password: usuario.must_change_password ?? user.must_change_password,
+    temp_password_grace_started_at:
+      usuario.temp_password_grace_started_at ?? user.temp_password_grace_started_at,
+  }
+
+  const flags = buildUserAuthFlags(mergedUser)
+  if (flags.temp_password_expired) {
+    return {
+      error: { status: 403, body: { error: 'temp_password_expired', message: EXPIRED_MESSAGE } },
+    }
+  }
+
+  const nombre = mergedUser.nombre_completo || mergedUser.correo
+  const sessionVersion = Number(usuario.session_version) || 1
+  authLog(
+    'central',
+    'login OK',
+    `rut=${rutLimpio} rol=${mergedUser.rol} session_version=${sessionVersion} permisos_desde=Basalto_Rendiciones`,
+  )
+
+  const token = issueToken(mergedUser, nombre, flags, 'central', sessionVersion)
+  await registrarAuditoria(
+    mergedUser.id,
+    nombre,
+    'LOGIN',
+    'Autenticación',
+    JSON.stringify({
+      resumen: `Inicio de sesión: ${nombre}`,
+      identity_source: 'central',
+      password_verificado: 'Basaltodrilling_Central',
+    }),
+  )
+
+  return {
+    token,
+    user: publicUserPayload(mergedUser, nombre),
+    identity_source: 'central',
+  }
+}
+
+async function loginLocal(identifier, plain, byCorreo) {
+  authLog('local', 'verificando credenciales en BD local', `id=${identifier}`)
+  const rows = await fetchLocalUser(identifier, byCorreo)
+  const user = rows?.[0]
+  if (!user) {
+    console.warn('[login] usuario no encontrado / soft-deleted')
+    return { error: { status: 401, body: { error: 'Credenciales inválidas' } } }
+  }
+  if (user.estado !== 'activo') {
+    console.warn(`[login] usuario id=${user.id} estado=${user.estado}`)
+    return {
+      error: {
+        status: 401,
+        body: { error: 'Tu cuenta está desactivada. Contacta a un administrador.' },
+      },
+    }
+  }
+
+  const hash = normalizePasswordHash(user.password_hash)
+  if (!hash.startsWith('$2')) {
+    console.error(
+      `[login] password_hash inválido para usuario id=${user.id} (no parece bcrypt). Prefijo: ${String(user.password_hash || '').slice(0, 4)}`,
+    )
+    return { error: { status: 401, body: { error: 'Credenciales inválidas' } } }
+  }
+
+  const ok = await bcrypt.compare(plain, hash)
+  if (!ok) {
+    console.warn(`[login] password incorrecto para usuario id=${user.id}`)
+    return { error: { status: 401, body: { error: 'Credenciales inválidas' } } }
+  }
+
+  const flags = buildUserAuthFlags(user)
+  if (flags.temp_password_expired) {
+    return { error: { status: 403, body: { error: 'temp_password_expired', message: EXPIRED_MESSAGE } } }
+  }
+
+  const nombre = user.nombre_completo || user.correo
+  const token = issueToken(user, nombre, flags, 'local', 1)
+  await registrarAuditoria(user.id, nombre, 'LOGIN', 'Autenticación', 'Inicio de sesión exitoso')
+
+  return { token, user: publicUserPayload(user, nombre), identity_source: 'local' }
+}
+
 async function login(req, res) {
   try {
     const { correo, rut, password } = req.body || {}
@@ -51,92 +254,26 @@ async function login(req, res) {
       return res.status(400).json({ error: 'correo o rut, y password son requeridos' })
     }
 
-    const normalizeRut = (value) =>
-      String(value || '')
-        .trim()
-        .toUpperCase()
-        .replace(/\./g, '')
-        .replace(/-/g, '')
-        .replace(/\s+/g, '')
-
-    const rows = correo
-      ? await query(
-          `SELECT u.*, t.nombre_completo
-           FROM usuarios u
-           LEFT JOIN trabajadores t ON t.id = u.trabajador_id AND t.is_deleted = FALSE
-           WHERE LOWER(u.correo) = LOWER(?) AND u.is_deleted = FALSE
-           LIMIT 1`,
-          [correo.trim()]
-        )
-      : await query(
-          `SELECT u.*, t.nombre_completo
-           FROM usuarios u
-           LEFT JOIN trabajadores t ON t.id = u.trabajador_id AND t.is_deleted = FALSE
-           WHERE REPLACE(REPLACE(UPPER(u.rut), '.', ''), '-', '') = ?
-             AND u.is_deleted = FALSE
-           LIMIT 1`,
-          [normalizeRut(rut)]
-        )
-
-    const user = rows[0]
-    if (!user) {
-      console.warn('[login] usuario no encontrado / soft-deleted')
-      return res.status(401).json({ error: 'Credenciales inválidas' })
-    }
-    if (user.estado !== 'activo') {
-      console.warn(`[login] usuario id=${user.id} estado=${user.estado}`)
-      return res.status(401).json({
-        error: 'Tu cuenta está desactivada. Contacta a un administrador.'
-      })
-    }
-
-    const hash = normalizePasswordHash(user.password_hash)
-    if (!hash.startsWith('$2')) {
-      console.error(
-        `[login] password_hash inválido para usuario id=${user.id} (no parece bcrypt). Prefijo: ${String(user.password_hash || '').slice(0, 4)}`
-      )
-      return res.status(401).json({ error: 'Credenciales inválidas' })
-    }
-
-    const ok = await bcrypt.compare(plain, hash)
-    if (!ok) {
-      console.warn(`[login] password incorrecto para usuario id=${user.id}`)
-      return res.status(401).json({ error: 'Credenciales inválidas' })
-    }
-
-    const flags = buildUserAuthFlags(user)
-    if (flags.temp_password_expired) {
-      return res.status(403).json({
-        error: 'temp_password_expired',
-        message: EXPIRED_MESSAGE
-      })
-    }
-
     const secret = getJwtSecret()
     if (!secret) {
       return res.status(500).json({ error: 'JWT secret no configurado' })
     }
 
-    const nombre = user.nombre_completo || user.correo
-    const token = jwt.sign(
-      {
-        id: user.id,
-        rut: user.rut,
-        rol: user.rol,
-        trabajador_id: user.trabajador_id,
-        nombre,
-        must_change_password: flags.must_change_password
-      },
-      secret,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '8h' }
-    )
+    const byCorreo = Boolean(correo?.trim())
+    const centralHandled = await tryLoginViaCentral(identifier, plain)
+    if (centralHandled?.error) {
+      return res.status(centralHandled.error.status).json(centralHandled.error.body)
+    }
+    if (centralHandled?.token) {
+      return res.json({ token: centralHandled.token, user: centralHandled.user })
+    }
 
-    await registrarAuditoria(user.id, nombre, 'LOGIN', 'Autenticación', 'Inicio de sesión exitoso')
+    const localResult = await loginLocal(identifier, plain, byCorreo)
+    if (localResult.error) {
+      return res.status(localResult.error.status).json(localResult.error.body)
+    }
 
-    return res.json({
-      token,
-      user: publicUserPayload(user, nombre)
-    })
+    return res.json({ token: localResult.token, user: localResult.user })
   } catch (err) {
     console.error('[login]', err)
     return res.status(500).json({ error: 'Internal Server Error' })
@@ -211,8 +348,13 @@ async function updateMe(req, res) {
         return res.status(400).json({ error: 'password_actual es requerida' })
       }
       if (password_actual) {
-        const hash = normalizePasswordHash(user.password_hash)
-        const ok = await bcrypt.compare(String(password_actual), hash)
+        const identitySource = req.user.identity_source || 'local'
+        const ok = await verifyCurrentPasswordForChange({
+          rutLimpio: user.rut,
+          passwordActual: password_actual,
+          identitySource,
+          localPasswordHash: user.password_hash,
+        })
         if (!ok) {
           return res.status(401).json({ error: 'Contraseña actual incorrecta' })
         }
@@ -262,6 +404,27 @@ async function updateMe(req, res) {
         userId
       ]
     )
+
+    if (quiereCambiarClave) {
+      const identitySource = req.user.identity_source || 'local'
+      const syncResult = await syncPasswordHashToCentral({
+        rutLimpio: user.rut,
+        passwordHash: nextHash,
+        mustChangePassword: clearMustChange ? false : asFlag(user.must_change_password),
+        clearGrace: clearMustChange,
+        requireOk: identitySource === 'central',
+      })
+      if (identitySource === 'central' && !syncResult.ok) {
+        return res.status(500).json({ error: 'No se pudo sincronizar la contraseña con identidad Central' })
+      }
+    }
+    if (correo !== undefined) {
+      await syncProfileToCentral({
+        rutLimpio: user.rut,
+        nombre: req.user.nombre,
+        correo: nextCorreo,
+      })
+    }
 
     await registrarAuditoria(
       userId,
@@ -315,6 +478,13 @@ async function dismissTempPassword(req, res) {
          WHERE id = ? AND is_deleted = FALSE`,
         [userId]
       )
+    }
+    if (req.user.identity_source === 'central') {
+      await syncAuthFlagsToCentral({
+        rutLimpio: user.rut || req.user.rut,
+        mustChangePassword: true,
+        graceStartedAt: new Date(),
+      })
     }
     const refreshed = await query(
       `SELECT id, rut, correo, rol, trabajador_id, persona_confianza,

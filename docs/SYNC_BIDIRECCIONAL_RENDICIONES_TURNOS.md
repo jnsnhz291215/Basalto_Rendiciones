@@ -6,6 +6,8 @@ Documento operativo/técnico desde el lado de **Basalto Rendiciones**. Describe 
 **Referencias cortas:** `DEPLOY.md` (notas sync).  
 **Nota:** `docs/REGLAS_SISTEMA_Y_BD.md` no tiene sección de sync; solo indica que el JWT de Rendiciones es independiente del de Turnos.
 
+> **Estado (sep 2026):** sync bidireccional **activa** por defecto. Con `AUTH_SOURCE=dual|central` en Rendiciones (o Turnos), el sync **no replica** `email`/`correo` ni `password`/`password_hash` entre BDs locales — `Basaltodrilling_Central` es la fuente de identidad para esos campos. Siguen sincronizándose nombres, altas y vínculos trabajador. Ver `syncBidireccional.js` (`authUsesCentral()`).
+
 > **Estado (jul 2026):** sync bidireccional **activa** por defecto (API y CLI). Para desactivar temporalmente: `SYNC_BIDIRECCIONAL_ENABLED=0` en `server/.env`.
 
 ---
@@ -23,7 +25,7 @@ Mantener alineados, por **RUT** (clave de cruce normalizada), el personal y las 
 ### Qué SÍ se sincroniza
 
 - **Existencia** de filas (altas en un lado → altas en el otro, según reglas abajo).
-- **Usuarios (campos comunes en UPDATE):** `email` ↔ `correo`, `password` ↔ `password_hash`.
+- **Usuarios (campos comunes en UPDATE):** `email` ↔ `correo`, `password` ↔ `password_hash` — **omitido** si `AUTH_SOURCE=dual|central` (Central es fuente).
 - **Trabajadores (campos comunes en UPDATE):** nombre (`nombres` + apellidos ↔ `nombre_completo`).
 - **Vínculo** `usuarios.trabajador_id` en Rendiciones cuando falta o el nombre está vacío (“Sin nombre”).
 - **Mapeo de rol** en altas Turnos → Rendiciones (y `es_super_admin` en altas Rendiciones → Turnos `admin_users`).

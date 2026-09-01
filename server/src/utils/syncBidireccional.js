@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs')
 const { query } = require('../config/db')
 const { queryTurnos } = require('../config/dbTurnos')
 const { ROLES } = require('../middlewares/role.middleware')
+const { authUsesCentral } = require('../config/runtimeConfig')
 
 /**
  * Esquema real (dumps SQL en ../bd/ + ALTER updated_at en Turnos):
@@ -421,6 +422,11 @@ function usuarioCommonDiffers(turnosRow, rendRow) {
 }
 
 async function updateUsuarioEnRendiciones(dest, { correo, passwordHash }, stats, label) {
+  if (authUsesCentral()) {
+    stats.usuarios = stats.usuarios || {}
+    stats.usuarios.omitidos_central = (stats.usuarios.omitidos_central || 0) + 1
+    return
+  }
   try {
     await query(
       `UPDATE usuarios
@@ -435,6 +441,7 @@ async function updateUsuarioEnRendiciones(dest, { correo, passwordHash }, stats,
 }
 
 async function updateAdminEnTurnos(norm, { email, password }, stats) {
+  if (authUsesCentral()) return
   try {
     await queryTurnos(
       `UPDATE admin_users
@@ -463,6 +470,7 @@ async function updateAdminEnTurnos(norm, { email, password }, stats) {
 }
 
 async function updateUserEnTurnos(norm, { email, password }, stats) {
+  if (authUsesCentral()) return
   try {
     await queryTurnos(
       `UPDATE users
