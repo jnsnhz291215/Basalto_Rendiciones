@@ -6,7 +6,7 @@ const { query } = require('../config/db')
 const { getJwtSecret } = require('../middlewares/auth.middleware')
 const { registrarAuditoria } = require('../utils/audit')
 const { resolveAuthSource, authUsesCentral } = require('../config/runtimeConfig')
-const { authenticateCentral, limpiarRut } = require('../utils/centralAuth')
+const { authenticateCentral, limpiarRut, lookupTrabajadorIdByRut } = require('../utils/centralAuth')
 const { authLog, authWarn } = require('../utils/authLogger')
 const {
   verifyCurrentPasswordForChange,
@@ -127,6 +127,14 @@ async function tryLoginViaCentral(identifier, plain) {
           },
         }
       }
+      if (centralResult.reason === 'sistema_disabled') {
+        return {
+          error: {
+            status: 403,
+            body: { error: 'No tienes acceso habilitado a Rendiciones. Contacta a un administrador.' },
+          },
+        }
+      }
       return { error: { status: 401, body: { error: 'Credenciales inválidas' } } }
     }
     authLog('dual', 'Central sin match → fallback BD local', `reason=${centralResult.reason}`)
@@ -134,6 +142,59 @@ async function tryLoginViaCentral(identifier, plain) {
   }
 
   const { usuario, rendRol, rutLimpio } = centralResult
+
+  if (mode === 'central') {
+    const trabajador = await lookupTrabajadorIdByRut(rutLimpio)
+    const mergedUser = {
+      id: usuario.id,
+      central_id: usuario.id,
+      rut: usuario.rut || rutLimpio,
+      correo: usuario.correo,
+      rol: rendRol,
+      trabajador_id: trabajador?.id ?? null,
+      nombre_completo: usuario.nombre,
+      estado: 'activo',
+      persona_confianza: Boolean(trabajador?.persona_confianza),
+      must_change_password: usuario.must_change_password,
+      temp_password_grace_started_at: usuario.temp_password_grace_started_at,
+    }
+
+    const flags = buildUserAuthFlags(mergedUser)
+    if (flags.temp_password_expired) {
+      return {
+        error: { status: 403, body: { error: 'temp_password_expired', message: EXPIRED_MESSAGE } },
+      }
+    }
+
+    const nombre = mergedUser.nombre_completo || mergedUser.correo
+    const sessionVersion = Number(usuario.session_version) || 1
+    authLog(
+      'central',
+      'login OK',
+      `rut=${rutLimpio} rol=${mergedUser.rol} session_version=${sessionVersion} identity=Central`,
+    )
+
+    const token = issueToken(mergedUser, nombre, flags, 'central', sessionVersion)
+    await registrarAuditoria(
+      mergedUser.id,
+      nombre,
+      'LOGIN',
+      'Autenticación',
+      JSON.stringify({
+        resumen: `Inicio de sesión: ${nombre}`,
+        identity_source: 'central',
+        password_verificado: 'Basaltodrilling_Central',
+      }),
+      { central_usuario_id: mergedUser.id, actor_rut: rutLimpio, identity_source: 'central' },
+    )
+
+    return {
+      token,
+      user: publicUserPayload(mergedUser, nombre),
+      identity_source: 'central',
+    }
+  }
+
   const localRows = await fetchLocalUser(rutLimpio, false)
   let user = localRows?.[0]
 

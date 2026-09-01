@@ -68,6 +68,29 @@ async function fetchRolesForUsuario(usuarioId) {
   return rows || []
 }
 
+async function fetchAccesoSistema(usuarioId, sistema) {
+  const rows = await queryCentral(
+    `SELECT login_habilitado
+     FROM usuario_acceso_sistema
+     WHERE usuario_id = ? AND sistema = ?
+     LIMIT 1`,
+    [usuarioId, sistema],
+  )
+  return Boolean(rows?.[0]?.login_habilitado)
+}
+
+async function lookupTrabajadorIdByRut(rutLimpio) {
+  const { query } = require('../config/db')
+  const rows = await query(
+    `SELECT id, persona_confianza FROM trabajadores
+     WHERE REPLACE(REPLACE(UPPER(rut), '.', ''), '-', '') = ?
+       AND is_deleted = FALSE
+     LIMIT 1`,
+    [rutLimpio],
+  )
+  return rows?.[0] || null
+}
+
 async function findCentralUsuario(identifier) {
   const raw = String(identifier || '').trim()
   if (!raw) return null
@@ -117,6 +140,11 @@ async function authenticateCentral(identifier, password) {
     return { ok: false, reason: 'role_no_login' }
   }
 
+  const rendicionesAcceso = await fetchAccesoSistema(usuario.id, 'rendiciones')
+  if (!rendicionesAcceso) {
+    return { ok: false, reason: 'sistema_disabled' }
+  }
+
   return {
     ok: true,
     usuario,
@@ -133,4 +161,6 @@ module.exports = {
   authenticateCentral,
   mapCentralToRendRol,
   canLogin,
+  fetchAccesoSistema,
+  lookupTrabajadorIdByRut,
 }

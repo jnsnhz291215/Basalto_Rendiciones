@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken')
 const { query } = require('../config/db')
 const { authUsesCentral } = require('../config/runtimeConfig')
 const { queryCentral } = require('../config/dbCentral')
-const { limpiarRut } = require('../utils/centralAuth')
+const { limpiarRut, lookupTrabajadorIdByRut } = require('../utils/centralAuth')
 const { authLog } = require('../utils/authLogger')
 const {
   buildUserAuthFlags,
@@ -14,10 +14,49 @@ function getJwtSecret() {
   return process.env.JWT_SECRET_RENDICIONES || process.env.JWT_SECRET
 }
 
+async function buildCentralReqUser(payload, tokenSessionVersion) {
+  const rutLimpio = limpiarRut(payload.rut)
+  const centralRows = await queryCentral(
+    `SELECT id, rut, correo, nombre, must_change_password, temp_password_grace_started_at, activo
+     FROM usuarios
+     WHERE id = ? OR rut = ?
+     LIMIT 1`,
+    [payload.id, rutLimpio],
+  )
+  const cu = centralRows?.[0]
+  if (!cu || Number(cu.activo) !== 1) return null
+
+  const trabajador = await lookupTrabajadorIdByRut(rutLimpio)
+  const userForFlags = {
+    must_change_password: cu.must_change_password,
+    temp_password_grace_started_at: cu.temp_password_grace_started_at,
+    accepted_email: null,
+    accepted_privacy_at: null,
+  }
+  const flags = buildUserAuthFlags(userForFlags)
+
+  return {
+    id: cu.id,
+    central_id: cu.id,
+    trabajador_id: payload.trabajador_id ?? trabajador?.id ?? null,
+    rut: cu.rut || rutLimpio,
+    correo: cu.correo,
+    rol: payload.rol,
+    nombre: payload.nombre || cu.nombre || cu.correo,
+    persona_confianza: Boolean(trabajador?.persona_confianza),
+    must_change_password: flags.must_change_password,
+    temp_password_grace_started_at: flags.temp_password_grace_started_at,
+    temp_password_days_left: flags.temp_password_days_left,
+    accepted_email: flags.accepted_email,
+    accepted_privacy_at: flags.accepted_privacy_at,
+    identity_source: 'central',
+    session_version: tokenSessionVersion,
+  }
+}
+
 /**
  * Exige Authorization: Bearer <token>.
- * Revalida en BD: estado activo e is_deleted = FALSE.
- * Bloquea API si must_change + gracia expirada (salvo whitelist).
+ * Modo central: req.user desde JWT + Central (sin tabla usuarios local).
  */
 async function authMiddleware(req, res, next) {
   try {
@@ -67,6 +106,28 @@ async function authMiddleware(req, res, next) {
           message: 'Sesión invalidada. Vuelve a iniciar sesión.',
         })
       }
+
+      const centralUser = await buildCentralReqUser(payload, tokenSessionVersion)
+      if (!centralUser) {
+        return res.status(401).json({ error: 'Unauthorized', message: 'Usuario inactivo o eliminado' })
+      }
+
+      const flagsCheck = buildUserAuthFlags({
+        must_change_password: centralUser.must_change_password,
+        temp_password_grace_started_at: centralUser.temp_password_grace_started_at,
+      })
+      if (flagsCheck.temp_password_expired && !isTempPasswordWhitelist(req.method, req.path)) {
+        const fullPath = String(req.originalUrl || req.url || '').split('?')[0]
+        if (!isTempPasswordWhitelist(req.method, fullPath)) {
+          return res.status(403).json({
+            error: 'temp_password_expired',
+            message: EXPIRED_MESSAGE
+          })
+        }
+      }
+
+      req.user = centralUser
+      return next()
     }
 
     let rows
@@ -104,7 +165,6 @@ async function authMiddleware(req, res, next) {
 
     const flags = buildUserAuthFlags(user)
     if (flags.temp_password_expired && !isTempPasswordWhitelist(req.method, req.path)) {
-      // req.path en routers montados puede ser relativo; usar originalUrl
       const fullPath = String(req.originalUrl || req.url || '').split('?')[0]
       if (!isTempPasswordWhitelist(req.method, fullPath)) {
         return res.status(403).json({
@@ -116,6 +176,7 @@ async function authMiddleware(req, res, next) {
 
     req.user = {
       id: user.id,
+      central_id: user.id,
       trabajador_id: user.trabajador_id,
       rut: user.rut,
       correo: user.correo,
@@ -138,4 +199,4 @@ async function authMiddleware(req, res, next) {
   }
 }
 
-module.exports = { authMiddleware, getJwtSecret }
+module.exports = { authMiddleware, getJwtSecret, buildCentralReqUser }

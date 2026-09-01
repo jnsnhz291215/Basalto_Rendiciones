@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs')
 const { query } = require('../config/db')
 const { queryTurnos } = require('../config/dbTurnos')
 const { queryCentral, isCentralConfigured } = require('../config/dbCentral')
-const { authUsesCentral } = require('../config/runtimeConfig')
+const { authUsesCentral, resolveAuthSource } = require('../config/runtimeConfig')
 const { ROLES } = require('../middlewares/role.middleware')
 
 /**
@@ -644,6 +644,12 @@ async function insertUserEnTurnos(u, stats) {
 }
 
 async function syncUsuarios(stats) {
+  if (authUsesCentral() && resolveAuthSource() === 'central') {
+    stats.usuarios = stats.usuarios || {}
+    stats.usuarios.omitidos_central = 'sync_usuarios_disabled_identity_central'
+    return
+  }
+
   const [admins, users, rendUsuarios] = await Promise.all([
     loadTurnosAdmins(),
     loadTurnosUsers(),

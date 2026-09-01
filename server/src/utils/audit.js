@@ -2,20 +2,46 @@ const { query } = require('../config/db')
 
 /**
  * Inserta un evento inmutable en audit_logs.
- * No aplica soft delete; nunca se altera retroactivamente.
+ * Con identidad Central: central_usuario_id + actor_rut; usuario_id local queda NULL.
  */
-async function registrarAuditoria(usuario_id, usuario_nombre, accion, modulo, detalle) {
-  await query(
-    `INSERT INTO audit_logs (usuario_id, usuario_nombre, accion, modulo, detalle)
-     VALUES (?, ?, ?, ?, ?)`,
-    [
-      usuario_id ?? null,
-      usuario_nombre ?? null,
-      accion,
-      modulo,
-      detalle
-    ]
-  )
+async function registrarAuditoria(usuario_id, usuario_nombre, accion, modulo, detalle, opts = {}) {
+  const identitySource = String(opts.identity_source || '').toLowerCase()
+  const isCentral = identitySource === 'central'
+  const centralId = opts.central_usuario_id ?? (isCentral ? usuario_id : null)
+  const actorRut = opts.actor_rut ?? null
+  const localId = isCentral ? null : (usuario_id ?? null)
+
+  try {
+    await query(
+      `INSERT INTO audit_logs (usuario_id, central_usuario_id, actor_rut, usuario_nombre, accion, modulo, detalle)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        localId,
+        centralId ?? null,
+        actorRut,
+        usuario_nombre ?? null,
+        accion,
+        modulo,
+        detalle
+      ]
+    )
+  } catch (err) {
+    if (err?.code === 'ER_BAD_FIELD_ERROR' || err?.errno === 1054) {
+      await query(
+        `INSERT INTO audit_logs (usuario_id, usuario_nombre, accion, modulo, detalle)
+         VALUES (?, ?, ?, ?, ?)`,
+        [
+          usuario_id ?? null,
+          usuario_nombre ?? null,
+          accion,
+          modulo,
+          detalle
+        ]
+      )
+      return
+    }
+    throw err
+  }
 }
 
 /** Normaliza valor escalar para comparar / mostrar en detalle. */

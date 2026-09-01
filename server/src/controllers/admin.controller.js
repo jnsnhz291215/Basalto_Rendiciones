@@ -26,6 +26,7 @@ const {
   syncProfileToCentral,
   deactivateCentralUsuario,
 } = require('../utils/centralIdentitySync')
+const { blocksLocalUsuarioCrud, identityCentralOnlyResponse } = require('../utils/identityCentralGuard')
 
 /** Normaliza RUT para comparar (sin puntos/guión). */
 function cleanRutValue(rut) {
@@ -390,6 +391,7 @@ async function listUsuarios(req, res) {
 }
 
 async function createUsuario(req, res) {
+  if (blocksLocalUsuarioCrud()) return identityCentralOnlyResponse(res)
   try {
     const { trabajador_id, rut, correo, password, rol, estado, persona_confianza } = req.body || {}
     if (!rut?.trim() || !correo?.trim() || !password || !rol) {
@@ -505,6 +507,7 @@ function adminFormNombre(body) {
 }
 
 async function updateUsuario(req, res) {
+  if (blocksLocalUsuarioCrud()) return identityCentralOnlyResponse(res)
   try {
     const id = Number(req.params.id)
     const { correo, rol, estado, password, persona_confianza } = req.body || {}
@@ -697,6 +700,7 @@ async function updateUsuario(req, res) {
 }
 
 async function softDeleteUsuario(req, res) {
+  if (blocksLocalUsuarioCrud()) return identityCentralOnlyResponse(res)
   try {
     if (!SUPER_ADMINS.includes(req.user.rol)) {
       return res.status(403).json({
@@ -750,6 +754,7 @@ async function softDeleteUsuario(req, res) {
  * Body opcional: { password?, mode?: 'rut'|'manual' }
  */
 async function resetPasswordUsuario(req, res) {
+  if (blocksLocalUsuarioCrud()) return identityCentralOnlyResponse(res)
   try {
     if (!SUPER_ADMINS.includes(req.user.rol)) {
       return res.status(403).json({
@@ -851,6 +856,9 @@ async function createPersonal(req, res) {
     const nombre = sanitizeTextoLibre(body.nombre_completo || body.nombre) || ''
     const cargo = sanitizeTextoLibre(body.cargo)
     const crearUsuario = Boolean(body.crear_usuario)
+    if (crearUsuario && blocksLocalUsuarioCrud()) {
+      return identityCentralOnlyResponse(res)
+    }
     const cajaClaves = parseCajaClaves(body)
 
     if (!rutClean || !nombre) {
@@ -1027,11 +1035,18 @@ async function updatePersonal(req, res) {
         : existing.cargo
     const cajaClaves = parseCajaClaves(body)
     const crearUsuario = Boolean(body.crear_usuario)
+    if (crearUsuario && blocksLocalUsuarioCrud()) {
+      return identityCentralOnlyResponse(res)
+    }
     const wantsUserUpdate =
       body.correo !== undefined ||
       body.rol !== undefined ||
       body.estado !== undefined ||
       (body.password && String(body.password).trim())
+
+    if (wantsUserUpdate && blocksLocalUsuarioCrud()) {
+      return identityCentralOnlyResponse(res)
+    }
 
     if (!nextNombre) {
       return res.status(400).json({ error: 'nombre_completo es requerido' })
