@@ -1,4 +1,5 @@
 const { query } = require('../config/db')
+const ccRepo = require('../services/orgCatalog/centrosCostoRepo')
 const { registrarAuditoria } = require('../utils/audit')
 const {
   calcularArrastreMes,
@@ -66,17 +67,18 @@ async function resolveMetaComprobante({ caja_id, trabajador_id, fecha }) {
 
   if (caja_id) {
     const rows = await query(
-      `SELECT c.clave_interna, c.nombre_exterior,
-              COALESCE(cc.nombre, 'sin_cc') AS centro_cobro_nombre
+      `SELECT c.clave_interna, c.nombre_exterior, c.centro_cobro_id
        FROM cajas_chicas c
-       LEFT JOIN centros_costo cc ON cc.id = c.centro_cobro_id AND cc.is_deleted = FALSE
        WHERE c.id = ? AND c.is_deleted = FALSE
        LIMIT 1`,
       [Number(caja_id)]
     )
     if (rows[0]) {
       caja = rows[0].clave_interna || rows[0].nombre_exterior || ''
-      centroCobro = rows[0].centro_cobro_nombre || 'sin_cc'
+      if (rows[0].centro_cobro_id) {
+        const cc = await ccRepo.getCentroById(rows[0].centro_cobro_id)
+        centroCobro = cc?.nombre || 'sin_cc'
+      }
     }
   }
 

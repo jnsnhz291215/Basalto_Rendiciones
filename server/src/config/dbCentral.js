@@ -1,7 +1,7 @@
 'use strict'
 
 const mysql = require('mysql2/promise')
-const { readEnvValue, authUsesCentral } = require('./runtimeConfig')
+const { readEnvValue, authUsesCentral, orgCatalogUsesCentral } = require('./runtimeConfig')
 
 const ALLOWED_CENTRAL_DB_LOWER = new Set([
   'basaltodrilling_central',
@@ -28,7 +28,7 @@ function assertCentralDbName(name) {
 }
 
 function resolveCentralDbConfig() {
-  if (!authUsesCentral()) return null
+  if (!authUsesCentral() && !orgCatalogUsesCentral()) return null
 
   const database = assertCentralDbName(readEnvValue('CENTRAL_DB_NAME'))
 
@@ -85,7 +85,7 @@ async function queryCentral(sql, params = []) {
 }
 
 ;(async () => {
-  if (!authUsesCentral()) return
+  if (!authUsesCentral() && !orgCatalogUsesCentral()) return
   try {
     const cfg = resolveCentralDbConfig()
     const p = getCentralPool()

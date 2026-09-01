@@ -1,8 +1,9 @@
 const bcrypt = require('bcryptjs')
 const { query } = require('../config/db')
 const { queryTurnos } = require('../config/dbTurnos')
-const { ROLES } = require('../middlewares/role.middleware')
+const { queryCentral, isCentralConfigured } = require('../config/dbCentral')
 const { authUsesCentral } = require('../config/runtimeConfig')
+const { ROLES } = require('../middlewares/role.middleware')
 
 /**
  * Esquema real (dumps SQL en ../bd/ + ALTER updated_at en Turnos):
@@ -142,11 +143,20 @@ let cachedCiudadId = null
 /** Primer id_ciudad válido (FK obligatoria en trabajadores Turnos). */
 async function getDefaultCiudadId() {
   if (cachedCiudadId != null) return cachedCiudadId
+  if (authUsesCentral() && isCentralConfigured()) {
+    const rows = await queryCentral(
+      `SELECT id_ciudad FROM ciudades ORDER BY id_ciudad ASC LIMIT 1`
+    )
+    if (rows[0]?.id_ciudad) {
+      cachedCiudadId = rows[0].id_ciudad
+      return cachedCiudadId
+    }
+  }
   const rows = await queryTurnos(
     `SELECT id_ciudad FROM ciudades ORDER BY id_ciudad ASC LIMIT 1`
   )
   if (!rows[0]?.id_ciudad) {
-    throw new Error('Turnos: no hay filas en ciudades (id_ciudad NOT NULL en trabajadores)')
+    throw new Error('Turnos/Central: no hay filas en ciudades (id_ciudad NOT NULL en trabajadores)')
   }
   cachedCiudadId = rows[0].id_ciudad
   return cachedCiudadId

@@ -40,7 +40,15 @@ JWT_SECRET=...   # mismo valor Panel + Turnos + Rendiciones
 | `server/src/controllers/auth.controller.js` | Login dual + `updateMe` / dismiss temp |
 | `server/src/middlewares/auth.middleware.js` | `session_version` Central si `identity_source=central` |
 | `server/src/controllers/admin.controller.js` | CRUD usuarios/admins/personal → Central |
-| `server/src/utils/syncBidireccional.js` | Omite sync password/email si Central activo |
+| `server/src/utils/syncBidireccional.js` | Omite sync password/email si Central activo; `id_ciudad` desde Central |
+| `server/src/services/orgCatalog/` | `centros_costo` unificado (`ORG_CATALOG_SOURCE`) |
+| `server/src/controllers/cajas.controller.js` | CRUD centros de cobro vía orgCatalog |
+
+## Catálogos — centros de costo unificados
+
+Con `ORG_CATALOG_SOURCE=central|dual`, Rendiciones lee/escribe `centros_costo` en **`Basaltodrilling_Central`** (campo `uso`: `operativo`, `cobro`, `ambos`). Las FKs `cajas_chicas.centro_cobro_id` apuntan a IDs Central tras import (`prod/07_import_org_from_basalto.sql` en Panel).
+
+Rollback: `ORG_CATALOG_SOURCE=basalto`.
 
 ## Qué lee cada BD
 
@@ -48,6 +56,7 @@ JWT_SECRET=...   # mismo valor Panel + Turnos + Rendiciones
 |------|---------|-------------------------------|
 | Password / activo / session | ✅ | fallback dual |
 | JWT `id` | ❌ | ✅ PK `usuarios.id` (FKs cajas/gastos) |
+| `centros_costo` (catálogo) | ✅ con `ORG_CATALOG_SOURCE=central\|dual` | fallback local |
 | Rol front (ENUM) | mapeado | ✅ persistido local |
 | Cajas, gastos, trabajador_cajas | ❌ | ✅ |
 

@@ -3,6 +3,7 @@ const { registrarAuditoria } = require('../utils/audit')
 const { ensureCajasSchema } = require('../utils/ensureCajasSchema')
 const { ROLES, ADMINS } = require('../middlewares/role.middleware')
 const { canDevHardDelete } = require('../config/devFlags')
+const ccRepo = require('../services/orgCatalog/centrosCostoRepo')
 
 function normalizeNombreInterior(value) {
   return String(value || '')
@@ -82,10 +83,20 @@ async function listCajas(req, res) {
         : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
     const anio = /^\d{4}$/.test(anioParam) ? anioParam : String(Number(mes.slice(0, 4)) || now.getFullYear())
 
+    const ccJoin = ccRepo.usesCentralReads()
+      ? ''
+      : 'LEFT JOIN centros_costo cc ON cc.id = c.centro_cobro_id AND cc.is_deleted = FALSE'
+    const ccSelect = ccRepo.usesCentralReads()
+      ? 'NULL AS centro_cobro_nombre'
+      : 'cc.nombre AS centro_cobro_nombre'
+    const orderBy = ccRepo.usesCentralReads()
+      ? 'c.clave_interna ASC'
+      : 'cc.nombre ASC, c.clave_interna ASC'
+
     let sql = `
       SELECT c.id, c.clave_interna, c.nombre_exterior, c.centro_cobro_id,
               c.created_at, c.updated_at,
-              cc.nombre AS centro_cobro_nombre,
+              ${ccSelect},
               (
                 EXISTS(
                   SELECT 1 FROM rendiciones_gastos r
@@ -120,7 +131,7 @@ async function listCajas(req, res) {
                 WHERE tc.clave_interna = c.clave_interna
               ) AS personal_asignado
        FROM cajas_chicas c
-       LEFT JOIN centros_costo cc ON cc.id = c.centro_cobro_id AND cc.is_deleted = FALSE
+       ${ccJoin}
        WHERE c.is_deleted = FALSE`
     const params = [mes, Number(anio)]
 
@@ -135,8 +146,11 @@ async function listCajas(req, res) {
       params.push(req.user.trabajador_id)
     }
 
-    sql += ' ORDER BY cc.nombre ASC, c.clave_interna ASC'
-    const rows = await query(sql, params)
+    sql += ` ORDER BY ${orderBy}`
+    let rows = await query(sql, params)
+    if (ccRepo.usesCentralReads()) {
+      rows = await ccRepo.enrichRows(rows)
+    }
     return res.json(rows.map(mapCajaRow))
   } catch (err) {
     console.error('[listCajas]', err)
@@ -272,18 +286,15 @@ async function createCaja(req, res) {
       return res.status(400).json({ error: 'centro_cobro_id es requerido' })
     }
 
-    const cc = await query(
-      `SELECT id, nombre FROM centros_costo WHERE id = ? AND is_deleted = FALSE`,
-      [centroCobroId]
-    )
-    if (!cc[0]) {
+    const cc = await ccRepo.getCentroById(centroCobroId)
+    if (!cc) {
       return res.status(400).json({ error: 'Centro de cobro / empresa no encontrado' })
     }
 
     // El agrupador es el CC (antes "nombre interior"). clave_interna técnica única por caja.
     const slugExterior = normalizeNombreInterior(nombreExterior) || 'CAJA'
     const clave =
-      normalizeNombreInterior(`${cc[0].nombre}_${slugExterior}`) ||
+      normalizeNombreInterior(`${cc.nombre}_${slugExterior}`) ||
       `CC${centroCobroId}_${slugExterior}`
 
     try {
@@ -302,13 +313,13 @@ async function createCaja(req, res) {
       )
 
       const created = await query(
-        `SELECT c.*, cc.nombre AS centro_cobro_nombre, FALSE AS tiene_datos
+        `SELECT c.*, NULL AS centro_cobro_nombre, FALSE AS tiene_datos
          FROM cajas_chicas c
-         LEFT JOIN centros_costo cc ON cc.id = c.centro_cobro_id
          WHERE c.id = ? AND c.is_deleted = FALSE`,
         [result.insertId]
       )
-      return res.status(201).json(mapCajaRow(created[0]))
+      const [enriched] = await ccRepo.enrichRows(created)
+      return res.status(201).json(mapCajaRow(enriched))
     } catch (e) {
       if (e.code === 'ER_DUP_ENTRY') {
         return res.status(409).json({
@@ -365,13 +376,13 @@ async function updateCaja(req, res) {
     )
 
     const updated = await query(
-      `SELECT c.*, cc.nombre AS centro_cobro_nombre, FALSE AS tiene_datos
+      `SELECT c.*, NULL AS centro_cobro_nombre, FALSE AS tiene_datos
        FROM cajas_chicas c
-       LEFT JOIN centros_costo cc ON cc.id = c.centro_cobro_id
        WHERE c.id = ? AND c.is_deleted = FALSE`,
       [id]
     )
-    return res.json(mapCajaRow(updated[0]))
+    const [enriched] = await ccRepo.enrichRows(updated)
+    return res.json(mapCajaRow(enriched))
   } catch (err) {
     console.error('[updateCaja]', err)
     return res.status(500).json({ error: 'Internal Server Error' })
@@ -435,15 +446,12 @@ async function softDeleteCaja(req, res) {
 async function listCentrosCosto(req, res) {
   try {
     await ensureCajasSchema()
-    const rows = await query(
-      `SELECT cc.*,
-              EXISTS(
-                SELECT 1 FROM cajas_chicas c
-                WHERE c.centro_cobro_id = cc.id AND c.is_deleted = FALSE
-              ) AS tiene_datos
-       FROM centros_costo cc
-       WHERE cc.is_deleted = FALSE
-       ORDER BY cc.nombre ASC`
+    const centros = await ccRepo.listCentrosCosto()
+    const rows = await Promise.all(
+      centros.map(async (cc) => ({
+        ...cc,
+        tiene_datos: await ccRepo.centroTieneCajas(cc.id),
+      })),
     )
     return res.json(rows.map(mapCcRow))
   } catch (err) {
@@ -464,23 +472,7 @@ async function createCentroCosto(req, res) {
     }
 
     try {
-      // Compat: si quedó columna legacy `codigo`, reutilizar el mismo valor
-      let result
-      try {
-        result = await query(
-          `INSERT INTO centros_costo (nombre, codigo) VALUES (?, ?)`,
-          [nombre, nombre]
-        )
-      } catch (insertErr) {
-        if (
-          insertErr.errno === 1054 ||
-          insertErr.code === 'ER_BAD_FIELD_ERROR'
-        ) {
-          result = await query(`INSERT INTO centros_costo (nombre) VALUES (?)`, [nombre])
-        } else {
-          throw insertErr
-        }
-      }
+      const created = await ccRepo.createCentroCosto({ nombre })
       await registrarAuditoria(
         req.user.id,
         req.user.nombre,
@@ -488,11 +480,7 @@ async function createCentroCosto(req, res) {
         'CentrosCobro',
         `Centro de cobro "${nombre}" creado`
       )
-      const created = await query(
-        `SELECT *, FALSE AS tiene_datos FROM centros_costo WHERE id = ? AND is_deleted = FALSE`,
-        [result.insertId]
-      )
-      return res.status(201).json(mapCcRow(created[0]))
+      return res.status(201).json(mapCcRow({ ...created, tiene_datos: false }))
     } catch (e) {
       if (e.code === 'ER_DUP_ENTRY') {
         return res.status(409).json({ error: 'Ya existe un centro de cobro con ese nombre' })
@@ -512,11 +500,8 @@ async function updateCentroCosto(req, res) {
   try {
     await ensureCajasSchema()
     const id = Number(req.params.id)
-    const existing = await query(
-      `SELECT * FROM centros_costo WHERE id = ? AND is_deleted = FALSE`,
-      [id]
-    )
-    if (!existing[0]) {
+    const existingRow = await ccRepo.getCentroById(id)
+    if (!existingRow) {
       return res.status(404).json({ error: 'Centro de cobro / empresa no encontrado' })
     }
 
@@ -533,7 +518,7 @@ async function updateCentroCosto(req, res) {
     }
 
     try {
-      await query(`UPDATE centros_costo SET nombre = ? WHERE id = ?`, [nombre, id])
+      await ccRepo.updateCentroCosto(id, { nombre })
     } catch (e) {
       if (e.code === 'ER_DUP_ENTRY') {
         return res.status(409).json({ error: 'Ya existe un centro de cobro con ese nombre' })
@@ -548,11 +533,8 @@ async function updateCentroCosto(req, res) {
       'CentrosCobro',
       `Centro de cobro id=${id} actualizado`
     )
-    const updated = await query(
-      `SELECT *, FALSE AS tiene_datos FROM centros_costo WHERE id = ? AND is_deleted = FALSE`,
-      [id]
-    )
-    return res.json(mapCcRow(updated[0]))
+    const updatedRow = await ccRepo.getCentroById(id)
+    return res.json(mapCcRow({ ...updatedRow, tiene_datos: false }))
   } catch (err) {
     console.error('[updateCentroCosto]', err)
     return res.status(500).json({ error: 'Internal Server Error' })
@@ -563,11 +545,8 @@ async function softDeleteCentroCosto(req, res) {
   try {
     await ensureCajasSchema()
     const id = Number(req.params.id)
-    const existing = await query(
-      `SELECT id FROM centros_costo WHERE id = ? AND is_deleted = FALSE`,
-      [id]
-    )
-    if (!existing[0]) {
+    const existingRow = await ccRepo.getCentroById(id)
+    if (!existingRow) {
       return res.status(404).json({ error: 'Centro de cobro / empresa no encontrado' })
     }
 
@@ -588,7 +567,7 @@ async function softDeleteCentroCosto(req, res) {
         await query(`DELETE FROM anticipos WHERE caja_id = ?`, [c.id])
         await query(`DELETE FROM cajas_chicas WHERE id = ?`, [c.id])
       }
-      await query(`DELETE FROM centros_costo WHERE id = ?`, [id])
+      await ccRepo.hardDeleteCentroCosto(id)
       await registrarAuditoria(
         req.user.id,
         req.user.nombre,
@@ -599,15 +578,7 @@ async function softDeleteCentroCosto(req, res) {
       return res.json({ ok: true, hard: true })
     }
 
-    // Liberar UNIQUE(nombre) para poder recrear el mismo nombre luego
-    await query(
-      `UPDATE centros_costo
-       SET is_deleted = TRUE,
-           deleted_at = NOW(),
-           nombre = CONCAT(nombre, '_DEL_', id)
-       WHERE id = ? AND is_deleted = FALSE`,
-      [id]
-    )
+    await ccRepo.softDeleteCentroCosto(id)
     await registrarAuditoria(
       req.user.id,
       req.user.nombre,
