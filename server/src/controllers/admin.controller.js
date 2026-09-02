@@ -27,12 +27,22 @@ const {
   deactivateCentralUsuario,
 } = require('../utils/centralIdentitySync')
 const { blocksLocalUsuarioCrud, identityCentralOnlyResponse } = require('../utils/identityCentralGuard')
+const { authUsesCentral } = require('../config/runtimeConfig')
+const { fetchRutsConAccesoSistema, limpiarRut } = require('../utils/centralAuth')
 
 /** Normaliza RUT para comparar (sin puntos/guión). */
 function cleanRutValue(rut) {
   return String(rut || '')
     .replace(/[^0-9kK]/g, '')
     .toUpperCase()
+}
+
+/** Con auth Central: solo personal con acceso Rendiciones ON. */
+async function filterTrabajadoresByAccesoRendiciones(trabajadores) {
+  if (!authUsesCentral()) return trabajadores
+  const allowed = await fetchRutsConAccesoSistema('rendiciones')
+  if (!allowed) return trabajadores
+  return (trabajadores || []).filter((t) => allowed.has(limpiarRut(t.rut) || cleanRutValue(t.rut)))
 }
 
 async function loadCajasByTrabajador() {
@@ -79,9 +89,10 @@ async function replaceTrabajadorCajas(connOrNull, trabajadorId, claves) {
  * `es_admin` indica ficha ligada a cuenta admin (mismo trabajador_id o RUT).
  */
 async function buildPersonalList() {
-  const trabajadores = await query(
+  const trabajadoresRaw = await query(
     `SELECT * FROM trabajadores WHERE is_deleted = FALSE ORDER BY nombre_completo ASC`
   )
+  const trabajadores = await filterTrabajadoresByAccesoRendiciones(trabajadoresRaw)
   const usuarios = await query(
     `SELECT id, trabajador_id, rut, correo, rol, estado
      FROM usuarios
@@ -163,9 +174,10 @@ async function getPersonalByTrabajadorId(id) {
 
 async function listTrabajadores(req, res) {
   try {
-    const trabajadores = await query(
+    const trabajadoresRaw = await query(
       `SELECT * FROM trabajadores WHERE is_deleted = FALSE ORDER BY nombre_completo ASC`
     )
+    const trabajadores = await filterTrabajadoresByAccesoRendiciones(trabajadoresRaw)
     const cajas = await query(
       `SELECT trabajador_id, clave_interna FROM trabajador_cajas`
     )

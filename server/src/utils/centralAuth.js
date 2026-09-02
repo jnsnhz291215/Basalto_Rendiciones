@@ -89,6 +89,31 @@ async function fetchAccesoSistema(usuarioId, sistema) {
   }
 }
 
+/** RUTs (limpios) con login_habilitado=1. null = no filtrar (tabla ausente / error). */
+async function fetchRutsConAccesoSistema(sistema) {
+  try {
+    const rows = await queryCentral(
+      `SELECT u.rut
+       FROM usuarios u
+       INNER JOIN usuario_acceso_sistema a ON a.usuario_id = u.id
+       WHERE a.sistema = ?
+         AND a.login_habilitado = 1
+         AND COALESCE(u.is_deleted, 0) = 0`,
+      [String(sistema || '').toLowerCase()],
+    )
+    const set = new Set()
+    for (const row of rows || []) {
+      const r = limpiarRut(row.rut)
+      if (r) set.add(r)
+    }
+    return set
+  } catch (err) {
+    if (err?.code === 'ER_NO_SUCH_TABLE' || err?.errno === 1146) return null
+    console.warn('[centralAuth] fetchRutsConAccesoSistema:', err.message)
+    return null
+  }
+}
+
 /** Habilita login en un sistema satélite. Best-effort si falta migración 09. */
 async function ensureAccesoSistemaCentral(usuarioId, sistema, loginHabilitado) {
   const uid = Number(usuarioId)
@@ -238,6 +263,7 @@ module.exports = {
   mapCentralToRendRol,
   canLogin,
   fetchAccesoSistema,
+  fetchRutsConAccesoSistema,
   ensureAccesoSistemaCentral,
   lookupTrabajadorIdByRut,
 }
