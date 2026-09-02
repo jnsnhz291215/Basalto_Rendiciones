@@ -4,18 +4,12 @@ const express = require('express')
 const { query } = require('../config/db')
 const { authMiddleware } = require('../middlewares/auth.middleware')
 const { checkRole, SUPER_ADMINS } = require('../middlewares/role.middleware')
-const { normalizeRut, generarPasswordTemporal } = require('../utils/mustChangePassword')
+const { normalizeRut } = require('../utils/mustChangePassword')
 const { insertNotificacion } = require('../utils/notificaciones')
-const bcrypt = require('bcryptjs')
-const { registrarAuditoria } = require('../utils/audit')
 
 const router = express.Router()
 
 router.use(authMiddleware)
-
-function isSuper(req) {
-  return SUPER_ADMINS.includes(req.user?.rol)
-}
 
 async function listInbox(req, res) {
   try {
@@ -33,20 +27,7 @@ async function listInbox(req, res) {
       [rut]
     )
 
-    // Los resets se aprueban en Turnos SPA (solicitudes_operativas).
-    // Aquí solo mostramos un aviso informativo si aún está PENDIENTE.
-    let resetPendientes = []
-    if (isSuper(req)) {
-      resetPendientes = await query(
-        `SELECT id, rut, correo_indicado, detalle, estado,
-                DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS created_at
-         FROM solicitudes_reset_password
-         WHERE estado = 'PENDIENTE'
-         ORDER BY id DESC
-         LIMIT 20`
-      )
-    }
-
+    // Resets de contraseña: cola única en Panel (/solicitudes-reset). No listar locales.
     const mapped = (items || []).map((n) => ({
       id: `n-${n.id}`,
       notif_id: n.id,
@@ -58,31 +39,8 @@ async function listInbox(req, res) {
       entidad_tipo: n.entidad_tipo,
       entidad_id: n.entidad_id,
       leida: Boolean(n.leido),
-      created_at: n.created_at
+      created_at: n.created_at,
     }))
-
-    for (const s of resetPendientes || []) {
-      mapped.push({
-        id: `reset-${s.id}`,
-        reset_id: s.id,
-        tipo: 'reset_info',
-        titulo: 'Reset pendiente (aprobar en Turnos)',
-        mensaje:
-          (s.detalle ||
-            `RUT ${s.rut}${s.correo_indicado ? ` · ${s.correo_indicado}` : ''}`) +
-          ' — Abre la campana del SPA Turnos para Aceptar/Rechazar.',
-        modulo: 'AUTH',
-        accion: 'SOLICITAR_RESET_PASSWORD',
-        entidad_tipo: 'USUARIO',
-        entidad_id: s.rut,
-        leida: false,
-        created_at: s.created_at,
-        rut: s.rut,
-        correo_indicado: s.correo_indicado
-      })
-    }
-
-    mapped.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
 
     return res.json({ success: true, items: mapped.slice(0, limit) })
   } catch (err) {
@@ -100,13 +58,7 @@ async function countInbox(req, res) {
          AND leido = 0`,
       [rut]
     )
-    let count = Number(rows[0]?.c || 0)
-    if (isSuper(req)) {
-      const pend = await query(
-        `SELECT COUNT(*) AS c FROM solicitudes_reset_password WHERE estado = 'PENDIENTE'`
-      )
-      count += Number(pend[0]?.c || 0)
-    }
+    const count = Number(rows[0]?.c || 0)
     return res.json({ success: true, count })
   } catch (err) {
     console.error('[notificaciones] count:', err)
@@ -176,7 +128,7 @@ async function createNotificacion(req, res) {
         titulo,
         mensaje,
         modulo: 'AVISO',
-        accion: 'AVISO_PERSONAL'
+        accion: 'AVISO_PERSONAL',
       })
       created += 1
     }
@@ -188,110 +140,14 @@ async function createNotificacion(req, res) {
   }
 }
 
-/** Super Admin: aprobar/rechazar solicitud de reset. */
-async function resolverReset(req, res) {
-  try {
-    const id = Number(req.params.id)
-    const accion = String(req.body?.accion || '').toUpperCase()
-    if (!Number.isInteger(id) || id <= 0) {
-      return res.status(400).json({ success: false, error: 'ID inválido' })
-    }
-    if (accion !== 'APROBAR' && accion !== 'RECHAZAR') {
-      return res.status(400).json({ success: false, error: 'accion debe ser APROBAR o RECHAZAR' })
-    }
-
-    const rows = await query(
-      `SELECT * FROM solicitudes_reset_password WHERE id = ? LIMIT 1`,
-      [id]
-    )
-    const sol = rows[0]
-    if (!sol) return res.status(404).json({ success: false, error: 'Solicitud no encontrada' })
-    if (sol.estado !== 'PENDIENTE') {
-      return res.status(409).json({ success: false, error: 'La solicitud ya fue resuelta' })
-    }
-
-    if (accion === 'RECHAZAR') {
-      await query(
-        `UPDATE solicitudes_reset_password
-         SET estado = 'RECHAZADA', resolved_by = ?, resolved_at = NOW()
-         WHERE id = ?`,
-        [req.user.id, id]
-      )
-      await insertNotificacion({
-        rutDestinatario: sol.rut,
-        titulo: 'Reset rechazado',
-        mensaje: 'Tu solicitud de restablecimiento de contraseña fue rechazada.',
-        modulo: 'AUTH',
-        accion: 'RESET_RECHAZADO',
-        entidadTipo: 'SOLICITUD_RESET',
-        entidadId: id
-      })
-      return res.json({ success: true, estado: 'RECHAZADA' })
-    }
-
-    const usuarios = await query(
-      `SELECT id, rut, correo, rol FROM usuarios
-       WHERE REPLACE(REPLACE(UPPER(rut), '.', ''), '-', '') = ?
-         AND is_deleted = FALSE
-       LIMIT 1`,
-      [normalizeRut(sol.rut)]
-    )
-    const dest = usuarios[0]
-    if (!dest) {
-      return res.status(404).json({ success: false, error: 'Usuario destino no encontrado' })
-    }
-
-    const passwordTemporal = generarPasswordTemporal(12)
-    const hash = await bcrypt.hash(passwordTemporal, 10)
-    await query(
-      `UPDATE usuarios
-       SET password_hash = ?,
-           must_change_password = 1,
-           temp_password_grace_started_at = NULL
-       WHERE id = ?`,
-      [hash, dest.id]
-    )
-    await query(
-      `UPDATE solicitudes_reset_password
-       SET estado = 'APROBADA', resolved_by = ?, resolved_at = NOW()
-       WHERE id = ?`,
-      [req.user.id, id]
-    )
-
-    await insertNotificacion({
-      rutDestinatario: dest.rut,
-      titulo: 'Clave temporal lista',
-      mensaje:
-        'Un administrador aprobó tu solicitud. Te entregarán una clave temporal; deberás cambiarla al ingresar.',
-      modulo: 'AUTH',
-      accion: 'RESET_APROBADO',
-      entidadTipo: 'SOLICITUD_RESET',
-      entidadId: id
-    })
-
-    await registrarAuditoria(
-      req.user.id,
-      req.user.nombre,
-      'MODIFICAR',
-      'Usuarios',
-      `Aprobó reset de contraseña para RUT ${dest.rut}`
-    )
-
-    return res.json({
-      success: true,
-      estado: 'APROBADA',
-      password_temporal: passwordTemporal,
-      usuario: {
-        id: dest.id,
-        rut: dest.rut,
-        correo: dest.correo,
-        rol: dest.rol
-      }
-    })
-  } catch (err) {
-    console.error('[notificaciones] resolver reset:', err)
-    return res.status(500).json({ success: false, error: 'No se pudo resolver la solicitud' })
-  }
+/** Deprecado: reset unificado en Panel administrativo. */
+async function resolverReset(_req, res) {
+  return res.status(410).json({
+    success: false,
+    code: 'reset_password_moved',
+    error:
+      'El restablecimiento de contraseña se gestiona en el Panel administrativo (solicitudes-reset).',
+  })
 }
 
 router.get('/inbox', listInbox)

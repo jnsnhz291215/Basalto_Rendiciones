@@ -1,15 +1,20 @@
 const { query } = require('../config/db')
+const { authUsesCentral, resolveAuthSource } = require('../config/runtimeConfig')
 
 /**
  * Inserta un evento inmutable en audit_logs.
- * Con identidad Central: central_usuario_id + actor_rut; usuario_id local queda NULL.
+ * Con AUTH_SOURCE=central: usuario_id local queda NULL; se guarda central_usuario_id / actor_rut.
+ * No tumba la request si falla la inserción.
  */
 async function registrarAuditoria(usuario_id, usuario_nombre, accion, modulo, detalle, opts = {}) {
   const identitySource = String(opts.identity_source || '').toLowerCase()
-  const isCentral = identitySource === 'central'
-  const centralId = opts.central_usuario_id ?? (isCentral ? usuario_id : null)
+  const forceCentral =
+    identitySource === 'central' ||
+    (authUsesCentral() && resolveAuthSource() === 'central')
+
+  const centralId = opts.central_usuario_id ?? (forceCentral ? usuario_id : null)
   const actorRut = opts.actor_rut ?? null
-  const localId = isCentral ? null : (usuario_id ?? null)
+  const localId = forceCentral ? null : (usuario_id ?? null)
 
   try {
     await query(
@@ -26,7 +31,6 @@ async function registrarAuditoria(usuario_id, usuario_nombre, accion, modulo, de
       ]
     )
   } catch (err) {
-    // Columnas nuevas aún no migradas, o FK a usuarios local con id Central.
     if (
       err?.code === 'ER_BAD_FIELD_ERROR' ||
       err?.errno === 1054 ||
@@ -38,7 +42,8 @@ async function registrarAuditoria(usuario_id, usuario_nombre, accion, modulo, de
           `INSERT INTO audit_logs (usuario_id, usuario_nombre, accion, modulo, detalle)
            VALUES (?, ?, ?, ?, ?)`,
           [
-            localId,
+            // Nunca insertar id Central en FK local
+            forceCentral ? null : localId,
             usuario_nombre ?? null,
             accion,
             modulo,
@@ -46,13 +51,27 @@ async function registrarAuditoria(usuario_id, usuario_nombre, accion, modulo, de
           ]
         )
       } catch (fallbackErr) {
-        // No tumbar login/mutaciones por falla de auditoría
         console.error('[registrarAuditoria] fallback FAIL:', fallbackErr.message)
       }
       return
     }
     console.error('[registrarAuditoria] FAIL:', err.message)
   }
+}
+
+/**
+ * Atajo: pasa req para rellenar actor Central (rut + identity).
+ */
+function auditOptsFromReq(req) {
+  const source = String(req?.user?.identity_source || '').toLowerCase()
+  if (source === 'central' || (authUsesCentral() && resolveAuthSource() === 'central')) {
+    return {
+      identity_source: 'central',
+      central_usuario_id: req.user?.central_id ?? req.user?.id ?? null,
+      actor_rut: req.user?.rut ?? null,
+    }
+  }
+  return {}
 }
 
 /** Normaliza valor escalar para comparar / mostrar en detalle. */
@@ -129,6 +148,7 @@ function formatearDetalleCambio(identidad, cambios) {
 
 module.exports = {
   registrarAuditoria,
+  auditOptsFromReq,
   identificarEntidad,
   pushCambio,
   pushPasswordReset,

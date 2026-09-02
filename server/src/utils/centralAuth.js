@@ -127,14 +127,33 @@ async function findCentralUsuario(identifier) {
   const raw = String(identifier || '').trim()
   if (!raw) return null
   const rut = limpiarRut(raw)
-  const rows = await queryCentral(
-    `SELECT id, rut, nombre, correo, password_hash, activo, is_deleted,
-            must_change_password, session_version, temp_password_grace_started_at
-     FROM usuarios
-     WHERE rut = ? OR LOWER(correo) = LOWER(?)
-     LIMIT 1`,
-    [rut, raw],
-  )
+  let rows
+  try {
+    rows = await queryCentral(
+      `SELECT id, rut, nombre, correo, password_hash, activo, is_deleted,
+              must_change_password, session_version, temp_password_grace_started_at,
+              accepted_email, accepted_privacy_at, persona_confianza
+       FROM usuarios
+       WHERE rut = ? OR LOWER(correo) = LOWER(?)
+       LIMIT 1`,
+      [rut, raw],
+    )
+  } catch (err) {
+    if (err?.code !== 'ER_BAD_FIELD_ERROR' && err?.errno !== 1054) throw err
+    rows = await queryCentral(
+      `SELECT id, rut, nombre, correo, password_hash, activo, is_deleted,
+              must_change_password, session_version, temp_password_grace_started_at
+       FROM usuarios
+       WHERE rut = ? OR LOWER(correo) = LOWER(?)
+       LIMIT 1`,
+      [rut, raw],
+    )
+    if (rows?.[0]) {
+      rows[0].accepted_email = null
+      rows[0].accepted_privacy_at = null
+      rows[0].persona_confianza = 0
+    }
+  }
   if (!rows?.[0]) return null
   const usuario = rows[0]
   const roles = await fetchRolesForUsuario(usuario.id)

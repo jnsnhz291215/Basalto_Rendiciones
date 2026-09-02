@@ -132,7 +132,14 @@ async function syncActivoToCentral({ rutLimpio, activo, bumpSession = true }) {
   }
 }
 
-async function syncProfileToCentral({ rutLimpio, nombre, correo, bumpSessionOnEmailChange = true }) {
+async function syncProfileToCentral({
+  rutLimpio,
+  nombre,
+  correo,
+  acceptedEmail,
+  acceptedPrivacyAt,
+  bumpSessionOnEmailChange = true,
+}) {
   if (!shouldSyncToCentral()) return { ok: true, skipped: true }
   const rut = limpiarRut(rutLimpio)
   if (!rut) return { ok: true, skipped: true }
@@ -155,13 +162,42 @@ async function syncProfileToCentral({ rutLimpio, nombre, correo, bumpSessionOnEm
       sets.push('correo = ?')
       params.push(correo ? String(correo).trim().toLowerCase() : null)
     }
+    if (acceptedEmail !== undefined) {
+      sets.push('accepted_email = ?')
+      params.push(acceptedEmail)
+    }
+    if (acceptedPrivacyAt !== undefined) {
+      sets.push('accepted_privacy_at = ?')
+      params.push(acceptedPrivacyAt)
+    }
     if (bumpSessionOnEmailChange && emailChanged) {
       sets.push('session_version = session_version + 1')
     }
     if (!sets.length) return { ok: true, skipped: true }
 
     params.push(rut)
-    await queryCentral(`UPDATE usuarios SET ${sets.join(', ')} WHERE rut = ?`, params)
+    try {
+      await queryCentral(`UPDATE usuarios SET ${sets.join(', ')} WHERE rut = ?`, params)
+    } catch (err) {
+      if (err?.code !== 'ER_BAD_FIELD_ERROR' && err?.errno !== 1054) throw err
+      // Prod sin columnas de consentimiento aún: actualizar solo perfil básico
+      const basicSets = []
+      const basicParams = []
+      if (nombre) {
+        basicSets.push('nombre = ?')
+        basicParams.push(String(nombre).trim())
+      }
+      if (correo !== undefined) {
+        basicSets.push('correo = ?')
+        basicParams.push(correo ? String(correo).trim().toLowerCase() : null)
+      }
+      if (bumpSessionOnEmailChange && emailChanged) {
+        basicSets.push('session_version = session_version + 1')
+      }
+      if (!basicSets.length) return { ok: true, skipped: true, reason: 'consent_cols_missing' }
+      basicParams.push(rut)
+      await queryCentral(`UPDATE usuarios SET ${basicSets.join(', ')} WHERE rut = ?`, basicParams)
+    }
     return { ok: true }
   } catch (err) {
     authWarn('central', 'sync perfil FAIL', `rut=${rut}`)

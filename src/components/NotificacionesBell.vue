@@ -24,14 +24,8 @@
           <div class="notif-bell__item-title">{{ item.titulo }}</div>
           <p class="notif-bell__item-msg">{{ item.mensaje }}</p>
           <div class="notif-bell__item-meta">{{ item.created_at || '' }}</div>
-          <div v-if="item.tipo === 'reset' && canResolve" class="notif-bell__actions">
-            <button type="button" class="notif-bell__action notif-bell__action--ok" @click="onApprove(item)">
-              Aprobar
-            </button>
-            <button type="button" class="notif-bell__action" @click="onReject(item)">Rechazar</button>
-          </div>
           <button
-            v-else-if="item.notif_id && !item.leida"
+            v-if="item.notif_id && !item.leida"
             type="button"
             class="notif-bell__link"
             @click="onMarkOne(item)"
@@ -56,10 +50,9 @@ import {
   fetchNotificacionesInbox,
   markAllNotificacionesLeidas,
   markNotificacionLeida,
-  resolverResetSolicitud
 } from '../api/notificaciones'
 
-const emit = defineEmits(['enviar', 'reset-aprobado'])
+const emit = defineEmits(['enviar'])
 
 const { user } = useAuth()
 const ui = useUi()
@@ -76,7 +69,6 @@ const isSuper = computed(() => {
   const r = user.value?.rol || ''
   return r === 'SUPER_ADMIN' || r === 'SUPER_ADMIN_DEV'
 })
-const canResolve = computed(() => isSuper.value)
 
 async function refresh() {
   if (!user.value) {
@@ -126,47 +118,6 @@ async function onMarkOne(item) {
     await refresh()
   } catch (e) {
     ui.showErrorToast('Error', e)
-  }
-}
-
-async function onApprove(item) {
-  const ok = await ui.confirm({
-    title: 'Aprobar reset',
-    message: `¿Aprobar reset de contraseña para RUT ${item.rut || item.entidad_id}? Se generará una clave temporal.`,
-    okLabel: 'Aprobar',
-    danger: false
-  })
-  if (!ok) return
-  ui.showLoading()
-  try {
-    const data = await resolverResetSolicitud(item.reset_id, 'APROBAR')
-    emit('reset-aprobado', data)
-    ui.showToast('Reset aprobado. Copia la clave temporal.', 'success')
-    await refresh()
-  } catch (e) {
-    ui.showErrorToast('Error', e)
-  } finally {
-    ui.hideLoading()
-  }
-}
-
-async function onReject(item) {
-  const ok = await ui.confirm({
-    title: 'Rechazar reset',
-    message: `¿Rechazar la solicitud de RUT ${item.rut || item.entidad_id}?`,
-    okLabel: 'Rechazar',
-    danger: true
-  })
-  if (!ok) return
-  ui.showLoading()
-  try {
-    await resolverResetSolicitud(item.reset_id, 'RECHAZAR')
-    ui.showToast('Solicitud rechazada', 'info')
-    await refresh()
-  } catch (e) {
-    ui.showErrorToast('Error', e)
-  } finally {
-    ui.hideLoading()
   }
 }
 

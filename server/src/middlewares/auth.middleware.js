@@ -16,22 +16,46 @@ function getJwtSecret() {
 
 async function buildCentralReqUser(payload, tokenSessionVersion) {
   const rutLimpio = limpiarRut(payload.rut)
-  const centralRows = await queryCentral(
-    `SELECT id, rut, correo, nombre, must_change_password, temp_password_grace_started_at, activo
-     FROM usuarios
-     WHERE id = ? OR rut = ?
-     LIMIT 1`,
-    [payload.id, rutLimpio],
-  )
-  const cu = centralRows?.[0]
+  let cu
+  try {
+    const centralRows = await queryCentral(
+      `SELECT id, rut, correo, nombre, must_change_password, temp_password_grace_started_at,
+              activo, accepted_email, accepted_privacy_at, persona_confianza
+       FROM usuarios
+       WHERE id = ? OR rut = ?
+       LIMIT 1`,
+      [payload.id, rutLimpio],
+    )
+    cu = centralRows?.[0]
+  } catch (err) {
+    if (err?.code !== 'ER_BAD_FIELD_ERROR' && err?.errno !== 1054) throw err
+    const centralRows = await queryCentral(
+      `SELECT id, rut, correo, nombre, must_change_password, temp_password_grace_started_at, activo
+       FROM usuarios
+       WHERE id = ? OR rut = ?
+       LIMIT 1`,
+      [payload.id, rutLimpio],
+    )
+    cu = centralRows?.[0]
+    if (cu) {
+      cu.accepted_email = null
+      cu.accepted_privacy_at = null
+      cu.persona_confianza = 0
+    }
+  }
   if (!cu || Number(cu.activo) !== 1) return null
 
-  const trabajador = await lookupTrabajadorIdByRut(rutLimpio)
+  let trabajador = null
+  try {
+    trabajador = await lookupTrabajadorIdByRut(rutLimpio)
+  } catch {
+    trabajador = null
+  }
   const userForFlags = {
     must_change_password: cu.must_change_password,
     temp_password_grace_started_at: cu.temp_password_grace_started_at,
-    accepted_email: null,
-    accepted_privacy_at: null,
+    accepted_email: cu.accepted_email || null,
+    accepted_privacy_at: cu.accepted_privacy_at || null,
   }
   const flags = buildUserAuthFlags(userForFlags)
 
@@ -43,7 +67,7 @@ async function buildCentralReqUser(payload, tokenSessionVersion) {
     correo: cu.correo,
     rol: payload.rol,
     nombre: payload.nombre || cu.nombre || cu.correo,
-    persona_confianza: Boolean(trabajador?.persona_confianza),
+    persona_confianza: Boolean(cu.persona_confianza || trabajador?.persona_confianza),
     must_change_password: flags.must_change_password,
     temp_password_grace_started_at: flags.temp_password_grace_started_at,
     temp_password_days_left: flags.temp_password_days_left,

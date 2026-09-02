@@ -3,6 +3,7 @@
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 const { query } = require('../config/db')
+const { queryCentral } = require('../config/dbCentral')
 const { getJwtSecret } = require('../middlewares/auth.middleware')
 const { registrarAuditoria } = require('../utils/audit')
 const { resolveAuthSource, authUsesCentral } = require('../config/runtimeConfig')
@@ -18,6 +19,37 @@ const {
   asFlag,
   EXPIRED_MESSAGE
 } = require('../utils/mustChangePassword')
+
+async function loadCentralUsuarioForMe(userId, rutLimpio) {
+  try {
+    const rows = await queryCentral(
+      `SELECT id, rut, correo, nombre, password_hash, activo, must_change_password,
+              temp_password_grace_started_at, accepted_email, accepted_privacy_at, persona_confianza
+       FROM usuarios
+       WHERE id = ? OR rut = ?
+       LIMIT 1`,
+      [userId, rutLimpio],
+    )
+    return rows?.[0] || null
+  } catch (err) {
+    if (err?.code !== 'ER_BAD_FIELD_ERROR' && err?.errno !== 1054) throw err
+    const rows = await queryCentral(
+      `SELECT id, rut, correo, nombre, password_hash, activo, must_change_password,
+              temp_password_grace_started_at
+       FROM usuarios
+       WHERE id = ? OR rut = ?
+       LIMIT 1`,
+      [userId, rutLimpio],
+    )
+    const u = rows?.[0] || null
+    if (u) {
+      u.accepted_email = null
+      u.accepted_privacy_at = null
+      u.persona_confianza = 0
+    }
+    return u
+  }
+}
 
 /**
  * bcryptjs acepta $2a$/$2b$; hashes PHP suelen venir como $2y$ (compatibles).
@@ -162,6 +194,8 @@ async function tryLoginViaCentral(identifier, plain) {
       persona_confianza: Boolean(trabajador?.persona_confianza),
       must_change_password: usuario.must_change_password,
       temp_password_grace_started_at: usuario.temp_password_grace_started_at,
+      accepted_email: usuario.accepted_email || null,
+      accepted_privacy_at: usuario.accepted_privacy_at || null,
     }
 
     const flags = buildUserAuthFlags(mergedUser)
@@ -373,6 +407,7 @@ async function me(req, res) {
 /**
  * Actualiza correo, contraseña y/o consentimientos.
  * Body: { correo?, password_actual?, password_nueva?, accepted_privacy?, accepted_email? }
+ * Con identity_source=central escribe en Basaltodrilling_Central (no usuarios local por id).
  */
 async function updateMe(req, res) {
   try {
@@ -383,20 +418,45 @@ async function updateMe(req, res) {
       accepted_privacy,
       accepted_email: acceptedEmailFlag
     } = req.body || {}
+    const identitySource = String(req.user.identity_source || 'local').toLowerCase()
+    const isCentral = identitySource === 'central' && authUsesCentral()
     const userId = req.user.id
+    const rutLimpio = limpiarRut(req.user.rut)
 
-    const rows = await query(
-      `SELECT id, rut, correo, password_hash, rol, trabajador_id, estado,
-              persona_confianza, must_change_password,
-              temp_password_grace_started_at, accepted_email, accepted_privacy_at
-       FROM usuarios
-       WHERE id = ? AND is_deleted = FALSE
-       LIMIT 1`,
-      [userId]
-    )
-    const user = rows[0]
-    if (!user || user.estado !== 'activo') {
-      return res.status(401).json({ error: 'Unauthorized' })
+    let user
+    if (isCentral) {
+      const cu = await loadCentralUsuarioForMe(userId, rutLimpio)
+      if (!cu || Number(cu.activo) !== 1) {
+        return res.status(401).json({ error: 'Unauthorized' })
+      }
+      user = {
+        id: cu.id,
+        rut: cu.rut || rutLimpio,
+        correo: cu.correo,
+        password_hash: cu.password_hash,
+        rol: req.user.rol,
+        trabajador_id: req.user.trabajador_id,
+        estado: 'activo',
+        persona_confianza: cu.persona_confianza,
+        must_change_password: cu.must_change_password,
+        temp_password_grace_started_at: cu.temp_password_grace_started_at,
+        accepted_email: cu.accepted_email,
+        accepted_privacy_at: cu.accepted_privacy_at,
+      }
+    } else {
+      const rows = await query(
+        `SELECT id, rut, correo, password_hash, rol, trabajador_id, estado,
+                persona_confianza, must_change_password,
+                temp_password_grace_started_at, accepted_email, accepted_privacy_at
+         FROM usuarios
+         WHERE id = ? AND is_deleted = FALSE
+         LIMIT 1`,
+        [userId]
+      )
+      user = rows[0]
+      if (!user || user.estado !== 'activo') {
+        return res.status(401).json({ error: 'Unauthorized' })
+      }
     }
 
     let nextCorreo = user.correo
@@ -418,7 +478,6 @@ async function updateMe(req, res) {
         return res.status(400).json({ error: 'password_actual es requerida' })
       }
       if (password_actual) {
-        const identitySource = req.user.identity_source || 'local'
         const ok = await verifyCurrentPasswordForChange({
           rutLimpio: user.rut,
           passwordActual: password_actual,
@@ -446,7 +505,6 @@ async function updateMe(req, res) {
       nextAcceptedPrivacy = new Date()
     }
 
-    // Si cambia el correo, invalidar accepted_email previo salvo que se re-acepte ahora
     if (
       correo !== undefined &&
       String(user.correo || '').trim().toLowerCase() !== String(nextCorreo).trim().toLowerCase() &&
@@ -455,45 +513,83 @@ async function updateMe(req, res) {
       nextAcceptedEmail = null
     }
 
-    await query(
-      `UPDATE usuarios
-       SET correo = ?,
-           password_hash = ?,
-           must_change_password = ?,
-           temp_password_grace_started_at = ?,
-           accepted_email = ?,
-           accepted_privacy_at = ?
-       WHERE id = ? AND is_deleted = FALSE`,
-      [
-        nextCorreo,
-        nextHash,
-        clearMustChange ? 0 : asFlag(user.must_change_password) ? 1 : 0,
-        clearMustChange ? null : user.temp_password_grace_started_at,
-        nextAcceptedEmail,
-        nextAcceptedPrivacy,
-        userId
-      ]
-    )
-
-    if (quiereCambiarClave) {
-      const identitySource = req.user.identity_source || 'local'
-      const syncResult = await syncPasswordHashToCentral({
-        rutLimpio: user.rut,
-        passwordHash: nextHash,
-        mustChangePassword: clearMustChange ? false : asFlag(user.must_change_password),
-        clearGrace: clearMustChange,
-        requireOk: identitySource === 'central',
-      })
-      if (identitySource === 'central' && !syncResult.ok) {
-        return res.status(500).json({ error: 'No se pudo sincronizar la contraseña con identidad Central' })
+    if (isCentral) {
+      const sets = ['correo = ?']
+      const params = [nextCorreo]
+      if (quiereCambiarClave) {
+        sets.push('password_hash = ?')
+        params.push(nextHash)
+        sets.push('must_change_password = ?')
+        params.push(clearMustChange ? 0 : asFlag(user.must_change_password) ? 1 : 0)
+        sets.push('temp_password_grace_started_at = ?')
+        params.push(clearMustChange ? null : user.temp_password_grace_started_at)
       }
-    }
-    if (correo !== undefined) {
-      await syncProfileToCentral({
-        rutLimpio: user.rut,
-        nombre: req.user.nombre,
-        correo: nextCorreo,
-      })
+      sets.push('accepted_email = ?')
+      params.push(nextAcceptedEmail)
+      sets.push('accepted_privacy_at = ?')
+      params.push(nextAcceptedPrivacy)
+      params.push(user.id)
+
+      try {
+        await queryCentral(`UPDATE usuarios SET ${sets.join(', ')} WHERE id = ?`, params)
+      } catch (err) {
+        if (err?.code !== 'ER_BAD_FIELD_ERROR' && err?.errno !== 1054) throw err
+        // Consent columns missing: update correo (+ password) only
+        const basicSets = ['correo = ?']
+        const basicParams = [nextCorreo]
+        if (quiereCambiarClave) {
+          basicSets.push('password_hash = ?')
+          basicParams.push(nextHash)
+          basicSets.push('must_change_password = ?')
+          basicParams.push(clearMustChange ? 0 : asFlag(user.must_change_password) ? 1 : 0)
+          basicSets.push('temp_password_grace_started_at = ?')
+          basicParams.push(clearMustChange ? null : user.temp_password_grace_started_at)
+        }
+        basicParams.push(user.id)
+        await queryCentral(`UPDATE usuarios SET ${basicSets.join(', ')} WHERE id = ?`, basicParams)
+      }
+    } else {
+      await query(
+        `UPDATE usuarios
+         SET correo = ?,
+             password_hash = ?,
+             must_change_password = ?,
+             temp_password_grace_started_at = ?,
+             accepted_email = ?,
+             accepted_privacy_at = ?
+         WHERE id = ? AND is_deleted = FALSE`,
+        [
+          nextCorreo,
+          nextHash,
+          clearMustChange ? 0 : asFlag(user.must_change_password) ? 1 : 0,
+          clearMustChange ? null : user.temp_password_grace_started_at,
+          nextAcceptedEmail,
+          nextAcceptedPrivacy,
+          userId
+        ]
+      )
+
+      if (quiereCambiarClave) {
+        const syncResult = await syncPasswordHashToCentral({
+          rutLimpio: user.rut,
+          passwordHash: nextHash,
+          mustChangePassword: clearMustChange ? false : asFlag(user.must_change_password),
+          clearGrace: clearMustChange,
+          requireOk: false,
+        })
+        if (!syncResult.ok && !syncResult.skipped) {
+          authWarn('central', 'sync password tras updateMe falló', `rut=${user.rut}`)
+        }
+      }
+      if (correo !== undefined) {
+        await syncProfileToCentral({
+          rutLimpio: user.rut,
+          nombre: req.user.nombre,
+          correo: nextCorreo,
+          acceptedEmail: nextAcceptedEmail,
+          acceptedPrivacyAt: nextAcceptedPrivacy,
+        })
+      }
     }
 
     await registrarAuditoria(
@@ -503,7 +599,10 @@ async function updateMe(req, res) {
       'Perfil',
       quiereCambiarClave
         ? `Actualizó correo/clave (correo=${nextCorreo})`
-        : `Actualizó perfil (correo=${nextCorreo})`
+        : `Actualizó perfil (correo=${nextCorreo})`,
+      isCentral
+        ? { central_usuario_id: userId, actor_rut: rutLimpio, identity_source: 'central' }
+        : {}
     )
 
     const updated = {
@@ -531,7 +630,37 @@ async function updateMe(req, res) {
 /** Inicia (o confirma) la gracia de 7 días tras dismiss del modal. */
 async function dismissTempPassword(req, res) {
   try {
+    const identitySource = String(req.user.identity_source || 'local').toLowerCase()
+    const isCentral = identitySource === 'central' && authUsesCentral()
     const userId = req.user.id
+    const rutLimpio = limpiarRut(req.user.rut)
+
+    if (isCentral) {
+      const cu = await loadCentralUsuarioForMe(userId, rutLimpio)
+      if (!cu) return res.status(401).json({ error: 'Unauthorized' })
+      if (!asFlag(cu.must_change_password)) {
+        return res.json({ ok: true, must_change_password: false })
+      }
+      if (!cu.temp_password_grace_started_at) {
+        await queryCentral(
+          `UPDATE usuarios SET temp_password_grace_started_at = NOW() WHERE id = ?`,
+          [cu.id],
+        )
+      }
+      const refreshed = await loadCentralUsuarioForMe(userId, rutLimpio)
+      return res.json({
+        ok: true,
+        user: publicUserPayload(
+          {
+            ...refreshed,
+            rol: req.user.rol,
+            trabajador_id: req.user.trabajador_id,
+          },
+          req.user.nombre,
+        ),
+      })
+    }
+
     const rows = await query(
       `SELECT id, must_change_password, temp_password_grace_started_at
        FROM usuarios WHERE id = ? AND is_deleted = FALSE LIMIT 1`,

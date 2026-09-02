@@ -8,7 +8,6 @@
       <div class="dash-header-actions">
         <NotificacionesBell
           @enviar="showEnviarAviso = true"
-          @reset-aprobado="onResetAprobado"
         />
         <div class="dash-user-menu" ref="userMenuEl">
           <button
