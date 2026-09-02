@@ -176,7 +176,11 @@ export async function login(identifier, password, mode = 'rut') {
   })
 
   if (!res.ok || !data?.token || !data?.user) {
-    throw new Error(data?.error || data?.message || 'Credenciales inválidas')
+    const err = new Error(data?.error || data?.message || 'Credenciales inválidas')
+    err.code = data?.code || ''
+    err.can_request_access = Boolean(data?.can_request_access)
+    err.status = res.status
+    throw err
   }
 
   setToken(data.token)

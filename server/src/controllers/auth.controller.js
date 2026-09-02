@@ -163,7 +163,11 @@ async function tryLoginViaCentral(identifier, plain) {
         return {
           error: {
             status: 403,
-            body: { error: 'No tienes acceso habilitado a Rendiciones. Contacta a un administrador.' },
+            body: {
+              error: 'No tienes acceso habilitado a Rendiciones. Puedes solicitar acceso a un administrador.',
+              code: 'sistema_disabled',
+              can_request_access: true,
+            },
           },
         }
       }

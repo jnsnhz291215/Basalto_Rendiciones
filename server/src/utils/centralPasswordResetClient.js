@@ -59,8 +59,46 @@ async function forwardSolicitarResetPassword({ rut, email, origen, detalle }) {
   return { ok: res.ok, status: res.status, body }
 }
 
+/**
+ * @param {{ rut: string, sistema: 'turnos'|'rendiciones', origen?: string, detalle?: string }} opts
+ */
+async function forwardSolicitarAccesoSistema({ rut, sistema, origen, detalle }) {
+  const base = getPanelBaseUrl()
+  if (!base) {
+    const err = new Error('Panel URL no configurada (CENTRAL_MAIL_URL / PANEL_ADMIN_URL)')
+    err.code = 'panel_url_missing'
+    throw err
+  }
+
+  const url = `${base}/api/public/solicitar-acceso-sistema`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'X-Acceso-Origen': String(origen || 'panel'),
+    },
+    body: JSON.stringify({
+      rut,
+      sistema,
+      origen: origen || 'panel',
+      detalle: detalle || undefined,
+    }),
+  })
+
+  let body = null
+  try {
+    body = await res.json()
+  } catch {
+    body = { success: false, error: 'Respuesta inválida del Panel' }
+  }
+
+  return { ok: res.ok, status: res.status, body }
+}
+
 module.exports = {
   getPanelBaseUrl,
   isCentralPasswordResetConfigured,
   forwardSolicitarResetPassword,
+  forwardSolicitarAccesoSistema,
 }

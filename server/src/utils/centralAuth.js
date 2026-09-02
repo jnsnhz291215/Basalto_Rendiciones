@@ -89,6 +89,31 @@ async function fetchAccesoSistema(usuarioId, sistema) {
   }
 }
 
+/** Habilita login en un sistema satélite. Best-effort si falta migración 09. */
+async function ensureAccesoSistemaCentral(usuarioId, sistema, loginHabilitado) {
+  const uid = Number(usuarioId)
+  if (!Number.isFinite(uid) || uid <= 0) {
+    return { ok: true, skipped: true, reason: 'invalid_args' }
+  }
+  const sys = String(sistema || '').trim().toLowerCase()
+  if (!sys) return { ok: true, skipped: true, reason: 'invalid_args' }
+
+  try {
+    await queryCentral(
+      `INSERT INTO usuario_acceso_sistema (usuario_id, sistema, login_habilitado)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE login_habilitado = VALUES(login_habilitado)`,
+      [uid, sys, loginHabilitado ? 1 : 0],
+    )
+    return { ok: true }
+  } catch (err) {
+    if (err?.code === 'ER_NO_SUCH_TABLE' || err?.errno === 1146) {
+      return { ok: true, skipped: true, reason: 'table_missing' }
+    }
+    return { ok: false, reason: 'db_error' }
+  }
+}
+
 /**
  * Resuelve ficha de negocio local por RUT.
  * persona_confianza vive en usuarios (no en trabajadores).
@@ -213,5 +238,6 @@ module.exports = {
   mapCentralToRendRol,
   canLogin,
   fetchAccesoSistema,
+  ensureAccesoSistemaCentral,
   lookupTrabajadorIdByRut,
 }

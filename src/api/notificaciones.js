@@ -65,6 +65,22 @@ export async function solicitarResetPassword({ rut, email, website_hp = '' }) {
   return data
 }
 
+export async function solicitarAccesoSistema({ rut, website_hp = '' }) {
+  const { res, data } = await apiFetch('/api/public/solicitar-acceso-sistema', {
+    method: 'POST',
+    auth: false,
+    body: JSON.stringify({ rut, sistema: 'rendiciones', website_hp })
+  })
+  if (res.status === 409 || res.status === 429) {
+    const err = new Error(data?.error || data?.message || 'No se pudo solicitar')
+    err.status = res.status
+    err.code = data?.code || ''
+    throw err
+  }
+  if (!res.ok) throw new Error(data?.error || data?.message || 'No se pudo solicitar el acceso')
+  return data
+}
+
 export async function dismissTempPassword() {
   const { res, data } = await apiFetch('/api/auth/temp-password/dismiss', {
     method: 'POST'

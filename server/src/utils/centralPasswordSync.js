@@ -2,7 +2,7 @@
 
 const { queryCentral, isCentralConfigured } = require('../config/dbCentral')
 const { authUsesCentral } = require('../config/runtimeConfig')
-const { findCentralUsuario, limpiarRut } = require('./centralAuth')
+const { findCentralUsuario, limpiarRut, ensureAccesoSistemaCentral } = require('./centralAuth')
 const { checkPasswordAny } = require('./passwordCheck')
 const { authLog, authWarn } = require('./authLogger')
 
@@ -53,6 +53,7 @@ async function syncPasswordHashToCentral({
       authWarn('central', 'dual-write password omitido: sin fila usuarios', `rut=${rut}`)
       return { ok: true, skipped: true, reason: 'not_in_central' }
     }
+    const centralUsuarioId = rows[0].id
 
     const sets = ['password_hash = ?']
     const params = [passwordHash]
@@ -71,6 +72,7 @@ async function syncPasswordHashToCentral({
       [rut],
     )
     const sessionVersion = Number(versionRows?.[0]?.session_version) || 1
+    await ensureAccesoSistemaCentral(centralUsuarioId, 'rendiciones', true)
     authLog('central', 'dual-write password OK', `rut=${rut} session_version=${sessionVersion}`)
     return { ok: true, sessionVersion }
   } catch (err) {

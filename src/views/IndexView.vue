@@ -106,6 +106,17 @@
 
               <p v-if="error || formError" class="error" role="alert">{{ error || formError }}</p>
 
+              <button
+                v-if="canRequestAccess && !accessRequestDone"
+                type="button"
+                class="login-forgot-btn"
+                style="margin-bottom: 0.75rem; display: block; width: 100%; text-align: center"
+                :disabled="accessRequestBusy || loading"
+                @click="requestRendicionesAccess"
+              >
+                {{ accessRequestBusy ? 'Enviando solicitud…' : 'Solicitar acceso a Rendiciones' }}
+              </button>
+
               <p class="login-forgot">
                 <button type="button" class="login-forgot-btn" @click="showResetModal = true">
                   ¿Olvidaste tu contraseña?
@@ -149,6 +160,7 @@ import { useAuth } from '../composables/useAuth'
 import { TEMP_AUTH_BYPASS } from '../TEMP_AUTH_BYPASS'
 import { cleanRut, fromRutInput } from '../utils/rut'
 import PasswordResetRequestModal from '../components/PasswordResetRequestModal.vue'
+import { solicitarAccesoSistema } from '../api/notificaciones'
 
 const { user, loading, error, bootstrapped, bootstrap, login } = useAuth()
 
@@ -162,6 +174,9 @@ const password = ref('')
 const showPassword = ref(false)
 const formError = ref('')
 const showResetModal = ref(false)
+const canRequestAccess = ref(false)
+const accessRequestBusy = ref(false)
+const accessRequestDone = ref(false)
 
 /** Solo letras, números, @ y . */
 function filterCorreoChars(value) {
@@ -189,6 +204,8 @@ function setLoginMode(mode) {
   identifier.value = ''
   rutClean.value = ''
   formError.value = ''
+  canRequestAccess.value = false
+  accessRequestDone.value = false
 }
 
 onMounted(async () => {
@@ -198,6 +215,8 @@ onMounted(async () => {
 
 async function handleLogin() {
   formError.value = ''
+  canRequestAccess.value = false
+  accessRequestDone.value = false
   const value =
     loginMode.value === 'rut'
       ? rutClean.value || cleanRut(identifier.value)
@@ -226,7 +245,33 @@ async function handleLogin() {
     password.value = ''
     redirectAfterLogin()
   } catch (e) {
-    formError.value = e.message || 'No se pudo iniciar sesión'
+    if (e?.code === 'sistema_disabled' || e?.can_request_access) {
+      formError.value =
+        e.message ||
+        'No tienes acceso habilitado a Rendiciones. Puedes solicitar acceso.'
+      canRequestAccess.value = true
+    } else {
+      formError.value = e.message || 'No se pudo iniciar sesión'
+    }
+  }
+}
+
+async function requestRendicionesAccess() {
+  const rut = rutClean.value || cleanRut(identifier.value)
+  if (!rut || loginMode.value !== 'rut') {
+    formError.value = 'Ingresa tu RUT para solicitar acceso.'
+    return
+  }
+  accessRequestBusy.value = true
+  try {
+    const data = await solicitarAccesoSistema({ rut })
+    accessRequestDone.value = true
+    canRequestAccess.value = false
+    formError.value = data?.message || 'Solicitud enviada. Un administrador la revisará.'
+  } catch (e) {
+    formError.value = e.message || 'No se pudo enviar la solicitud'
+  } finally {
+    accessRequestBusy.value = false
   }
 }
 

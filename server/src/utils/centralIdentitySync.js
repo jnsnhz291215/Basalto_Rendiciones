@@ -2,7 +2,7 @@
 
 const { queryCentral } = require('../config/dbCentral')
 const { shouldSyncToCentral } = require('./centralPasswordSync')
-const { limpiarRut } = require('./centralAuth')
+const { limpiarRut, ensureAccesoSistemaCentral } = require('./centralAuth')
 const { authLog, authWarn } = require('./authLogger')
 
 const VALID_ROLE_CODES = new Set(['trabajador', 'usuario', 'admin', 'super_admin', 'super_admin_dev'])
@@ -101,7 +101,15 @@ async function provisionCentralUsuario({
       }
     }
 
-    if (usuarioId) await ensureUsuarioRoles(usuarioId, roleList)
+    if (usuarioId) {
+      await ensureUsuarioRoles(usuarioId, roleList)
+      if (
+        passwordHash
+        && roleList.some((code) => ['usuario', 'admin', 'super_admin', 'super_admin_dev'].includes(code))
+      ) {
+        await ensureAccesoSistemaCentral(usuarioId, 'rendiciones', true)
+      }
+    }
     authLog('central', 'provision OK', `rut=${rut}`)
     return { ok: true, usuarioId }
   } catch (err) {
