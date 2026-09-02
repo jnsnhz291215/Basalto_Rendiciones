@@ -26,21 +26,32 @@ async function registrarAuditoria(usuario_id, usuario_nombre, accion, modulo, de
       ]
     )
   } catch (err) {
-    if (err?.code === 'ER_BAD_FIELD_ERROR' || err?.errno === 1054) {
-      await query(
-        `INSERT INTO audit_logs (usuario_id, usuario_nombre, accion, modulo, detalle)
-         VALUES (?, ?, ?, ?, ?)`,
-        [
-          usuario_id ?? null,
-          usuario_nombre ?? null,
-          accion,
-          modulo,
-          detalle
-        ]
-      )
+    // Columnas nuevas aún no migradas, o FK a usuarios local con id Central.
+    if (
+      err?.code === 'ER_BAD_FIELD_ERROR' ||
+      err?.errno === 1054 ||
+      err?.code === 'ER_NO_REFERENCED_ROW_2' ||
+      err?.errno === 1452
+    ) {
+      try {
+        await query(
+          `INSERT INTO audit_logs (usuario_id, usuario_nombre, accion, modulo, detalle)
+           VALUES (?, ?, ?, ?, ?)`,
+          [
+            localId,
+            usuario_nombre ?? null,
+            accion,
+            modulo,
+            detalle
+          ]
+        )
+      } catch (fallbackErr) {
+        // No tumbar login/mutaciones por falla de auditoría
+        console.error('[registrarAuditoria] fallback FAIL:', fallbackErr.message)
+      }
       return
     }
-    throw err
+    console.error('[registrarAuditoria] FAIL:', err.message)
   }
 }
 

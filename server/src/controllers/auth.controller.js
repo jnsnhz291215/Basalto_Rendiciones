@@ -144,7 +144,12 @@ async function tryLoginViaCentral(identifier, plain) {
   const { usuario, rendRol, rutLimpio } = centralResult
 
   if (mode === 'central') {
-    const trabajador = await lookupTrabajadorIdByRut(rutLimpio)
+    let trabajador = null
+    try {
+      trabajador = await lookupTrabajadorIdByRut(rutLimpio)
+    } catch (lookupErr) {
+      authWarn('central', 'lookup trabajador local omitido', lookupErr.message)
+    }
     const mergedUser = {
       id: usuario.id,
       central_id: usuario.id,
@@ -175,18 +180,22 @@ async function tryLoginViaCentral(identifier, plain) {
     )
 
     const token = issueToken(mergedUser, nombre, flags, 'central', sessionVersion)
-    await registrarAuditoria(
-      mergedUser.id,
-      nombre,
-      'LOGIN',
-      'Autenticación',
-      JSON.stringify({
-        resumen: `Inicio de sesión: ${nombre}`,
-        identity_source: 'central',
-        password_verificado: 'Basaltodrilling_Central',
-      }),
-      { central_usuario_id: mergedUser.id, actor_rut: rutLimpio, identity_source: 'central' },
-    )
+    try {
+      await registrarAuditoria(
+        mergedUser.id,
+        nombre,
+        'LOGIN',
+        'Autenticación',
+        JSON.stringify({
+          resumen: `Inicio de sesión: ${nombre}`,
+          identity_source: 'central',
+          password_verificado: 'Basaltodrilling_Central',
+        }),
+        { central_usuario_id: mergedUser.id, actor_rut: rutLimpio, identity_source: 'central' },
+      )
+    } catch (auditErr) {
+      authWarn('central', 'audit login omitida', auditErr.message)
+    }
 
     return {
       token,

@@ -69,26 +69,58 @@ async function fetchRolesForUsuario(usuarioId) {
 }
 
 async function fetchAccesoSistema(usuarioId, sistema) {
-  const rows = await queryCentral(
-    `SELECT login_habilitado
-     FROM usuario_acceso_sistema
-     WHERE usuario_id = ? AND sistema = ?
-     LIMIT 1`,
-    [usuarioId, sistema],
-  )
-  return Boolean(rows?.[0]?.login_habilitado)
+  try {
+    const rows = await queryCentral(
+      `SELECT login_habilitado
+       FROM usuario_acceso_sistema
+       WHERE usuario_id = ? AND sistema = ?
+       LIMIT 1`,
+      [usuarioId, sistema],
+    )
+    // Si la tabla aún no tiene filas para el usuario, denegar (cutover estricto).
+    // Si la tabla no existe (migración 09 pendiente), no tumbar login: asumir habilitado.
+    if (!rows?.length) return false
+    return Boolean(rows[0].login_habilitado)
+  } catch (err) {
+    if (err?.code === 'ER_NO_SUCH_TABLE' || err?.errno === 1146) {
+      return true
+    }
+    throw err
+  }
 }
 
+/**
+ * Resuelve ficha de negocio local por RUT.
+ * persona_confianza vive en usuarios (no en trabajadores).
+ */
 async function lookupTrabajadorIdByRut(rutLimpio) {
   const { query } = require('../config/db')
   const rows = await query(
-    `SELECT id, persona_confianza FROM trabajadores
+    `SELECT id FROM trabajadores
      WHERE REPLACE(REPLACE(UPPER(rut), '.', ''), '-', '') = ?
        AND is_deleted = FALSE
      LIMIT 1`,
     [rutLimpio],
   )
-  return rows?.[0] || null
+  const trabajador = rows?.[0] || null
+  if (!trabajador) return null
+
+  let personaConfianza = false
+  try {
+    const uRows = await query(
+      `SELECT persona_confianza FROM usuarios
+       WHERE REPLACE(REPLACE(UPPER(rut), '.', ''), '-', '') = ?
+         AND is_deleted = FALSE
+       LIMIT 1`,
+      [rutLimpio],
+    )
+    personaConfianza = Boolean(uRows?.[0]?.persona_confianza)
+  } catch {
+    // Columna/tabla local deprecada: default false
+    personaConfianza = false
+  }
+
+  return { id: trabajador.id, persona_confianza: personaConfianza }
 }
 
 async function findCentralUsuario(identifier) {
