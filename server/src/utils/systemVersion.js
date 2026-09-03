@@ -19,27 +19,13 @@ function writeVersion(version) {
   return cachedVersion
 }
 
-function readVersionFromDisk() {
-  try {
-    if (!fs.existsSync(VERSION_FILE)) return null
-    const raw = fs.readFileSync(VERSION_FILE, 'utf8')
-    const parsed = JSON.parse(raw)
-    const v = parsed?.version
-    return v != null && String(v).trim() !== '' ? String(v) : null
-  } catch {
-    return null
-  }
-}
-
 /**
- * Carga SYSTEM_VERSION en memoria (archivo o Date.now() inicial).
+ * Bumpea SYSTEM_VERSION en cada arranque del proceso (deploy/reinicio), para
+ * que los clientes detecten la actualización solos sin depender de un
+ * trigger manual. `bumpSystemVersion()` sigue disponible para forzar un
+ * refresh en caliente (ej. cambios de configuración sin reiniciar).
  */
 function initSystemVersion() {
-  const fromDisk = readVersionFromDisk()
-  if (fromDisk) {
-    cachedVersion = fromDisk
-    return cachedVersion
-  }
   return writeVersion(String(Date.now()))
 }
 

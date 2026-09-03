@@ -7,14 +7,14 @@
       aria-live="polite"
     >
       <p class="update-banner__text">
-        Se han realizado cambios en el sistema.
+        Se han realizado cambios en el sistema. Recargando…
       </p>
       <button
         type="button"
         class="update-banner__btn"
         @click="reloadPage"
       >
-        Recargar Página
+        Recargar ahora
       </button>
     </div>
     <div v-if="visible" class="update-banner-spacer" aria-hidden="true" />
@@ -28,12 +28,14 @@ import { getSystemVersion } from '../api/resources'
 
 const STORAGE_KEY = 'basalto_system_version'
 const POLL_MS = 45_000
+const AUTO_RELOAD_DELAY_MS = 2_500
 
 const visible = ref(false)
 const serverVersion = ref('')
 const route = useRoute()
 
 let pollTimer = null
+let autoReloadTimer = null
 
 function readLocalVersion() {
   return localStorage.getItem(STORAGE_KEY) || ''
@@ -69,15 +71,32 @@ async function checkVersion() {
       return
     }
 
-    if (compareVersions(version, local)) {
+    if (compareVersions(version, local) && !visible.value) {
       visible.value = true
+      scheduleAutoReload()
     }
   } catch {
     /* polling silencioso: no molestar si la API no responde */
   }
 }
 
+function scheduleAutoReload() {
+  if (autoReloadTimer != null) return
+  autoReloadTimer = window.setTimeout(() => {
+    autoReloadTimer = null
+    reloadPage()
+  }, AUTO_RELOAD_DELAY_MS)
+}
+
+function cancelAutoReload() {
+  if (autoReloadTimer != null) {
+    window.clearTimeout(autoReloadTimer)
+    autoReloadTimer = null
+  }
+}
+
 function reloadPage() {
+  cancelAutoReload()
   if (serverVersion.value) writeLocalVersion(serverVersion.value)
   window.location.reload()
 }
@@ -109,6 +128,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   stopPolling()
+  cancelAutoReload()
   window.dispatchEvent(new Event('rendiciones:chrome-layout'))
 })
 
