@@ -9150,18 +9150,23 @@ function onToggleEstadoPersonal(p) {
 async function onDeletePersonal(p) {
   if (!canHardDelete.value || !p?.id) return
   const msg = p.tieneUsuario
-    ? `¿Eliminar la ficha de "${p.nombre}" (${formatRut(p.rut)})? También se desactivará el acceso de usuario (soft delete).`
-    : `¿Eliminar la ficha de "${p.nombre}" (${formatRut(p.rut)})? (soft delete)`
-  if (!(await ui.confirm({ title: 'Eliminar personal', message: msg, okLabel: 'Eliminar', danger: true }))) return
+    ? `¿Ocultar la ficha de "${p.nombre}" (${formatRut(p.rut)})?\n\nSe quitará de Rendiciones y se desactivará el acceso. Podrá reactivarse desde el Panel administrativo.`
+    : `¿Ocultar la ficha de "${p.nombre}" (${formatRut(p.rut)})?`
+  if (!(await ui.confirm({ title: 'Ocultar personal', message: msg, okLabel: 'Ocultar', danger: true }))) return
   try {
     saveError.value = ''
     if (p.usuarioId) {
-      await api.deleteUsuario(p.usuarioId)
+      try {
+        await api.deleteUsuario(p.usuarioId)
+      } catch (err) {
+        const status = err?.status || err?.response?.status
+        if (status !== 410) throw err
+      }
     }
     await api.deleteTrabajador(p.id)
     await loadDashboardData()
   } catch (err) {
-    saveError.value = err?.message || 'No se pudo eliminar el personal'
+    saveError.value = err?.message || 'No se pudo ocultar el personal'
   }
 }
 

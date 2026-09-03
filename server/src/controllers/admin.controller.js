@@ -28,7 +28,8 @@ const {
 } = require('../utils/centralIdentitySync')
 const { blocksLocalUsuarioCrud, identityCentralOnlyResponse } = require('../utils/identityCentralGuard')
 const { authUsesCentral } = require('../config/runtimeConfig')
-const { fetchRutsConAccesoSistema, limpiarRut } = require('../utils/centralAuth')
+const { queryCentral } = require('../config/dbCentral')
+const { fetchRutsConAccesoSistema, limpiarRut, ensureAccesoSistemaCentral, findCentralUsuario, mapCentralToRendRol } = require('../utils/centralAuth')
 
 /** Normaliza RUT para comparar (sin puntos/guión). */
 function cleanRutValue(rut) {
@@ -337,6 +338,16 @@ async function softDeleteTrabajador(req, res) {
        WHERE id = ? AND is_deleted = FALSE`,
       [id]
     )
+    if (authUsesCentral()) {
+      try {
+        const central = await findCentralUsuario(rows[0].rut)
+        if (central?.usuario?.id) {
+          await ensureAccesoSistemaCentral(central.usuario.id, 'rendiciones', false)
+        }
+      } catch (accesoErr) {
+        console.warn('[softDeleteTrabajador] acceso Central:', accesoErr?.message || accesoErr)
+      }
+    }
     const identidad = identificarEntidad('Trabajador', {
       nombre: rows[0].nombre_completo,
       rut: rows[0].rut,
@@ -416,6 +427,55 @@ async function setTrabajadorCajas(req, res) {
 
 async function listUsuarios(req, res) {
   try {
+    if (authUsesCentral()) {
+      let rows
+      try {
+        rows = await queryCentral(
+          `SELECT u.id, u.rut, u.correo, u.nombre, u.activo, u.created_at,
+                  GROUP_CONCAT(r.codigo ORDER BY r.orden SEPARATOR ',') AS roles_csv
+           FROM usuarios u
+           INNER JOIN usuario_roles ur ON ur.usuario_id = u.id
+           INNER JOIN roles r ON r.id = ur.rol_id
+           INNER JOIN usuario_acceso_sistema a ON a.usuario_id = u.id AND a.sistema = 'rendiciones' AND a.login_habilitado = 1
+           WHERE COALESCE(u.is_deleted, 0) = 0
+           GROUP BY u.id, u.rut, u.correo, u.nombre, u.activo, u.created_at
+           ORDER BY u.id DESC`,
+        )
+      } catch (accesoErr) {
+        console.warn('[listUsuarios] filtro acceso omitido:', accesoErr.message)
+        rows = await queryCentral(
+          `SELECT u.id, u.rut, u.correo, u.nombre, u.activo, u.created_at,
+                  GROUP_CONCAT(r.codigo ORDER BY r.orden SEPARATOR ',') AS roles_csv
+           FROM usuarios u
+           INNER JOIN usuario_roles ur ON ur.usuario_id = u.id
+           INNER JOIN roles r ON r.id = ur.rol_id
+           WHERE COALESCE(u.is_deleted, 0) = 0
+           GROUP BY u.id, u.rut, u.correo, u.nombre, u.activo, u.created_at
+           ORDER BY u.id DESC`,
+        )
+      }
+      const mapped = []
+      for (const row of rows || []) {
+        const roles = String(row.roles_csv || '').split(',').filter(Boolean)
+        const mappedRol = mapCentralToRendRol(roles)
+        if (!mappedRol?.rendRol) continue
+        if (!SUPER_ADMINS.includes(req.user.rol) && mappedRol.rendRol !== ROLES.USER_RENDIDOR) continue
+        mapped.push({
+          id: row.id,
+          trabajador_id: null,
+          rut: row.rut,
+          correo: row.correo,
+          rol: mappedRol.rendRol,
+          estado: Number(row.activo) === 1 ? 'activo' : 'inactivo',
+          persona_confianza: false,
+          created_at: row.created_at,
+          trabajador_nombre: row.nombre,
+          cargo: null,
+        })
+      }
+      return res.json(mapped)
+    }
+
     const params = []
     let sql = `SELECT u.id, u.trabajador_id, u.rut, u.correo, u.rol, u.estado, u.persona_confianza, u.created_at,
               t.nombre_completo AS trabajador_nombre, t.cargo

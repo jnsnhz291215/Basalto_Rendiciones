@@ -376,6 +376,10 @@ async function login(req, res) {
       return res.json({ token: centralHandled.token, user: centralHandled.user })
     }
 
+    if (authUsesCentral()) {
+      return res.status(401).json({ error: 'Credenciales inválidas' })
+    }
+
     const localResult = await loginLocal(identifier, plain, byCorreo)
     if (localResult.error) {
       return res.status(localResult.error.status).json(localResult.error.body)
