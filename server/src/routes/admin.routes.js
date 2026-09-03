@@ -11,6 +11,7 @@ const {
   softDeleteUsuario,
   resetPasswordUsuario,
   listPersonal,
+  getPersonalByIdOrRut,
   createPersonal,
   updatePersonal,
   listTarjetas,
@@ -35,6 +36,7 @@ router.use(checkRole(ADMINS))
 
 /* Personal unificado (ficha + acceso rendidor opcional) */
 router.get('/personal', listPersonal)
+router.get('/personal/:idOrRut', getPersonalByIdOrRut)
 router.post('/personal', createPersonal)
 router.put('/personal/:idOrRut', updatePersonal)
 

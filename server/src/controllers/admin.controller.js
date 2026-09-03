@@ -170,6 +170,40 @@ async function getPersonalByTrabajadorId(id) {
   return list.find((p) => Number(p.id) === Number(id)) || null
 }
 
+async function buildPersonalItemByTrabajador(trabajador) {
+  if (!trabajador) return null
+  if (authUsesCentral()) {
+    const allowed = await fetchRutsConAccesoSistema('rendiciones')
+    if (allowed) {
+      const rut = limpiarRut(trabajador.rut) || cleanRutValue(trabajador.rut)
+      if (!allowed.has(rut)) return null
+    }
+  }
+
+  const [cajasRows, rendidor, admin] = await Promise.all([
+    query(`SELECT clave_interna FROM trabajador_cajas WHERE trabajador_id = ?`, [trabajador.id]),
+    findRendidorForTrabajador(trabajador),
+    findAdminForTrabajador(trabajador)
+  ])
+  const cajasAsignadas = (cajasRows || []).map((row) => row.clave_interna).filter(Boolean)
+
+  return {
+    id: trabajador.id,
+    rut: trabajador.rut,
+    nombre_completo: trabajador.nombre_completo,
+    cargo: trabajador.cargo,
+    created_at: trabajador.created_at,
+    cajas_asignadas: cajasAsignadas,
+    usuario_id: rendidor?.id ?? null,
+    correo: rendidor?.correo ?? null,
+    usuario_rol: rendidor?.rol ?? null,
+    usuario_estado: rendidor?.estado ?? null,
+    acceso_sistema: rendidor ? (rendidor.estado === 'inactivo' ? 'inactivo' : 'activo') : null,
+    es_admin: Boolean(admin?.rol),
+    admin_rol: admin?.rol ?? null
+  }
+}
+
 /* --- Trabajadores --- */
 
 async function listTrabajadores(req, res) {
@@ -856,6 +890,19 @@ async function listPersonal(req, res) {
     return res.json(await buildPersonalList())
   } catch (err) {
     console.error('[listPersonal]', err)
+    return res.status(500).json({ error: 'Internal Server Error' })
+  }
+}
+
+async function getPersonalByIdOrRut(req, res) {
+  try {
+    const trabajador = await findTrabajadorByIdOrRut(req.params.idOrRut)
+    if (!trabajador) return res.status(404).json({ error: 'Personal no encontrado' })
+    const personal = await buildPersonalItemByTrabajador(trabajador)
+    if (!personal) return res.status(404).json({ error: 'Personal no encontrado' })
+    return res.json(personal)
+  } catch (err) {
+    console.error('[getPersonalByIdOrRut]', err)
     return res.status(500).json({ error: 'Internal Server Error' })
   }
 }
@@ -1728,6 +1775,7 @@ module.exports = {
   softDeleteUsuario,
   resetPasswordUsuario,
   listPersonal,
+  getPersonalByIdOrRut,
   createPersonal,
   updatePersonal,
   listTarjetas,
