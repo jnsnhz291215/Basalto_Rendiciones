@@ -237,6 +237,33 @@ export async function deleteAnticipo(id) {
   return jsonOrThrow(`/api/anticipos/${id}`, { method: 'DELETE' })
 }
 
+export async function listDevoluciones(params = {}) {
+  const qs = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') qs.set(k, String(v))
+  }
+  const q = qs.toString()
+  return unwrapList(await jsonOrThrow(`/api/devoluciones${q ? `?${q}` : ''}`))
+}
+
+export async function createDevolucion(payload) {
+  return jsonOrThrow('/api/devoluciones', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateDevolucion(id, payload) {
+  return jsonOrThrow(`/api/devoluciones/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deleteDevolucion(id) {
+  return jsonOrThrow(`/api/devoluciones/${id}`, { method: 'DELETE' })
+}
+
 export async function listBancosOrigen(params = {}) {
   const qs = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {

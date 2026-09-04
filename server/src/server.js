@@ -11,6 +11,7 @@ const cors = require('cors')
 const { STORAGE_ROOT, ensureStorageDirs } = require('./config/storage')
 const { ensureCajasSchema } = require('./utils/ensureCajasSchema')
 const { ensureAsignacionesSchema } = require('./utils/ensureAsignacionesSchema')
+const { ensureDevolucionesSchema } = require('./utils/ensureDevolucionesSchema')
 const { ensureRendicionesTipoDocto } = require('./utils/ensureRendicionesTipoDocto')
 const { ensureImportacionesSchema } = require('./utils/ensureImportacionesSchema')
 const { ensureCuentasBancoSchema } = require('./utils/ensureCuentasBancoSchema')
@@ -21,6 +22,7 @@ const authRoutes = require('./routes/auth.routes')
 const cajasRoutes = require('./routes/cajas.routes')
 const rendicionesRoutes = require('./routes/rendiciones.routes')
 const anticiposRoutes = require('./routes/anticipos.routes')
+const devolucionesRoutes = require('./routes/devoluciones.routes')
 const adminRoutes = require('./routes/admin.routes')
 const legacyRoutes = require('./routes/legacy.routes')
 const importacionesRoutes = require('./routes/importaciones.routes')
@@ -82,6 +84,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/cajas', cajasRoutes)
 app.use('/api/rendiciones', rendicionesRoutes)
 app.use('/api/anticipos', anticiposRoutes)
+app.use('/api/devoluciones', devolucionesRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/legacy', legacyRoutes)
 app.use('/api/importaciones', importacionesRoutes)
@@ -142,6 +145,12 @@ app.listen(PORT, async () => {
     console.log('[schema] asignaciones (anticipos + bancos_origen) OK')
   } catch (err) {
     console.warn('[schema] ensureAsignacionesSchema:', err.message)
+  }
+  try {
+    await ensureDevolucionesSchema()
+    console.log('[schema] devoluciones OK')
+  } catch (err) {
+    console.warn('[schema] ensureDevolucionesSchema:', err.message)
   }
   try {
     await ensureRendicionesTipoDocto()

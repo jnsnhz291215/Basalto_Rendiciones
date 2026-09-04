@@ -351,6 +351,28 @@ export function mapAnticipo(row) {
   }
 }
 
+export function mapDevolucion(row) {
+  const sentido = row.sentido === 'empresa' ? 'empresa' : 'trabajador'
+  return {
+    id: row.id,
+    fecha: toDDMMYYYY(row.fecha),
+    fechaSort: String(row.fecha || '').slice(0, 10),
+    subidoEl: formatSubidoElFromIso(row.created_at),
+    createdAtMs: row.created_at ? new Date(row.created_at).getTime() : 0,
+    trabajador: row.trabajador_nombre || '',
+    trabajadorId: row.trabajador_id,
+    doc: row.codigo || '',
+    sentido,
+    sentidoLabel:
+      sentido === 'empresa' ? 'Empresa → Trabajador' : 'Trabajador → Empresa',
+    observaciones: row.observacion || '-',
+    monto: formatMontoApi(row.monto),
+    cajaGroupKey: row.clave_interna || '',
+    cajaId: row.caja_id,
+    comprobanteNombre: row.comprobante_url || ''
+  }
+}
+
 export function mapAuditLog(row) {
   const accion = row.accion || ''
   return {
@@ -373,8 +395,8 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;')
 }
 
-/** Cartola simple: rendiciones + anticipos (ya no hay inyección de fondo en caja) */
-export function buildCartola({ cajas, movimientos, asignaciones }) {
+/** Cartola simple: rendiciones + anticipos + devoluciones */
+export function buildCartola({ cajas, movimientos, asignaciones, devoluciones }) {
   const rows = []
   const cajaByKey = new Map()
   for (const c of cajas || []) {
@@ -439,7 +461,6 @@ export function buildCartola({ cajas, movimientos, asignaciones }) {
       detalle: a.observaciones || 'Asignación',
       responsable: a.conductor,
       trabajadorId: a.trabajadorId ?? null,
-      // Asignación = abono (entra/se asigna plata); Rendición = cargo
       abono: a.monto,
       abonoClass: 'dash-metric-value--ok',
       cargo: '-',
@@ -453,6 +474,41 @@ export function buildCartola({ cajas, movimientos, asignaciones }) {
       docto: '',
       subidoEl: '',
       legacy: Boolean(a.legacy)
+    })
+  }
+
+  for (const d of devoluciones || []) {
+    const mes = mesFromDDMMYYYY(d.fecha)
+    const meta = metaCaja(d.cajaGroupKey)
+    const esTrabajador = d.sentido !== 'empresa'
+    const detalleBase = d.sentidoLabel || (esTrabajador ? 'Trabajador → Empresa' : 'Empresa → Trabajador')
+    const obs = d.observaciones && d.observaciones !== '-' ? d.observaciones : ''
+    rows.push({
+      id: d.id,
+      fecha: d.fecha,
+      mes,
+      ...meta,
+      doc: d.doc,
+      docClass: 'dash-doc-muted',
+      tipoKey: 'devolucion',
+      tipo: 'Devolución',
+      badgeClass: 'dash-badge--ok',
+      detalle: obs ? `${detalleBase} · ${obs}` : detalleBase,
+      responsable: d.trabajador,
+      trabajadorId: d.trabajadorId ?? null,
+      abono: esTrabajador ? d.monto : '-',
+      abonoClass: esTrabajador ? 'dash-metric-value--ok' : 'dash-muted',
+      cargo: esTrabajador ? '-' : d.monto,
+      cargoClass: esTrabajador ? 'dash-muted' : 'dash-table-amount',
+      comprobanteNombre: d.comprobanteNombre || '',
+      estado: '',
+      estadoClass: '',
+      intento: 1,
+      observacionAdmin: '',
+      pago: '',
+      docto: '',
+      subidoEl: d.subidoEl || '',
+      legacy: false
     })
   }
 

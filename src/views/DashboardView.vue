@@ -717,7 +717,7 @@
               </span>
               <template v-for="item in operacionNavItems" :key="item.id">
                 <button
-                  v-if="!item.adminOnly || isAdminSession"
+                  v-if="(!item.adminOnly || isAdminSession) && (!item.devOnly || isSuperAdminDevSession)"
                   type="button"
                   class="dash-nav-item"
                   :class="
@@ -1781,7 +1781,13 @@
                 </template>
                 <template v-else>
                   Guardando
-                  {{ pendingVerifyKind === 'anticipo' ? 'asignación' : 'rendición' }}…
+                  {{
+                    pendingVerifyKind === 'anticipo'
+                      ? 'asignación'
+                      : pendingVerifyKind === 'devolucion'
+                        ? 'devolución'
+                        : 'rendición'
+                  }}…
                 </template>
               </p>
             </div>
@@ -2571,6 +2577,700 @@
             </tbody>
           </table>
         </div>
+      </div>
+
+      <!-- Devolución -->
+      <div v-else-if="activeView === 'devolucion' && canManageDevolucionFull" class="dash-assign">
+        <div v-if="canSeeDevolucionTabs" class="dash-personal-subview-bar">
+          <div class="dash-personal-subview-tabs">
+            <button
+              type="button"
+              class="dash-personal-subview-tab"
+              :class="{
+                'dash-personal-subview-tab--active': devolucionSubview === 'historial'
+              }"
+              @click="devolucionSubview = 'historial'"
+            >
+              Historial
+            </button>
+            <button
+              type="button"
+              class="dash-personal-subview-tab"
+              :class="{
+                'dash-personal-subview-tab--active':
+                  devolucionSubview === 'pendiente_empresa'
+              }"
+              @click="devolucionSubview = 'pendiente_empresa'"
+            >
+              Empresa por pagar
+              <span
+                v-if="pendientesEmpresaDevolucion.length"
+                class="dash-badge dash-badge--warn"
+                style="margin-left: 0.35rem"
+              >
+                {{ pendientesEmpresaDevolucion.length }}
+              </span>
+            </button>
+            <button
+              type="button"
+              class="dash-personal-subview-tab"
+              :class="{
+                'dash-personal-subview-tab--active':
+                  devolucionSubview === 'pendiente_trabajador'
+              }"
+              @click="devolucionSubview = 'pendiente_trabajador'"
+            >
+              Trabajadores por devolver
+              <span
+                v-if="pendientesTrabajadorDevolucion.length"
+                class="dash-badge dash-badge--warn"
+                style="margin-left: 0.35rem"
+              >
+                {{ pendientesTrabajadorDevolucion.length }}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Formulario: Super Admin Dev (libre) o Admin Caja desde pendiente -->
+        <div
+          v-if="canManageDevolucionFull || (canSeeDevolucionTabs && devolucionFormOpen)"
+          class="dash-rendicion-gestion"
+        >
+          <div class="dash-cajas-toolbar">
+            <div>
+              <h3 class="dash-cajas-toolbar-title">Devolución</h3>
+              <p class="dash-cajas-toolbar-hint">
+                <template v-if="canManageDevolucionFull">
+                  Declara cuando el trabajador o la empresa ya devolvió el saldo pendiente.
+                </template>
+                <template v-else>
+                  Registra la devolución del saldo pendiente seleccionado.
+                </template>
+              </p>
+            </div>
+            <div v-if="canManageDevolucionFull" class="dash-toolbar-actions">
+              <button
+                class="dash-btn-primary dash-btn-toggle-caja"
+                type="button"
+                @click="toggleFormDevolucion"
+              >
+                <span>{{ devolucionFormOpen ? '▲' : '＋' }}</span>
+                <span>
+                  {{ devolucionFormOpen ? 'Ocultar Formulario' : 'Registrar Devolución' }}
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div
+            class="dash-collapse"
+            :class="{ 'dash-collapse--open': devolucionFormOpen }"
+          >
+            <div class="dash-collapse-inner">
+              <div class="dash-panel dash-gasto-form-panel dash-collapse-panel">
+                <div class="dash-caja-form-head">
+                  <div>
+                    <h2 class="dash-assign-title dash-assign-title--flush">
+                      {{
+                        devolucionFormDesdePendiente
+                          ? 'Registrar saldo pendiente'
+                          : 'Nueva Devolución'
+                      }}
+                    </h2>
+                    <p class="dash-hint">
+                      Elige si el trabajador devolvió dinero a la empresa, o la empresa al
+                      trabajador.
+                    </p>
+                    <div class="dash-alert dash-alert--warn">
+                      <p>
+                        <strong>Todos los campos son obligatorios</strong> (incl.
+                        <strong>observaciones</strong> y <strong>comprobante</strong>).
+                      </p>
+                      <p>
+                        El comprobante se guarda sin validación IA de monto (como vale de
+                        devolución).
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    class="dash-modal-close"
+                    type="button"
+                    aria-label="Cerrar formulario"
+                    @click="closeFormDevolucion"
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <form class="dash-anticipo-form" @submit.prevent="onSaveDevolucion">
+                  <div class="dash-form dash-gasto-grid-4">
+                    <div class="dash-field">
+                      <label>Fondo Fijo / Caja *</label>
+                      <select
+                        v-model="devolucion.fondo"
+                        required
+                        :disabled="devolucionFormDesdePendiente"
+                      >
+                        <option value="" disabled>Seleccionar caja...</option>
+                        <option
+                          v-for="c in cajasActivasOpciones"
+                          :key="c.groupKey"
+                          :value="c.groupKey"
+                        >
+                          {{ c.label }}
+                        </option>
+                      </select>
+                    </div>
+                    <div class="dash-field">
+                      <label>Fecha *</label>
+                      <input v-model="devolucion.fecha" type="date" required />
+                    </div>
+                    <div class="dash-field">
+                      <label>Trabajador *</label>
+                      <select
+                        v-model="devolucion.trabajadorId"
+                        required
+                        :disabled="devolucionFormDesdePendiente"
+                      >
+                        <option value="" disabled>Seleccionar...</option>
+                        <option
+                          v-for="t in trabajadores"
+                          :key="t.id"
+                          :value="String(t.id)"
+                        >
+                          {{ t.nombre }}
+                        </option>
+                      </select>
+                    </div>
+                    <div class="dash-field">
+                      <label>Dirección *</label>
+                      <select
+                        v-model="devolucion.sentido"
+                        required
+                        :disabled="devolucionFormDesdePendiente"
+                      >
+                        <option value="trabajador">Trabajador → Empresa</option>
+                        <option value="empresa">Empresa → Trabajador</option>
+                      </select>
+                      <p class="dash-field-hint">
+                        {{
+                          devolucion.sentido === 'empresa'
+                            ? 'La empresa devuelve dinero al trabajador.'
+                            : 'El trabajador devuelve dinero a la empresa.'
+                        }}
+                      </p>
+                    </div>
+                    <div class="dash-field">
+                      <label>Monto ($)*</label>
+                      <input
+                        :value="devolucion.monto"
+                        type="text"
+                        inputmode="numeric"
+                        placeholder="0"
+                        class="dash-input-strong dash-input-monto"
+                        autocomplete="off"
+                        required
+                        @input="onDevolucionMontoInput"
+                      />
+                    </div>
+                    <div class="dash-field">
+                      <label>Comprobante *</label>
+                      <input
+                        ref="devolucionFileInputEl"
+                        type="file"
+                        accept=".pdf,image/png,image/jpeg"
+                        class="dash-file"
+                        required
+                        @change="onDevolucionFile"
+                      />
+                      <span v-if="devolucion.comprobanteNombre" class="dash-field-hint">
+                        Archivo: {{ devolucion.comprobanteNombre }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="dash-form--section">
+                    <div class="dash-desc-head">
+                      <label class="dash-field-label">Observaciones / Motivo *</label>
+                      <span
+                        class="dash-word-count"
+                        :class="{
+                          'dash-word-count--over': letrasObservacionDevolucion > 500
+                        }"
+                      >
+                        {{ letrasObservacionDevolucion }} / 500 caracteres
+                      </span>
+                    </div>
+                    <textarea
+                      :value="devolucion.observaciones"
+                      rows="3"
+                      maxlength="500"
+                      placeholder="Detalle de la devolución..."
+                      class="dash-textarea"
+                      required
+                      @input="onDevolucionObservacionInput"
+                    ></textarea>
+                  </div>
+
+                  <div class="dash-caja-form-actions">
+                    <button class="dash-btn-secondary" type="button" @click="closeFormDevolucion">
+                      Cancelar
+                    </button>
+                    <button class="dash-btn-primary" type="submit">
+                      <span>Guardar Devolución</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Super Admin Dev: listado completo -->
+        <div v-if="canManageDevolucionFull" class="dash-table-wrap">
+          <div class="dash-panel-head dash-cajas-head">
+            <div>
+              <h3>Devoluciones recientes</h3>
+              <p>Listado de devoluciones declaradas entre trabajador y empresa.</p>
+            </div>
+            <div class="dash-historial-filters">
+              <div class="dash-historial-filter">
+                <label class="dash-sr-only" for="devolucion-caja-dev">Caja</label>
+                <select
+                  id="devolucion-caja-dev"
+                  v-model="devolucionFiltroCaja"
+                  class="dash-historial-select"
+                >
+                  <option value="">Todas las Cajas</option>
+                  <option
+                    v-for="c in cajasActivasOpciones"
+                    :key="c.groupKey"
+                    :value="c.groupKey"
+                  >
+                    {{ c.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="dash-historial-filter">
+                <label class="dash-sr-only" for="devolucion-mes-dev">Mes</label>
+                <select
+                  id="devolucion-mes-dev"
+                  v-model="devolucionFiltroMes"
+                  class="dash-historial-select dash-historial-select--mes"
+                >
+                  <option value="">Todos los Meses</option>
+                  <option v-for="m in mesesDisponibles" :key="m.value" :value="m.value">
+                    {{ m.label }}
+                  </option>
+                </select>
+              </div>
+              <div class="dash-historial-search">
+                <label class="dash-sr-only" for="devolucion-buscar-dev">Buscar trabajador</label>
+                <input
+                  id="devolucion-buscar-dev"
+                  v-model="devolucionBusqueda"
+                  type="search"
+                  placeholder="Buscar por nombre o RUT..."
+                  class="dash-search-input"
+                />
+              </div>
+              <div class="dash-historial-search">
+                <label class="dash-sr-only" for="devolucion-buscar-obs-dev">
+                  Observaciones / Motivo
+                </label>
+                <input
+                  id="devolucion-buscar-obs-dev"
+                  v-model="devolucionBusquedaObs"
+                  type="search"
+                  placeholder="Observaciones / Motivo..."
+                  class="dash-search-input dash-search-input--desc"
+                />
+              </div>
+            </div>
+          </div>
+
+          <table class="dash-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Trabajador</th>
+                <th>Código</th>
+                <th>Dirección</th>
+                <th>Observaciones</th>
+                <th class="dash-table-center">Comprobante</th>
+                <th class="dash-table-right">Monto</th>
+                <th class="dash-table-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in devolucionesFiltradas" :key="row.doc || row.id">
+                <td class="dash-mono">{{ row.fecha }}</td>
+                <td class="dash-table-strong">{{ row.trabajador }}</td>
+                <td class="dash-mono">{{ row.doc }}</td>
+                <td>
+                  <span class="dash-badge dash-badge--ok">{{ row.sentidoLabel }}</span>
+                </td>
+                <td>{{ row.observaciones }}</td>
+                <td class="dash-table-center">
+                  <button
+                    v-if="row.comprobanteNombre"
+                    type="button"
+                    class="dash-adjunto-btn"
+                    :title="row.comprobanteNombre"
+                    @click="openComprobanteArchivo(row.comprobanteNombre)"
+                  >
+                    📄 {{ labelAdjunto(row.comprobanteNombre) }}
+                  </button>
+                  <span v-else class="dash-adjunto-empty">-</span>
+                </td>
+                <td class="dash-table-right dash-rinde">{{ row.monto }}</td>
+                <td class="dash-table-center dash-table-actions">
+                  <div class="dash-actions-cell">
+                    <button
+                      v-if="muestraSoftDeleteAdmin(row)"
+                      class="dash-btn-icon dash-btn-icon--danger"
+                      type="button"
+                      :disabled="!puedeSoftDeleteAdmin(row)"
+                      :title="tituloSoftDeleteAdmin(row)"
+                      @click="onDeleteDevolucion(row)"
+                    >
+                      <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                    </button>
+                    <button
+                      v-if="canDevForceDelete && row.id"
+                      class="dash-btn-icon dash-btn-icon--danger"
+                      type="button"
+                      title="Hard delete (Dev)"
+                      @click="onHardDeleteDevolucion(row)"
+                    >
+                      <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                    </button>
+                    <span
+                      v-else-if="!muestraSoftDeleteAdmin(row) && !canDevForceDelete"
+                      class="dash-muted"
+                      >-</span
+                    >
+                  </div>
+                </td>
+              </tr>
+              <tr v-if="!devolucionesFiltradas.length">
+                <td colspan="8" class="dash-table-empty">
+                  No hay devoluciones para los filtros seleccionados.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Admin Caja / Super Admin: pestañas -->
+        <template v-else-if="canSeeDevolucionTabs">
+          <div
+            v-if="devolucionSubview === 'historial'"
+            class="dash-table-wrap"
+          >
+            <div class="dash-panel-head dash-cajas-head">
+              <div>
+                <h3>Historial de devoluciones</h3>
+                <p>Devoluciones ya registradas entre trabajador y empresa.</p>
+              </div>
+              <div class="dash-historial-filters">
+                <div class="dash-historial-filter">
+                  <label class="dash-sr-only" for="devolucion-caja">Caja</label>
+                  <select
+                    id="devolucion-caja"
+                    v-model="devolucionFiltroCaja"
+                    class="dash-historial-select"
+                  >
+                    <option value="">Todas las Cajas</option>
+                    <option
+                      v-for="c in cajasActivasOpciones"
+                      :key="c.groupKey"
+                      :value="c.groupKey"
+                    >
+                      {{ c.label }}
+                    </option>
+                  </select>
+                </div>
+                <div class="dash-historial-filter">
+                  <label class="dash-sr-only" for="devolucion-mes">Mes</label>
+                  <select
+                    id="devolucion-mes"
+                    v-model="devolucionFiltroMes"
+                    class="dash-historial-select dash-historial-select--mes"
+                  >
+                    <option value="">Todos los Meses</option>
+                    <option v-for="m in mesesDisponibles" :key="m.value" :value="m.value">
+                      {{ m.label }}
+                    </option>
+                  </select>
+                </div>
+                <div class="dash-historial-search">
+                  <label class="dash-sr-only" for="devolucion-buscar">Buscar trabajador</label>
+                  <input
+                    id="devolucion-buscar"
+                    v-model="devolucionBusqueda"
+                    type="search"
+                    placeholder="Buscar por nombre o RUT..."
+                    class="dash-search-input"
+                  />
+                </div>
+                <div class="dash-historial-search">
+                  <label class="dash-sr-only" for="devolucion-buscar-obs">
+                    Observaciones / Motivo
+                  </label>
+                  <input
+                    id="devolucion-buscar-obs"
+                    v-model="devolucionBusquedaObs"
+                    type="search"
+                    placeholder="Observaciones / Motivo..."
+                    class="dash-search-input dash-search-input--desc"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <table class="dash-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Trabajador</th>
+                  <th>Código</th>
+                  <th>Dirección</th>
+                  <th>Observaciones</th>
+                  <th class="dash-table-center">Comprobante</th>
+                  <th class="dash-table-right">Monto</th>
+                  <th class="dash-table-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in devolucionesFiltradas" :key="row.doc || row.id">
+                  <td class="dash-mono">{{ row.fecha }}</td>
+                  <td class="dash-table-strong">{{ row.trabajador }}</td>
+                  <td class="dash-mono">{{ row.doc }}</td>
+                  <td>
+                    <span class="dash-badge dash-badge--ok">{{ row.sentidoLabel }}</span>
+                  </td>
+                  <td>{{ row.observaciones }}</td>
+                  <td class="dash-table-center">
+                    <button
+                      v-if="row.comprobanteNombre"
+                      type="button"
+                      class="dash-adjunto-btn"
+                      :title="row.comprobanteNombre"
+                      @click="openComprobanteArchivo(row.comprobanteNombre)"
+                    >
+                      📄 {{ labelAdjunto(row.comprobanteNombre) }}
+                    </button>
+                    <span v-else class="dash-adjunto-empty">-</span>
+                  </td>
+                  <td class="dash-table-right dash-rinde">{{ row.monto }}</td>
+                  <td class="dash-table-center dash-table-actions">
+                    <div class="dash-actions-cell">
+                      <button
+                        v-if="muestraSoftDeleteAdmin(row)"
+                        class="dash-btn-icon dash-btn-icon--danger"
+                        type="button"
+                        :disabled="!puedeSoftDeleteAdmin(row)"
+                        :title="tituloSoftDeleteAdmin(row)"
+                        @click="onDeleteDevolucion(row)"
+                      >
+                        <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                      </button>
+                      <span v-else class="dash-muted">-</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="!devolucionesFiltradas.length">
+                  <td colspan="8" class="dash-table-empty">
+                    No hay devoluciones para los filtros seleccionados.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div
+            v-else-if="devolucionSubview === 'pendiente_empresa'"
+            class="dash-table-wrap"
+          >
+            <div class="dash-panel-head dash-cajas-head">
+              <div>
+                <h3>Empresa por pagar</h3>
+                <p>
+                  Saldos donde la empresa debe devolver dinero al trabajador (asignaciones −
+                  gastos efectivo − devoluciones).
+                </p>
+              </div>
+              <div class="dash-historial-filters">
+                <div class="dash-historial-filter">
+                  <label class="dash-sr-only" for="devolucion-caja-emp">Caja</label>
+                  <select
+                    id="devolucion-caja-emp"
+                    v-model="devolucionFiltroCaja"
+                    class="dash-historial-select"
+                  >
+                    <option value="">Todas las Cajas</option>
+                    <option
+                      v-for="c in cajasActivasOpciones"
+                      :key="c.groupKey"
+                      :value="c.groupKey"
+                    >
+                      {{ c.label }}
+                    </option>
+                  </select>
+                </div>
+                <div class="dash-historial-filter">
+                  <label class="dash-sr-only" for="devolucion-mes-emp">Mes</label>
+                  <select
+                    id="devolucion-mes-emp"
+                    v-model="devolucionFiltroMes"
+                    class="dash-historial-select dash-historial-select--mes"
+                  >
+                    <option value="">Todos los Meses</option>
+                    <option v-for="m in mesesDisponibles" :key="m.value" :value="m.value">
+                      {{ m.label }}
+                    </option>
+                  </select>
+                </div>
+                <div class="dash-historial-search">
+                  <label class="dash-sr-only" for="devolucion-buscar-emp">Buscar</label>
+                  <input
+                    id="devolucion-buscar-emp"
+                    v-model="devolucionBusqueda"
+                    type="search"
+                    placeholder="Buscar por nombre o RUT..."
+                    class="dash-search-input"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <table class="dash-table">
+              <thead>
+                <tr>
+                  <th>Trabajador</th>
+                  <th>Caja</th>
+                  <th>Mes</th>
+                  <th class="dash-table-right">Saldo pendiente</th>
+                  <th class="dash-table-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in pendientesEmpresaDevolucion" :key="row.key">
+                  <td class="dash-table-strong">{{ row.trabajador }}</td>
+                  <td>{{ row.cajaLabel }}</td>
+                  <td class="dash-mono">{{ row.mesLabel }}</td>
+                  <td class="dash-table-right dash-rinde">{{ row.monto }}</td>
+                  <td class="dash-table-center">
+                    <button
+                      type="button"
+                      class="dash-btn-secondary"
+                      @click="openFormDevolucionDesdePendiente(row)"
+                    >
+                      Registrar
+                    </button>
+                  </td>
+                </tr>
+                <tr v-if="!pendientesEmpresaDevolucion.length">
+                  <td colspan="5" class="dash-table-empty">
+                    No hay saldos pendientes de pago por parte de la empresa.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div
+            v-else-if="devolucionSubview === 'pendiente_trabajador'"
+            class="dash-table-wrap"
+          >
+            <div class="dash-panel-head dash-cajas-head">
+              <div>
+                <h3>Trabajadores por devolver</h3>
+                <p>
+                  Saldos donde el trabajador debe devolver dinero a la empresa.
+                </p>
+              </div>
+              <div class="dash-historial-filters">
+                <div class="dash-historial-filter">
+                  <label class="dash-sr-only" for="devolucion-caja-trab">Caja</label>
+                  <select
+                    id="devolucion-caja-trab"
+                    v-model="devolucionFiltroCaja"
+                    class="dash-historial-select"
+                  >
+                    <option value="">Todas las Cajas</option>
+                    <option
+                      v-for="c in cajasActivasOpciones"
+                      :key="c.groupKey"
+                      :value="c.groupKey"
+                    >
+                      {{ c.label }}
+                    </option>
+                  </select>
+                </div>
+                <div class="dash-historial-filter">
+                  <label class="dash-sr-only" for="devolucion-mes-trab">Mes</label>
+                  <select
+                    id="devolucion-mes-trab"
+                    v-model="devolucionFiltroMes"
+                    class="dash-historial-select dash-historial-select--mes"
+                  >
+                    <option value="">Todos los Meses</option>
+                    <option v-for="m in mesesDisponibles" :key="m.value" :value="m.value">
+                      {{ m.label }}
+                    </option>
+                  </select>
+                </div>
+                <div class="dash-historial-search">
+                  <label class="dash-sr-only" for="devolucion-buscar-trab">Buscar</label>
+                  <input
+                    id="devolucion-buscar-trab"
+                    v-model="devolucionBusqueda"
+                    type="search"
+                    placeholder="Buscar por nombre o RUT..."
+                    class="dash-search-input"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <table class="dash-table">
+              <thead>
+                <tr>
+                  <th>Trabajador</th>
+                  <th>Caja</th>
+                  <th>Mes</th>
+                  <th class="dash-table-right">Saldo pendiente</th>
+                  <th class="dash-table-center">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="row in pendientesTrabajadorDevolucion" :key="row.key">
+                  <td class="dash-table-strong">{{ row.trabajador }}</td>
+                  <td>{{ row.cajaLabel }}</td>
+                  <td class="dash-mono">{{ row.mesLabel }}</td>
+                  <td class="dash-table-right dash-rinde">{{ row.monto }}</td>
+                  <td class="dash-table-center">
+                    <button
+                      type="button"
+                      class="dash-btn-secondary"
+                      @click="openFormDevolucionDesdePendiente(row)"
+                    >
+                      Registrar
+                    </button>
+                  </td>
+                </tr>
+                <tr v-if="!pendientesTrabajadorDevolucion.length">
+                  <td colspan="5" class="dash-table-empty">
+                    No hay trabajadores con saldo pendiente por devolver.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
       </div>
 
       <!-- Informes y Cartola -->
@@ -4831,6 +5531,7 @@ import {
   buildCartola,
   mapAdminFromUsuario,
   mapAnticipo,
+  mapDevolucion,
   mapAuditLog,
   mapCaja,
   mapCentroCobro,
@@ -5211,13 +5912,17 @@ function normalizarGroupKey(value) {
 const activeView = ref('rendicion')
 const personalSubview = ref('personal')
 const cuentasBancoSubview = ref('tarjetas')
+/** Admin Caja / Super Admin: historial | pendiente_empresa | pendiente_trabajador */
+const devolucionSubview = ref('historial')
 const sidebarOpen = ref(false)
 
-const OPERACION_VIEW_IDS = ['rendicion', 'asignacion', 'informes']
+const OPERACION_VIEW_IDS = ['rendicion', 'asignacion', 'devolucion', 'informes']
 
 const operacionNavItems = [
   { id: 'rendicion', label: 'Rendición de Gastos', icon: 'fa-file-invoice-dollar' },
   { id: 'asignacion', label: 'Asignaciones', icon: 'fa-hand-holding-dollar', adminOnly: true },
+  // Visible solo Super Admin Dev mientras se prueba; luego quitar devOnly
+  { id: 'devolucion', label: 'Devolución', icon: 'fa-money-bill-transfer', adminOnly: true, devOnly: true },
   { id: 'informes', label: 'Informes y Cartola', icon: 'fa-chart-line', adminOnly: true },
   { id: 'importaciones', label: 'Importaciones', icon: 'fa-file-import', adminOnly: true }
 ]
@@ -5274,15 +5979,23 @@ const modalVerificar = reactive({
 const pendingVerifyKind = ref(null)
 let pendingGastoSave = null
 let pendingAnticipoSave = null
+let pendingDevolucionSave = null
 let pendingVerifyResult = null
 let verifyAbortController = null
 let verifyCancelRequested = false
 
-const verifyComprobanteFile = computed(() =>
-  pendingVerifyKind.value === 'anticipo' || pendingVerifyKind.value === 'anticipo-adjunto'
-    ? anticipoComprobanteFile.value
-    : gastoComprobanteFile.value
-)
+const verifyComprobanteFile = computed(() => {
+  if (
+    pendingVerifyKind.value === 'anticipo' ||
+    pendingVerifyKind.value === 'anticipo-adjunto'
+  ) {
+    return anticipoComprobanteFile.value
+  }
+  if (pendingVerifyKind.value === 'devolucion') {
+    return devolucionComprobanteFile.value
+  }
+  return gastoComprobanteFile.value
+})
 
 const gastoTrabajadorQuery = ref('')
 const gastoTrabajadorOpen = ref(false)
@@ -5391,6 +6104,27 @@ const asignacion = reactive({
   comprobanteNombre: ''
 })
 
+const devolucion = reactive({
+  fondo: '',
+  fecha: new Date().toISOString().slice(0, 10),
+  trabajadorId: '',
+  sentido: 'trabajador',
+  observaciones: '',
+  monto: '',
+  comprobanteNombre: ''
+})
+
+const devolucionFormOpen = ref(false)
+/** Prefill desde pendiente (Admin Caja / Super Admin): bloquea caja, trabajador y sentido */
+const devolucionFormDesdePendiente = ref(false)
+const devolucionComprobanteFile = ref(null)
+const devolucionFileInputEl = ref(null)
+const devolucionBusqueda = ref('')
+const devolucionBusquedaObs = ref('')
+const devolucionFiltroCaja = ref('')
+const devolucionFiltroMes = ref('')
+const devoluciones = ref([])
+
 const bancosOrigen = ref([])
 const bancoOrigenOpen = ref(false)
 const bancoOrigenHighlight = ref(0)
@@ -5401,6 +6135,10 @@ const letrasObservacionAnticipo = computed(
   () => String(asignacion.observaciones || '').length
 )
 
+const letrasObservacionDevolucion = computed(
+  () => String(devolucion.observaciones || '').length
+)
+
 const verifyComprobanteNombre = computed(() => {
   if (
     pendingVerifyKind.value === 'anticipo' ||
@@ -5409,6 +6147,13 @@ const verifyComprobanteNombre = computed(() => {
     return (
       anticipoComprobanteFile.value?.name ||
       asignacion.comprobanteNombre ||
+      ''
+    )
+  }
+  if (pendingVerifyKind.value === 'devolucion') {
+    return (
+      devolucionComprobanteFile.value?.name ||
+      devolucion.comprobanteNombre ||
       ''
     )
   }
@@ -5539,6 +6284,23 @@ const isSuperAdminSession = computed(() => {
   return nivel === ROLE_DEV || nivel === ROLE_SUPER
 })
 
+/** Solo Super Admin - Dev: formulario libre de devoluciones */
+const isSuperAdminDevSession = computed(() => {
+  if (TEMP_AUTH_BYPASS) return true
+  const rol = user.value?.rol
+  if (rol === 'SUPER_ADMIN_DEV') return true
+  return sessionAdminNivel.value === ROLE_DEV
+})
+
+/** Vista completa (registrar cualquier devolución): solo Super Admin Dev */
+const canManageDevolucionFull = isSuperAdminDevSession
+
+/**
+ * Admin Caja / Super Admin: 3 pestañas (historial + pendientes).
+ * Por ahora desactivado: solo Super Admin Dev ve Devolución mientras se prueba.
+ */
+const canSeeDevolucionTabs = computed(() => false)
+
 const canCreateAdmins = isSuperAdminSession
 
 const administracionNavItemsVisibles = computed(() =>
@@ -5547,6 +6309,7 @@ const administracionNavItemsVisibles = computed(() =>
 
 function canAccessView(id) {
   if (id === 'rendicion') return true
+  if (id === 'devolucion') return isSuperAdminDevSession.value
   if (id === 'auditoria') return isSuperAdminSession.value
   return isAdminSession.value
 }
@@ -5558,6 +6321,10 @@ const showPersonalAdminsToggle = computed(
 watch(activeView, (view) => {
   if (view === 'auditoria' && !isSuperAdminSession.value) {
     activeView.value = isAdminSession.value ? 'personal' : 'rendicion'
+    return
+  }
+  if (view === 'devolucion' && !isSuperAdminDevSession.value) {
+    activeView.value = isAdminSession.value ? 'asignacion' : 'rendicion'
     return
   }
   if (view === 'personal' && !showPersonalAdminsToggle.value) {
@@ -6104,13 +6871,17 @@ function syncSelectoresCajaMes() {
   if (!asignacion.fondo && cajaActiva.value) {
     asignacion.fondo = cajaActiva.value
   }
+  if (!devolucion.fondo && cajaActiva.value) {
+    devolucion.fondo = cajaActiva.value
+  }
 }
 
 function rebuildCartola() {
   cartola.value = buildCartola({
     cajas: cajas.value,
     movimientos: movimientos.value,
-    asignaciones: asignaciones.value
+    asignaciones: asignaciones.value,
+    devoluciones: devoluciones.value
   })
 }
 
@@ -6156,6 +6927,8 @@ async function loadDashboardData(opts = {}) {
 
       const anticiposRaw = await safeList(api.listAnticipos)
       asignaciones.value = anticiposRaw.map(mapAnticipo)
+      const devolucionesRaw = await safeList(api.listDevoluciones)
+      devoluciones.value = devolucionesRaw.map(mapDevolucion)
       const bancosRaw = await safeList(api.listBancosOrigen)
       bancosOrigen.value = bancosRaw
         .map((b) => String(b.nombre || b).trim().toUpperCase())
@@ -6633,6 +7406,150 @@ const asignacionesFiltradas = computed(() =>
   })
 )
 
+function matchDevolucionFiltros({ nombre, rut, cajaGroupKey, fecha, observaciones }) {
+  const q = devolucionBusqueda.value.trim()
+  if (q && !coincideNombreORut({ nombre, rut }, q)) return false
+  const qObs = devolucionBusquedaObs.value.trim().toLowerCase()
+  if (qObs && !String(observaciones || '').toLowerCase().includes(qObs)) return false
+  if (devolucionFiltroCaja.value) {
+    if (!cajaGroupKey || cajaGroupKey !== devolucionFiltroCaja.value) return false
+  }
+  if (devolucionFiltroMes.value) {
+    if (mesFromFechaDDMMYYYY(fecha) !== devolucionFiltroMes.value) return false
+  }
+  return true
+}
+
+function computeSaldoNetoDevolucion(trabajadorId, cajaGroupKey, mes) {
+  const row = { trabajadorId, cajaGroupKey }
+  const anticiposMes = asignaciones.value.filter(
+    (a) => mismoTrabajadorCaja(a, row) && mesFromFechaDDMMYYYY(a.fecha) === mes
+  )
+  const gastosMes = movimientos.value.filter(
+    (m) =>
+      !m.legacy &&
+      mismoTrabajadorCaja(m, row) &&
+      mesFromFechaDDMMYYYY(m.fecha) === mes &&
+      m.metodoPago === 'efectivo'
+  )
+  const devolucionesMes = devoluciones.value.filter(
+    (d) => mismoTrabajadorCaja(d, row) && mesFromFechaDDMMYYYY(d.fecha) === mes
+  )
+  const totalAnticipos = anticiposMes.reduce((acc, a) => acc + parseMontoNumber(a.monto), 0)
+  const totalDeclarado = gastosMes.reduce((acc, g) => acc + parseMontoNumber(g.monto), 0)
+  const totalDevTrab = devolucionesMes
+    .filter((d) => d.sentido !== 'empresa')
+    .reduce((acc, d) => acc + parseMontoNumber(d.monto), 0)
+  const totalDevEmp = devolucionesMes
+    .filter((d) => d.sentido === 'empresa')
+    .reduce((acc, d) => acc + parseMontoNumber(d.monto), 0)
+  return totalAnticipos - totalDeclarado - totalDevTrab + totalDevEmp
+}
+
+/** Saldos ≠ 0 por trabajador + caja + mes (misma lógica que el modal Parcial). */
+const saldosPendientesDevolucion = computed(() => {
+  const keyMap = new Map()
+  const addKey = (trabajadorId, cajaGroupKey, fecha, nombre, rut) => {
+    const tid = trabajadorId != null ? Number(trabajadorId) : 0
+    const mes = mesFromFechaDDMMYYYY(fecha)
+    if (!tid || !cajaGroupKey || !mes) return
+    const key = `${tid}|${cajaGroupKey}|${mes}`
+    const prev = keyMap.get(key)
+    if (!prev) {
+      keyMap.set(key, {
+        key,
+        trabajadorId: tid,
+        cajaGroupKey,
+        mes,
+        trabajador: nombre || '',
+        rut: rut || ''
+      })
+      return
+    }
+    if (!prev.trabajador && nombre) prev.trabajador = nombre
+    if (!prev.rut && rut) prev.rut = rut
+  }
+
+  for (const a of asignaciones.value) {
+    addKey(
+      a.trabajadorId,
+      a.cajaGroupKey || a.fondo,
+      a.fecha,
+      a.conductor || a.trabajador,
+      a.rut
+    )
+  }
+  for (const m of movimientos.value) {
+    if (m.legacy || m.metodoPago !== 'efectivo') continue
+    addKey(m.trabajadorId, m.cajaGroupKey, m.fecha, m.trabajador, m.rut)
+  }
+  for (const d of devoluciones.value) {
+    addKey(d.trabajadorId, d.cajaGroupKey, d.fecha, d.trabajador, '')
+  }
+
+  const rows = []
+  for (const item of keyMap.values()) {
+    const diff = computeSaldoNetoDevolucion(item.trabajadorId, item.cajaGroupKey, item.mes)
+    if (!Number.isFinite(diff) || diff === 0) continue
+    const quien = diff > 0 ? 'trabajador' : 'empresa'
+    const montoNum = Math.abs(diff)
+    let trabajador = item.trabajador
+    let rut = item.rut
+    if (!trabajador) {
+      const t = trabajadores.value.find((x) => Number(x.id) === Number(item.trabajadorId))
+      trabajador = t?.nombre || 'Trabajador'
+      rut = rut || t?.rut || ''
+    }
+    if (devolucionFiltroCaja.value && item.cajaGroupKey !== devolucionFiltroCaja.value) {
+      continue
+    }
+    if (devolucionFiltroMes.value && item.mes !== devolucionFiltroMes.value) {
+      continue
+    }
+    const q = devolucionBusqueda.value.trim()
+    if (q && !coincideNombreORut({ nombre: trabajador, rut }, q)) {
+      continue
+    }
+    rows.push({
+      ...item,
+      trabajador,
+      rut,
+      quien,
+      montoNum,
+      monto: formatMonto(montoNum),
+      cajaLabel: labelCajaGroup(item.cajaGroupKey) || item.cajaGroupKey,
+      mesLabel: labelMes(item.mes)
+    })
+  }
+
+  return rows.sort((a, b) => {
+    const mesCmp = String(b.mes).localeCompare(String(a.mes))
+    if (mesCmp) return mesCmp
+    return String(a.trabajador).localeCompare(String(b.trabajador), 'es')
+  })
+})
+
+const pendientesEmpresaDevolucion = computed(() =>
+  saldosPendientesDevolucion.value.filter((r) => r.quien === 'empresa')
+)
+
+const pendientesTrabajadorDevolucion = computed(() =>
+  saldosPendientesDevolucion.value.filter((r) => r.quien === 'trabajador')
+)
+
+const devolucionesFiltradas = computed(() =>
+  devoluciones.value.filter((d) => {
+    const trab = trabajadores.value.find((t) => String(t.id) === String(d.trabajadorId))
+    return matchDevolucionFiltros({
+      nombre: d.trabajador,
+      rut: trab?.rut || '',
+      cajaGroupKey: d.cajaGroupKey,
+      fecha: d.fecha,
+      observaciones: d.observaciones
+    })
+  })
+)
+
 function parseMontoNumber(montoStr) {
   if (montoStr == null || montoStr === '' || montoStr === '-') return 0
   if (typeof montoStr === 'number' && Number.isFinite(montoStr)) {
@@ -6924,6 +7841,9 @@ function onVerificarReplaceFile(event) {
     if (pendingVerifyKind.value === 'anticipo') {
       asignacion.comprobanteNombre = file ? file.name : ''
     }
+  } else if (pendingVerifyKind.value === 'devolucion') {
+    devolucionComprobanteFile.value = file
+    devolucion.comprobanteNombre = file ? file.name : ''
   } else {
     gastoComprobanteFile.value = file
     if (pendingVerifyKind.value === 'gasto') {
@@ -6947,6 +7867,7 @@ function resetModalVerificarState() {
   pendingVerifyKind.value = null
   pendingGastoSave = null
   pendingAnticipoSave = null
+  pendingDevolucionSave = null
   pendingLegacyAttach.value = null
   pendingVerifyResult = null
 }
@@ -6994,6 +7915,14 @@ async function verificarComprobanteConIa() {
     if (cajaId) fd.append('caja_id', String(cajaId))
     if (trabajadorId) fd.append('trabajador_id', String(trabajadorId))
     if (fecha) fd.append('fecha', String(fecha))
+  } else if (pendingVerifyKind.value === 'devolucion') {
+    const payload = pendingDevolucionSave || {}
+    fd.append('monto', String(payload.monto || parseMontoInput(devolucion.monto) || ''))
+    fd.append('tipo_documento', 'Devolución')
+    fd.append('tipo_movimiento', 'devolucion')
+    if (payload.caja_id) fd.append('caja_id', String(payload.caja_id))
+    if (payload.trabajador_id) fd.append('trabajador_id', String(payload.trabajador_id))
+    if (payload.fecha) fd.append('fecha', String(payload.fecha))
   } else if (pendingVerifyKind.value === 'gasto-adjunto') {
     const row = pendingLegacyAttach.value?.row
     const tipo =
@@ -7120,6 +8049,18 @@ async function aplicarResultadoVerificacion(verifyResult) {
     pendingAnticipoSave = null
     pendingVerifyResult = null
     closeFormAnticipo()
+  } else if (pendingVerifyKind.value === 'devolucion') {
+    if (!pendingDevolucionSave) throw new Error('No hay devolución pendiente de guardar')
+    await api.createDevolucion({
+      ...pendingDevolucionSave,
+      comprobante_url: verifyResult.comprobante_url
+    })
+    await loadDashboardData()
+    modalVerificar.open = false
+    pendingVerifyKind.value = null
+    pendingDevolucionSave = null
+    pendingVerifyResult = null
+    closeFormDevolucion()
   } else {
     if (!pendingGastoSave) throw new Error('No hay rendición pendiente de guardar')
     await api.createRendicion({
@@ -7151,6 +8092,7 @@ async function confirmarVerificacionYGuardar() {
 async function retryVerificarYGuardar() {
   if (!verifyComprobanteFile.value) return
   if (pendingVerifyKind.value === 'anticipo' && !pendingAnticipoSave) return
+  if (pendingVerifyKind.value === 'devolucion' && !pendingDevolucionSave) return
   if (pendingVerifyKind.value === 'gasto' && !pendingGastoSave) return
   if (
     (pendingVerifyKind.value === 'gasto-adjunto' ||
@@ -7338,6 +8280,9 @@ function openModalParcialMes(row) {
       mesFromFechaDDMMYYYY(m.fecha) === mes &&
       m.metodoPago === 'efectivo'
   )
+  const devolucionesMes = devoluciones.value.filter(
+    (d) => mismoTrabajadorCaja(d, row) && mesFromFechaDDMMYYYY(d.fecha) === mes
+  )
 
   const items = [
     ...anticiposMes.map((a) => ({
@@ -7361,25 +8306,46 @@ function openModalParcialMes(row) {
       hora: horaFromSubidoEl(g.subidoEl),
       monto: g.monto,
       sortKey: `${g.fechaSort || ''}|${String(g.createdAtMs || 0).padStart(13, '0')}|G|${g.id}`
+    })),
+    ...devolucionesMes.map((d) => ({
+      tipo: 'Devolución',
+      badgeClass: 'dash-badge--ok',
+      doc: d.doc || '-',
+      docClass: 'dash-doc-muted',
+      detalle:
+        d.observaciones && d.observaciones !== '-'
+          ? `${d.sentidoLabel} · ${d.observaciones}`
+          : d.sentidoLabel || 'Devolución',
+      fecha: d.fecha,
+      hora: horaFromSubidoEl(d.subidoEl),
+      monto: d.monto,
+      sortKey: `${d.fechaSort || ''}|${String(d.createdAtMs || 0).padStart(13, '0')}|D|${d.id}`
     }))
   ].sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
   const totalAnticipos = anticiposMes.reduce((acc, a) => acc + parseMontoNumber(a.monto), 0)
   const totalDeclarado = gastosMes.reduce((acc, g) => acc + parseMontoNumber(g.monto), 0)
-  const diff = totalAnticipos - totalDeclarado
+  const totalDevTrab = devolucionesMes
+    .filter((d) => d.sentido !== 'empresa')
+    .reduce((acc, d) => acc + parseMontoNumber(d.monto), 0)
+  const totalDevEmp = devolucionesMes
+    .filter((d) => d.sentido === 'empresa')
+    .reduce((acc, d) => acc + parseMontoNumber(d.monto), 0)
+  // Saldo neto: anticipos - gastos - devoluciones del trabajador + devoluciones de la empresa
+  const diff = totalAnticipos - totalDeclarado - totalDevTrab + totalDevEmp
   let quien = ''
   let labelDevolucion = 'Total devolución'
   let montoDevolucion = 0
   if (diff > 0) {
     quien = 'trabajador'
-    labelDevolucion = 'Total devolución (trabajador)'
+    labelDevolucion = 'Saldo pendiente (trabajador)'
     montoDevolucion = diff
   } else if (diff < 0) {
     quien = 'empresa'
-    labelDevolucion = 'Total devolución (empresa)'
+    labelDevolucion = 'Saldo pendiente (empresa)'
     montoDevolucion = Math.abs(diff)
   } else {
-    labelDevolucion = 'Total devolución'
+    labelDevolucion = 'Saldo pendiente'
     montoDevolucion = 0
   }
 
@@ -7857,6 +8823,149 @@ function toggleFormAnticipo() {
 function closeFormAnticipo() {
   anticipoFormOpen.value = false
   resetAsignacionFormFields()
+}
+
+function onDevolucionFile(event) {
+  const file = event.target.files?.[0] || null
+  devolucionComprobanteFile.value = file
+  devolucion.comprobanteNombre = file ? file.name : ''
+}
+
+function onDevolucionMontoInput(event) {
+  const formatted = formatMontoInputCl(event.target.value)
+  devolucion.monto = formatted
+  event.target.value = formatted
+}
+
+function onDevolucionObservacionInput(event) {
+  devolucion.observaciones = String(event.target.value || '').slice(0, 500)
+}
+
+function resetDevolucionFormFields() {
+  devolucion.trabajadorId = ''
+  devolucion.sentido = 'trabajador'
+  devolucion.observaciones = ''
+  devolucion.monto = ''
+  devolucion.comprobanteNombre = ''
+  devolucion.fecha = new Date().toISOString().slice(0, 10)
+  devolucionComprobanteFile.value = null
+  devolucionFormDesdePendiente.value = false
+  if (devolucionFileInputEl.value) devolucionFileInputEl.value.value = ''
+  if (cajaActiva.value) devolucion.fondo = cajaActiva.value
+}
+
+function toggleFormDevolucion() {
+  if (!canManageDevolucionFull.value) return
+  if (devolucionFormOpen.value) {
+    closeFormDevolucion()
+    return
+  }
+  resetDevolucionFormFields()
+  devolucionFormOpen.value = true
+}
+
+function closeFormDevolucion() {
+  devolucionFormOpen.value = false
+  resetDevolucionFormFields()
+}
+
+function openFormDevolucionDesdePendiente(row) {
+  if (!row?.trabajadorId || !row?.cajaGroupKey) return
+  resetDevolucionFormFields()
+  devolucionFormDesdePendiente.value = true
+  devolucion.fondo = row.cajaGroupKey
+  devolucion.trabajadorId = String(row.trabajadorId)
+  devolucion.sentido = row.quien === 'empresa' ? 'empresa' : 'trabajador'
+  devolucion.monto = formatMontoInputCl(row.montoNum)
+  devolucion.observaciones =
+    row.quien === 'empresa'
+      ? `Devolución pendiente empresa → trabajador (${row.mesLabel || row.mes})`
+      : `Devolución pendiente trabajador → empresa (${row.mesLabel || row.mes})`
+  devolucionFormOpen.value = true
+}
+
+async function onSaveDevolucion() {
+  const cajaId =
+    findCajaIdByGroupKey(devolucion.fondo) || findCajaIdForGasto(devolucion.fondo)
+  if (!devolucion.fondo || !cajaId) {
+    saveError.value = 'Selecciona una caja con presupuesto para el mes activo.'
+    return
+  }
+  if (!String(devolucion.fecha || '').trim()) {
+    saveError.value = 'La fecha es obligatoria.'
+    return
+  }
+
+  const trabajadorId = Number(devolucion.trabajadorId)
+  if (!trabajadorId) {
+    saveError.value = 'Selecciona un trabajador.'
+    return
+  }
+
+  const sentido = devolucion.sentido
+  if (sentido !== 'trabajador' && sentido !== 'empresa') {
+    saveError.value = 'Selecciona la dirección de la devolución.'
+    return
+  }
+
+  const montoNum = parseMontoInput(devolucion.monto)
+  if (!Number.isFinite(montoNum) || montoNum <= 0) {
+    saveError.value = 'Ingresa un monto válido mayor a 0.'
+    return
+  }
+  if (!devolucionComprobanteFile.value) {
+    saveError.value = 'El comprobante es obligatorio. Adjunta PDF, PNG o JPG.'
+    return
+  }
+  const observacion = String(devolucion.observaciones || '').trim()
+  if (!observacion) {
+    saveError.value = 'Las observaciones / motivo son obligatorias.'
+    return
+  }
+  if (observacion.length > 500 || letrasObservacionDevolucion.value > 500) {
+    saveError.value = 'Las observaciones no pueden superar 500 caracteres.'
+    return
+  }
+
+  saveError.value = ''
+  pendingVerifyKind.value = 'devolucion'
+  pendingDevolucionSave = {
+    caja_id: cajaId,
+    trabajador_id: trabajadorId,
+    fecha: devolucion.fecha,
+    monto: montoNum,
+    sentido,
+    observacion
+  }
+  await ejecutarVerificacionYGuardado()
+}
+
+async function onDeleteDevolucion(row) {
+  if (!row?.id || !muestraSoftDeleteAdmin(row)) return
+  if (!confirm(`¿Eliminar la devolución ${row.doc}?`)) return
+  try {
+    saveError.value = ''
+    await api.deleteDevolucion(row.id)
+    await loadDashboardData()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo eliminar la devolución'
+  }
+}
+
+async function onHardDeleteDevolucion(row) {
+  if (!canDevForceDelete.value || !row?.id) return
+  if (
+    !confirm(`¿HARD DELETE de la devolución ${row.doc}? Esta acción no se puede deshacer.`)
+  ) {
+    return
+  }
+  try {
+    saveError.value = ''
+    await api.deleteDevolucion(row.id)
+    await loadDashboardData()
+  } catch (err) {
+    saveError.value = err?.message || 'No se pudo eliminar la devolución'
+  }
 }
 
 async function onSaveAsignacion() {
