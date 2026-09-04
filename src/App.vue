@@ -28,6 +28,7 @@ import TempPasswordGate from './components/TempPasswordGate.vue'
 import ContactConsentGate from './components/ContactConsentGate.vue'
 import BasaltoFooter from './components/BasaltoFooter.vue'
 import { useAuth } from './composables/useAuth'
+import { startSessionWatchdog } from './core/sessionWatchdog'
 
 const { user } = useAuth()
 const route = useRoute()
@@ -39,6 +40,8 @@ const CHROME_LAYOUT_EVENT = 'rendiciones:chrome-layout'
 const rootEl = ref(null)
 /** @type {ResizeObserver | null} */
 let resizeObserver = null
+/** @type {(() => void) | null} */
+let stopWatchdog = null
 
 function syncChromeHeight() {
   const root = rootEl.value
@@ -70,6 +73,7 @@ function onChromeLayout() {
 }
 
 onMounted(() => {
+  stopWatchdog = startSessionWatchdog()
   syncChromeHeight()
   if (typeof ResizeObserver !== 'undefined' && rootEl.value) {
     resizeObserver = new ResizeObserver(() => syncChromeHeight())
@@ -80,6 +84,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  stopWatchdog?.()
+  stopWatchdog = null
   resizeObserver?.disconnect()
   resizeObserver = null
   window.removeEventListener(CHROME_LAYOUT_EVENT, onChromeLayout)

@@ -209,6 +209,7 @@ function setLoginMode(mode) {
 }
 
 onMounted(async () => {
+  document.title = 'Iniciar sesión - Basalto rendiciones'
   await bootstrap()
   if (user.value) redirectAfterLogin()
 })

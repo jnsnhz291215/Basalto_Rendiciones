@@ -84,15 +84,14 @@ async function parseJson(res) {
   }
 }
 
-/** Rutas que no deben disparar el redirect global de sesión expirada. */
-const SESSION_EXPIRY_EXEMPT_PATHS = new Set(['/api/auth/login', '/api/auth/me'])
+/** Rutas que no disparan redirect global de sesión (el watchdog sí trata /me). */
+const SESSION_EXPIRY_EXEMPT_PATHS = new Set(['/api/auth/login'])
 
 let handlingSessionExpiry = false
 
 /**
- * Ante un 401 en cualquier llamada autenticada (fuera de login/me), limpia el
- * perfil local y redirige a /login de inmediato, sin esperar a la próxima
- * navegación (cubre el caso de sesión expirada a mitad de una vista, tras 8h).
+ * Ante un 401 en cualquier llamada autenticada (fuera de login), limpia el
+ * perfil local y redirige a /login de inmediato.
  */
 async function handleSessionExpiry() {
   if (handlingSessionExpiry) return
@@ -103,7 +102,7 @@ async function handleSessionExpiry() {
     clearProfile()
     const current = window.location.pathname
     if (current !== LOGIN_URL && current !== '/login') {
-      window.location.href = LOGIN_URL
+      window.location.href = `${LOGIN_URL}?sesion=expirada`
     }
   } catch {
     /* ignore */
@@ -111,6 +110,8 @@ async function handleSessionExpiry() {
     handlingSessionExpiry = false
   }
 }
+
+export { handleSessionExpiry }
 
 /**
  * fetch JSON con Bearer opcional.

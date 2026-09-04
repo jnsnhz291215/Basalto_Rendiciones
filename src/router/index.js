@@ -60,4 +60,14 @@ router.beforeEach(async (to) => {
   }
 })
 
+router.afterEach((to) => {
+  if (to.name === 'login') {
+    document.title = 'Iniciar sesión - Basalto rendiciones'
+    return
+  }
+  if (to.name === 'dashboard' || to.meta.requiresAuth) {
+    document.title = 'Basalto rendiciones'
+  }
+})
+
 export default router
